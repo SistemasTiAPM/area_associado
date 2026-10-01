@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Não foi possível continuar — Área do Associado APM{% endblock %}
+{% block content %}
+<div class="form-card">
+  <h1 class="form-card__title">Não foi possível continuar</h1>
+  <p class="form-card__sub">{{ mensagem }}</p>
+  <div><a class="btn-ghost" href="/">Voltar ao início</a></div>
+  <p class="hint">Se precisar de ajuda, informe este código à Central de Relacionamento: <code>{{ request_id }}</code></p>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Login de construção — Área do Associado APM{% endblock %}
+{% block content %}
+<div class="form-card">
+  <h1 class="form-card__title">Login de construção</h1>
+  <p class="form-card__sub">Modo interino para desenvolver as telas. Em produção o login é feito pelo Login APM.</p>
+  <form method="post" action="/auth/login" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label for="token">Token de construção</label>
+    <input id="token" name="token" type="password" required autocomplete="off">
+    <label for="nome">Nome</label>
+    <input id="nome" name="nome" type="text" maxlength="160">
+    <label for="email">E-mail</label>
+    <input id="email" name="email" type="email" maxlength="254">
+    <label for="cpf">CPF (apenas para a máscara)</label>
+    <input id="cpf" name="cpf" type="text" inputmode="numeric" maxlength="14" required>
+    <div><button class="btn-ghost" type="submit">Entrar</button></div>
+  </form>
+</div>
+{% endblock %}

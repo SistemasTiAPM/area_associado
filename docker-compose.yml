@@ -1,0 +1,37 @@
+services:
+  area-associado:
+    build: .
+    container_name: area_associado
+    restart: always
+    env_file:
+      - .env
+    expose:
+      - "8000"          # alcançável SOMENTE pelo nginx_porteiro na rede_publica
+
+    # Endurecimento idêntico ao login_associado (validado em 10/09/2026): a app
+    # não grava nada fora de /tmp, roda sem capabilities e sem escalar privilégio.
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Sem `ports:` — todo tráfego externo passa pelo nginx_porteiro (TLS,
+    # real_ip, rate-limit, allowlist). Para teste direto use um
+    # docker-compose.override.yml com o mapeamento de porta.
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - rede_publica
+
+networks:
+  rede_publica:
+    external: true

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Bem-vindo — Área do Associado APM{% endblock %}
+{% block brand_title %}Bem-vindo de volta<br>à sua Associação.{% endblock %}
+{% block brand_lead %}Você está autenticado com segurança na Área do Associado da APM.{% endblock %}
+{% block content %}
+<div class="form-card">
+  <h1 class="form-card__title">Olá, {{ a.nome or "associado(a)" }}</h1>
+  <p class="form-card__sub">Acesso autenticado{% if a.is_stub %} em modo de construção{% else %} pelo Login APM{% endif %}.</p>
+  <dl class="dados">
+    <dt>CPF</dt><dd><span class="welcome__id">{{ a.cpf_mask or "***.***.***-**" }}</span></dd>
+    {% if a.email %}<dt>E-mail</dt><dd>{{ a.email }}</dd>{% endif %}
+    <dt>Método</dt><dd>{{ a.amr | join(", ") if a.amr else "—" }}</dd>
+  </dl>
+  <form class="inline-form" method="post" action="/auth/logout">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn-ghost" type="submit">Sair</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,84 @@
+# =====================================================================
+# associado.apm.org.br — Area do Associado (container area_associado:8000)
+# Copiar para /home/ubuntu/nginx-proxy/sites-enabled/area_associado.conf
+# e aplicar: docker exec nginx_porteiro nginx -t && docker exec nginx_porteiro nginx -s reload
+#
+# Ordem de carga: este arquivo ordena DEPOIS de apm_parceiros.conf, que
+# continua sendo o default_server. Conferir:
+#   docker exec nginx_porteiro nginx -T | grep "^# configuration file"
+# =====================================================================
+
+# Zonas com nome unico (sao globais no nginx). Chaveadas pelo IP real.
+limit_req_zone $binary_remote_addr zone=area_publico:10m rate=10r/s;
+# /auth/*: login + callback consomem ~3 requests por entrada.
+limit_req_zone $binary_remote_addr zone=area_auth:10m    rate=5r/s;
+
+server {
+    listen 80;
+    listen 443 ssl;
+    http2 on;
+    include /etc/nginx/conf.d/_ssl.inc;
+    server_name associado.apm.org.br;
+
+    # Resolucao do backend POR REQUISICAO: se o container nao estiver no DNS
+    # do Docker, so este dominio da 502 — o porteiro continua subindo.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $up_area area_associado;
+
+    # real_ip no escopo do server: login_associado.conf ja inclui _real_ip.inc
+    # em nivel http (com real_ip_header), e a diretiva nao pode repetir no
+    # mesmo contexto. Aqui so os CIDRs + o header escolhido.
+    include /etc/nginx/conf.d/_real_ip_cidrs.inc;
+    real_ip_header    X-Forwarded-For;
+    real_ip_recursive on;
+
+    # SEM _headers_seguranca.inc de proposito: o backend envia CSP, XFO DENY,
+    # Referrer-Policy no-referrer e HSTS de 1 ano — mais restritivos.
+
+    # Varredura automatizada (mapa em _00_seguranca.conf): 403, nao 444.
+    if ($req_varredura) { return 403; }
+
+    # ---------------------------------------------------------------- #
+    # FASE DE CONSTRUCAO — allowlist de IP. Remover no cutover         #
+    # (docs/CUTOVER.md). Avaliada apos o real_ip: usa o IP do visitante. #
+    # ---------------------------------------------------------------- #
+    # allow 203.0.113.10;        # escritorio APM
+    # allow 203.0.113.11;        # desenvolvedor
+    # deny  all;
+
+    # Probes internos — bloqueados na borda; a monitoracao acessa o
+    # container direto na rede Docker (area_associado:8000).
+    location = /db-health   { return 403; }
+    location = /auth-health { return 403; }
+    location = /docs         { return 403; }
+    location = /redoc        { return 403; }
+    location = /openapi.json { return 403; }
+
+    location = /health {
+        access_log off;
+        proxy_pass http://$up_area:8000/health;
+    }
+
+    # Fluxo de autenticacao (login, callback do IdP, logout).
+    location ^~ /auth/ {
+        limit_req zone=area_auth burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://$up_area:8000$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
+    }
+
+    location / {
+        limit_req zone=area_publico burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass http://$up_area:8000$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
+    }
+}

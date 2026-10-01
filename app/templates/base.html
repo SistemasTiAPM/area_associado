@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#013a72">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png?v={{ static_v }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/favicon-192.png?v={{ static_v }}">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v={{ static_v }}">
+  <title>{% block title %}Área do Associado — APM{% endblock %}</title>
+  <script src="/static/boot.js?v={{ static_v }}"></script>
+  <link rel="stylesheet" href="/static/fonts.css?v={{ static_v }}">
+  <link rel="stylesheet" href="/static/style.css?v={{ static_v }}">
+</head>
+<body>
+  {% if auth_mode == 'stub' %}
+  <div class="alert alert--warn stub-banner" role="status">
+    Ambiente de construção ({{ app_env }}): login sem o Login APM (AUTH_MODE=stub).
+  </div>
+  {% endif %}
+  <div class="shell">
+    <aside class="brand">
+      <div class="brand__top">
+        <span class="brand__chip">
+          <img src="/static/logo-apm.png" alt="Associação Paulista de Medicina — 95 anos">
+        </span>
+      </div>
+      <div class="brand__hero">
+        <p class="brand__eyebrow">Área do Associado</p>
+        <h2 class="brand__title">{% block brand_title %}O orgulho de pertencer<br>à medicina paulista.{% endblock %}</h2>
+        <p class="brand__lead">{% block brand_lead %}Seus serviços na Associação Paulista de Medicina — seguros, simples e sempre à mão.{% endblock %}</p>
+      </div>
+      <svg class="ecg" viewBox="0 0 600 80" preserveAspectRatio="none" aria-hidden="true">
+        <g class="ecg__tape">
+          <path d="M0,40 h60 l6,-5 8,5 h8 l5,3 5,-30 6,48 6,-21 h10 l12,-9 12,9 h62 h60 l6,-5 8,5 h8 l5,3 5,-30 6,48 6,-21 h10 l12,-9 12,9 h62 h60 l6,-5 8,5 h8 l5,3 5,-30 6,48 6,-21 h10 l12,-9 12,9 h62 h60 l6,-5 8,5 h8 l5,3 5,-30 6,48 6,-21 h10 l12,-9 12,9 h62" />
+        </g>
+      </svg>
+      <p class="brand__foot"><strong>95 anos</strong> · Associação Paulista de Medicina</p>
+    </aside>
+
+    <main class="panel">
+      <div class="panel__inner">
+        {% if error %}<div class="alert alert--error" role="alert">{{ error }}</div>{% endif %}
+        {% if success %}<div class="alert alert--ok" role="status">{{ success }}</div>{% endif %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+  {% block extra_script %}{% endblock %}
+</body>
+</html>

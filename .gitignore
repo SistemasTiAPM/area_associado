@@ -1,0 +1,12 @@
+# Segredos: ignora .env e todas as variantes, mantendo só o template versionado.
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+.DS_Store
+logs/
