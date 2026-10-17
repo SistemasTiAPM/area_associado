@@ -31,6 +31,7 @@ TABELAS_COM_UPDATE: frozenset[str] = frozenset({
     "evento_inscricao",
     "comunidade_adesao",
     "job_execucao",
+    "email_verificacao",
 })
 PRIVILEGIOS_DO_SCHEMA: frozenset[str] = frozenset({"SELECT", "INSERT", "EXECUTE"})
 

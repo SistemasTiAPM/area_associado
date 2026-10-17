@@ -6,6 +6,50 @@ data de conclusão e o ID original.
 
 ---
 
+## 2026-10-17 — Fase 2a: perfil e carteirinha na área (código)
+
+Implantação no ambiente de construção pendente (P-23). Dados reais de contato e foto dependem
+da Fase 2b no mcp_hub (P-28): até lá `HUB_MODE=stub`. A carteirinha já usa dados reais do CRM
+pelo escopo `carteirinha` do Login APM.
+
+**Entregue**
+- **Identidade:** escopo `carteirinha` pedido por padrão; tipo, situação, CRM, UF, nº de contato
+  e filiação lidos do userinfo; `auth_time` do IdP na sessão para o step-up.
+- **Perfil** (`/area/perfil`, tela nova): cadastro somente leitura; contato e endereço com
+  validação (DDD, celular, CEP, UF) gravados só depois do CRM confirmar; cache com degradação
+  "desatualizado" quando o hub cai.
+- **Troca de e-mail** com login recente no IdP e código de 6 dígitos no novo endereço, com aviso
+  ao endereço antigo (ADR-0015).
+- **Foto:** upload lido só depois de sessão, CSRF e limites; tipo pelos bytes mágicos; teto de
+  pixels contra bomba de descompressão; recodificação sem metadados; 512 px para o CRM e
+  miniatura de 128 px no avatar; remoção.
+- **Carteirinha** (`/area/carteirinha`): cartão da spec, QR em SVG servido como imagem,
+  Compartilhar com cópia do link (validade omitida, LA-04). **Verificação pública**
+  `/verificar/{token}` com nome, situação e "verificado em", `noindex` e limite de 2 r/s.
+- **Integrações:** cliente do mcp_hub (`app/integracoes/hub.py`) e simulado (`hub_stub.py`),
+  envio de e-mail por SMTP/STARTTLS (`app/integracoes/email.py`), contrato em `docs/CONTRATO-HUB.md`.
+- **Banco:** `sql/006_associado_perfil`, `sql/007_email_verificacao` (UPDATE por tabela); allowlist
+  do `db_check` atualizada.
+- **Infra:** Pillow 13.0.0 e segno 1.6.6; vhost com `client_max_body_size 6m` só na rota da foto e
+  zona `area_verificar`.
+
+**Pendências resolvidas**
+- **P-20** cadastro sem tipo ou situação: recusa o login com 403 `persona_incompleta` (ADR-0016).
+
+**Evidências (2026-10-17)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest com MySQL 8.4 real (migrações 000–007) | 135 passaram |
+| pytest sem banco | 125 passaram, 10 de integração pulados |
+| Vitest | 42 passaram |
+| Playwright e2e na imagem real `read_only`, 1440 e 390 px | 20 de 20 |
+| Lighthouse em Perfil e Carteirinha, autenticado | acessibilidade 100 e boas práticas 100 nas duas |
+| axe (WCAG 2.1 AA) em Início, Benefícios, Carteirinha e Perfil | 0 violações |
+| Varredura de CPF em `evento_log`, `evento_uso` e `associado_perfil` | 0 ocorrências |
+| `db_check` (3 grants de UPDATE por tabela) e `csp_check` | conforme / conforme |
+| `nginx -t` do vhost | sintaxe ok |
+
 ## 2026-10-17 — Fase 1: fundação da Minha APM (código)
 
 Implantação no ambiente de construção pendente: P-23 (migrações no RDS, `SESSION_ENC_KEYS`,

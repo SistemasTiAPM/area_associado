@@ -14,8 +14,9 @@ Aplicação FastAPI atrás do `nginx_porteiro` (`associado.apm.org.br`), autenti
 | [docs/CONCLUIDO.md](docs/CONCLUIDO.md) | O que já foi entregue, com data e evidência. |
 | [docs/PROVISIONAMENTO.md](docs/PROVISIONAMENTO.md) · [docs/CUTOVER.md](docs/CUTOVER.md) · [docs/ACESSO-CONSTRUCAO.md](docs/ACESSO-CONSTRUCAO.md) | Banco, virada de chave e acesso na fase de construção. |
 
-**Estado:** Fase 1 (fundação) concluída no código: SPA React em `/area`, API `/api/v1`
-(`sessao`, `uso`), sessão cifrada, CSRF da API, flags e analytics. Implantação no ambiente de
+**Estado:** Fases 1 (fundação) e 2a (perfil e carteirinha) concluídas no código: SPA React em
+`/area`, API `/api/v1`, sessão cifrada, CSRF, flags, analytics, perfil com e-mail por código e
+foto, carteirinha com QR e verificação pública. O mcp_hub ainda roda simulado (Fase 2b, P-28). Implantação no ambiente de
 construção pendente (P-23 em [docs/PENDENCIAS.md](docs/PENDENCIAS.md)). Integração com o
 `mcp_hub`, jobs e as telas de domínio são as fases 2 a 8.
 
@@ -56,6 +57,11 @@ docker run --rm -v "$PWD:/app:ro" -v /dev/null:/app/.env:ro -w /app -e PYTHONDON
   --entrypoint sh area_associado-area-associado:latest \
   -c "pip install -q --user -r requirements-dev.txt && python -m pytest -p no:cacheprovider"
 ```
+
+Integração com MySQL real (marcador `mysql`; sem as variáveis, esses testes são pulados): suba um
+MySQL 8.4 descartável, aplique `sql/000` a `sql/007` e rode o mesmo comando acima com
+`-e TESTE_DB_HOST=... -e TESTE_DB_USER=apm_area -e TESTE_DB_PASS=... -e TESTE_DB_NAME=area_associado`
+e a rede do MySQL (`--network ...`).
 
 Frontend (Node 24 em container; o Node do host é antigo para Vitest/jsdom). O build da imagem
 roda o mesmo `npm run check` e falha se algo quebrar:

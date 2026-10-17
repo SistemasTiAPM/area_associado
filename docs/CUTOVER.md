@@ -17,7 +17,7 @@ não um deploy de código.
      --redirect-uri https://associado.apm.org.br/auth/callback \
      --post-logout-redirect-uri https://associado.apm.org.br/ \
      --grant authorization_code \
-     --scope "openid profile email cpf" --audience https://associado.apm.org.br --apply
+     --scope "openid profile email cpf carteirinha" --audience https://associado.apm.org.br --apply
    ```
    O segredo aparece **uma única vez**: vai direto para `OIDC_CLIENT_SECRET` no `.env` da área
    e para o Secrets Manager. Sem `refresh_token` de propósito: a área não chama API após o login.

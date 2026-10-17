@@ -87,9 +87,19 @@ def _campo(loc: tuple[Any, ...]) -> str:
     return ".".join(partes) or "corpo"
 
 
+def _mensagem_validacao(e: dict[str, Any]) -> str:
+    # `value_error` vem dos NOSSOS validadores (textos fixos, sem o valor recebido);
+    # os demais são do pydantic, em inglês e às vezes com o valor: viram genéricos.
+    if e.get("type") == "value_error":
+        erro = (e.get("ctx") or {}).get("error")
+        if isinstance(erro, ValueError) and erro.args and isinstance(erro.args[0], str):
+            return erro.args[0][:120]
+    return "valor inválido ou ausente"
+
+
 async def tratar_validacao(request: Request, exc: RequestValidationError) -> JSONResponse:
     detalhes = [
-        {"campo": _campo(tuple(e.get("loc", ()))), "mensagem": "valor inválido ou ausente"}
+        {"campo": _campo(tuple(e.get("loc", ()))), "mensagem": _mensagem_validacao(e)}
         for e in exc.errors()[:20]
     ]
     erro, mensagem = MENSAGENS_PADRAO[400]

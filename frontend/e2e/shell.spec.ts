@@ -126,9 +126,10 @@ test('navegação pelo menu (desktop) ou drawer + bottom-nav (mobile)', async ({
 
 test('acessibilidade (axe) sem violações em Início, Benefícios e Carteirinha', async ({ page }) => {
   await entrar(page);
-  for (const caminho of ['/area', '/area/beneficios', '/area/carteirinha']) {
+  for (const caminho of ['/area', '/area/beneficios', '/area/carteirinha', '/area/perfil']) {
     await page.goto(caminho);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByText(/Carregando/)).toHaveCount(0);
     const resultado = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(resultado.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
   }

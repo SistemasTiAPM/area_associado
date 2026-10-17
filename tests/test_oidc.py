@@ -165,12 +165,21 @@ def test_fluxo_completo_com_idp_mockado(pem, settings, cache, monkeypatch):
 
         def get(self, url, headers=None):
             assert headers["Authorization"] == "Bearer at"
-            return Resp(200, {"sub": "sub-abc", "name": "Maria  Silva", "email": "m@x.org", "cpf": "12345678901"})
+            return Resp(200, {"sub": "sub-abc", "name": "Maria  Silva", "email": "m@x.org", "cpf": "12345678901",
+                              "tipo_associado": "Efetivo", "associado": "Ativo", "num_contato": "80012345",
+                              "crm": "123456", "crm_uf": "SP", "data_filiacao": "2014-03-01"})
 
     monkeypatch.setattr(oidc.httpx, "Client", FakeHttp)
     pending = {"st": "abc", "nonce": "n0nce", "cv": "v", "cc": "c", "exp": int(time.time()) + 60, "next": "/area"}
     a = oidc.login_from_callback({"state": "abc", "code": "q"}, pending, settings=settings)
     assert a.sub == "sub-abc" and a.nome == "Maria Silva" and a.cpf_mask == "***.456.789-**" and a.amr == ["pwd"]
+    assert (a.tipo, a.status, a.crm, a.crm_uf, a.data_filiacao) == ("Efetivo", "Ativo", "123456", "SP", "2014-03-01")
+
+    # P-20: escopo carteirinha pedido e cadastro sem tipo/situação → recusa (403)
+    FakeHttp.get = lambda self, url, headers=None: Resp(200, {"sub": "sub-abc", "name": "Maria"})
+    with pytest.raises(OidcError) as e:
+        oidc.login_from_callback({"state": "abc", "code": "q"}, pending, settings=settings)
+    assert e.value.code == "persona_incompleta" and e.value.http_status == 403
 
     # userinfo de outro sub → recusa (nunca identidade parcial)
     FakeHttp.get = lambda self, url, headers=None: Resp(200, {"sub": "outro"})

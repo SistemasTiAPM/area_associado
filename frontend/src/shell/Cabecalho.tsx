@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { Link } from 'react-router-dom';
+import { ConteudoAvatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { useSessao } from '../state/SessaoContext';
 import { CampoBusca } from './CampoBusca';
@@ -17,7 +18,7 @@ export const Cabecalho = forwardRef<HTMLHeadingElement, Props>(function Cabecalh
   refTitulo,
 ) {
   const { sessao } = useSessao();
-  const { nome, iniciais } = sessao.associado;
+  const { nome, iniciais, foto_versao } = sessao.associado;
 
   return (
     <header className="topo">
@@ -49,7 +50,7 @@ export const Cabecalho = forwardRef<HTMLHeadingElement, Props>(function Cabecalh
             // WCAG 2.5.3: o nome acessível começa pelo texto visível (as iniciais).
             aria-label={nome ? `${iniciais}, carteirinha digital de ${nome}` : `${iniciais}, carteirinha digital`}
           >
-            {iniciais}
+            <ConteudoAvatar iniciais={iniciais} fotoVersao={foto_versao} tamanho={40} />
           </Link>
         </div>
       </div>

@@ -105,7 +105,8 @@ def test_sessao_entrega_contrato_sem_dado_pessoal(ctx):
     assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
     corpo = r.json()
     assert corpo["associado"] == {"nome": "Telma Nogueira da Silva", "nome_exibicao": "Telma", "iniciais": "TS",
-                                  "tipo": "Efetivo", "status": "Ativo", "tem_foto": False}
+                                  "tipo": "Efetivo", "status": "Ativo", "tem_foto": False,
+                                  "foto_versao": None}
     assert corpo["stub"] is True and corpo["rota_inicial"] == "/area" and corpo["csrf"]
     assert corpo["config"] == {"whatsapp": "551131886200", "show_whatsapp": True, "animations": True}
     texto = r.text

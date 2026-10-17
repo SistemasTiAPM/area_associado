@@ -2,7 +2,9 @@
 
 O cookie (cifrado e autenticado por `app/sessao.py`, ADR-0011) carrega só o
 necessário para renderizar a área e encerrar a sessão no IdP: `sub`, `cid`,
-`nome`, `email`, `cpf_mask`, `auth_at`, `amr`, `idt`, `tipo`, `status` (+ `csrf`).
+`nome`, `email`, `cpf_mask`, `auth_at`, `idp_at`, `amr`, `idt`, `tipo`, `status` (+ `csrf`).
+`auth_at` = login NESTA área; `idp_at` = `auth_time` do IdP (senha digitada de fato) —
+o step-up usa `idp_at`, porque SSO silencioso renova `auth_at` sem pedir senha.
 CPF completo, access token e refresh token nunca entram aqui.
 """
 
@@ -43,6 +45,7 @@ class Associado:
     amr: tuple[str, ...]
     tipo: str | None = None
     status: str | None = None
+    idp_auth_time: int | None = None
 
     @property
     def is_stub(self) -> bool:
@@ -82,6 +85,7 @@ def store_identity(request: Request, claims: AssociadoClaims, *, amr: list[str] 
             "email": claims.email,
             "cpf_mask": claims.cpf_mask,
             "auth_at": int(time.time()),
+            "idp_at": claims.auth_time if isinstance(claims.auth_time, int) else None,
             "amr": list(amr if amr is not None else claims.amr),
             "idt": claims.id_token or None,
             "tipo": _rotulo(claims.tipo),
@@ -111,7 +115,16 @@ def current_associado(request: Request) -> Associado | None:
         amr=tuple(a for a in amr if isinstance(a, str)) if isinstance(amr, list) else (),
         tipo=_rotulo(sess.get("tipo")),
         status=_rotulo(sess.get("status")),
+        idp_auth_time=sess.get("idp_at") if isinstance(sess.get("idp_at"), int) else None,
     )
+
+
+def autenticacao_recente(associado: Associado, max_idade: int) -> bool:
+    """Senha digitada no IdP há no máximo `max_idade` segundos (step-up).
+    Sem `auth_time` do IdP, não há como provar: falso."""
+    if associado.idp_auth_time is None:
+        return False
+    return 0 <= time.time() - associado.idp_auth_time <= max_idade
 
 
 def require_associado(request: Request) -> Associado:

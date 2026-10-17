@@ -21,6 +21,22 @@ _ENV = {
 }
 
 
+# Integração com MySQL real (opcional): com TESTE_DB_HOST definido, os testes
+# usam esse banco (migrações 000–007 aplicadas) e os marcados `mysql` rodam.
+_INTEGRACAO = {k[len("TESTE_"):]: v for k, v in os.environ.items() if k.startswith("TESTE_DB_")}
+if _INTEGRACAO:
+    _ENV.update(_INTEGRACAO)
+
+
+def pytest_collection_modifyitems(config, items):
+    if _INTEGRACAO:
+        return
+    pular = pytest.mark.skip(reason="defina TESTE_DB_HOST/USER/PASS para a integração com MySQL")
+    for item in items:
+        if "mysql" in item.keywords:
+            item.add_marker(pular)
+
+
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
     for k, v in _ENV.items():

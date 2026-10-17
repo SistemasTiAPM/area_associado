@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import re
 import logging
 import secrets
 import threading
@@ -67,10 +68,14 @@ class AssociadoClaims:
     amr: list[str] = field(default_factory=list)
     auth_time: int | None = None
     id_token: str = ""  # guardado na sessão só para o `id_token_hint` do logout
-    # Persona (rótulos do CRM, escopo `carteirinha`). Fase 1: só o login stub
-    # preenche; o OIDC passa a pedir o escopo na Fase 2 (P-09, P-20).
+    # Escopo `carteirinha` (rótulos/valores do CRM via IdP). Com o escopo
+    # pedido, tipo e status são OBRIGATÓRIOS (P-20: recusa o login sem eles).
     tipo: str | None = None
     status: str | None = None
+    num_contato: str | None = None
+    crm: str | None = None
+    crm_uf: str | None = None
+    data_filiacao: str | None = None  # AAAA-MM-DD
 
 
 # --------------------------------------------------------------------------- #
@@ -394,6 +399,7 @@ def login_from_callback(params: dict, pending: dict, *, settings: Settings | Non
     amr_list = [a for a in amr if isinstance(a, str)][:8] if isinstance(amr, list) else []
     contact_id = claims.get("contact_id") or info.get("contact_id")
     auth_time = claims.get("auth_time")
+    carteirinha = _carteirinha(info) if "carteirinha" in s.scope_list else {}
     return AssociadoClaims(
         sub=sub,
         contact_id=str(contact_id)[:64] if contact_id else None,
@@ -403,4 +409,32 @@ def login_from_callback(params: dict, pending: dict, *, settings: Settings | Non
         amr=amr_list,
         auth_time=int(auth_time) if isinstance(auth_time, int) else None,
         id_token=tokens.id_token,
+        **carteirinha,
     )
+
+
+_RE_DATA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_RE_NUM = re.compile(r"^[0-9A-Za-z./-]{1,20}$")
+
+
+def _carteirinha(info: dict) -> dict[str, str | None]:
+    """Claims do escopo `carteirinha`. Sem tipo ou situação: recusa (P-20).
+
+    Fail-closed por decisão de negócio: cadastro incompleto no CRM não abre
+    sessão, para a área nunca decidir persona por palpite.
+    """
+    tipo = _text(info, "tipo_associado", 40)
+    status = _text(info, "associado", 40)
+    if not tipo or not status:
+        raise OidcError("persona_incompleta", http_status=403)
+    num = _text(info, "num_contato", 20)
+    crm = _text(info, "crm", 20)
+    data = _text(info, "data_filiacao", 10)
+    return {
+        "tipo": tipo,
+        "status": status,
+        "num_contato": num if num and _RE_NUM.match(num) else None,
+        "crm": crm if crm and _RE_NUM.match(crm) else None,
+        "crm_uf": _text(info, "crm_uf", 2),
+        "data_filiacao": data if data and _RE_DATA.match(data) else None,
+    }

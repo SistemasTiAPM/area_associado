@@ -848,7 +848,7 @@ Layout: composto por componentes da spec (`HeroPanel` compacto com avatar 56 px,
 - **Descrição:** Authorization Code + PKCE S256, `validate_id_token` (`app/oidc.py:264`), userinfo fail-closed (`app/oidc.py:307`, 503 → sem sessão), mensagens por código (`app/main.py:79`). Escopos passam a incluir `carteirinha` (P-09; hoje `openid profile email cpf`, `app/config.py:67`). `tipo` e `status` gravados na sessão a partir de `tipo_associado` e `associado`.
 - **Fonte:** IdP · **Endpoint:** `GET /auth/login`, `GET /auth/callback` · **Evento:** — (`evento_log` `login_ok`/`login_falha`) · **Flag:** — · **Fase:** 1 (escopo na 2)
 - **UI:** página `erro.html` existente.
-- **Aceite:** testes existentes de `tests/` seguem verdes; userinfo sem `tipo_associado` → login recusado (identidade parcial) — **a confirmar com Sentinela**, alternativa: sessão sem persona e rota `/area`.
+- **Aceite:** testes existentes de `tests/` seguem verdes; userinfo sem `tipo_associado` ou `associado` → login recusado com 403 `persona_incompleta` (decidido em 2026-10-17, ADR-0016).
 
 **RF-AU-10 — Modo stub**
 - **Descrição:** `AUTH_MODE=stub` só fora de produção (`app/config.py:152-156`); faixa de aviso visível também na SPA; formulário stub ganha campo de tipo para testar personas. Corrige o defeito `app/static/style.css:323` (`html.js .alert { display: none; }` esconde a faixa stub).
@@ -988,27 +988,28 @@ proibidas (mesma lista de `app/audit.py:29`), remoção lógica por coluna (sem 
 | Feature flag | chave, ligada, descrição | área (operador) | `feature_flag` (`sql/003`) | SELECT | 1 |
 | Evento de uso | analytics (seção 8) | área | `evento_uso` (`sql/004`) | INSERT | 1 |
 | Associado | `contact_id`, `sub_hash`, primeiro/último acesso, token de verificação da carteirinha | IdP/CRM (identidade); área (token) | `associado` (`sql/005`) | SELECT, INSERT, UPDATE | 1–2 |
-| Perfil | cache dos campos de `contact` exibidos + `foto_miniatura` (128×128) + ETag + `atualizado_em` | CRM `contact` | `associado_perfil` (`sql/005`) | SELECT, INSERT, UPDATE | 2 |
+| Perfil | cache dos campos de `contact` exibidos + `foto_miniatura` (128×128) + ETag + `atualizado_em` | CRM `contact` | `associado_perfil` (`sql/006`) | SELECT, INSERT, UPDATE | 2 |
+| Verificação de e-mail | pedido de troca: HMAC do e-mail novo e do código, validade, tentativas | área | `email_verificacao` (`sql/007`) | SELECT, INSERT, UPDATE | 2 |
 | Foto | 512×512 em `entityimage` | CRM | (CRM) + `associado_perfil.foto_miniatura` | — | 2 |
 | Carteirinha | derivada de perfil + regra de validade (LA-04) | CRM | — (derivada) | — | 2 |
-| Solicitação | tipo, dados, status, `uuid`, `chave_idempotencia`, `crm_id`, `crm_sync`, tentativas, próxima tentativa | área (pedido); CRM (andamento) | `solicitacao` (`sql/006`) | SELECT, INSERT, UPDATE | 3 |
-| Evento de solicitação | linha do tempo (transição, ator, mensagem pública) | área | `solicitacao_evento` (`sql/006`) | SELECT, INSERT | 3 |
-| Categoria | 8 categorias (tiles) + grupo de exibição (4) + cores/ícone/destino | área (seed editorial) | `beneficio_categoria` (`sql/007`) | SELECT | 4 |
-| Benefício | catálogo (19 itens no seed inicial): slug, categoria, ícone, título, descrição, meta, CTA, tag, URL, valor de referência | área (seed editorial, negócio) | `beneficio` (`sql/007`) | SELECT | 4 |
-| Ativação de benefício | associado × benefício, ativo, ativado/desativado em | área | `beneficio_ativacao` (`sql/007`) | SELECT, INSERT, UPDATE | 4 |
+| Solicitação | tipo, dados, status, `uuid`, `chave_idempotencia`, `crm_id`, `crm_sync`, tentativas, próxima tentativa | área (pedido); CRM (andamento) | `solicitacao` (`sql/008`) | SELECT, INSERT, UPDATE | 3 |
+| Evento de solicitação | linha do tempo (transição, ator, mensagem pública) | área | `solicitacao_evento` (`sql/008`) | SELECT, INSERT | 3 |
+| Categoria | 8 categorias (tiles) + grupo de exibição (4) + cores/ícone/destino | área (seed editorial) | `beneficio_categoria` (`sql/009`) | SELECT | 4 |
+| Benefício | catálogo (19 itens no seed inicial): slug, categoria, ícone, título, descrição, meta, CTA, tag, URL, valor de referência | área (seed editorial, negócio) | `beneficio` (`sql/009`) | SELECT | 4 |
+| Ativação de benefício | associado × benefício, ativo, ativado/desativado em | área | `beneficio_ativacao` (`sql/009`) | SELECT, INSERT, UPDATE | 4 |
 | Adesão TotalPass | adesão no CRM | CRM `dxc_adesao_totalpass` | — (cache em memória 10 min) | — | 4 |
-| Notícia | cache de posts do site | WordPress | `noticia_cache` (`sql/008`) | SELECT, INSERT, UPDATE | 5 |
-| Evento | cache de eventos do site (inclui Congresso) | WordPress | `evento_cache` (`sql/008`) | SELECT, INSERT, UPDATE | 5 |
-| Tema | temas disponíveis | área (seed) | `tema` (`sql/008`) | SELECT | 5 |
-| Tema seguido | associado × tema, ativo | área | `associado_tema` (`sql/008`) | SELECT, INSERT, UPDATE | 5 |
-| Notícia salva | associado × notícia, ativo | área | `noticia_salva` (`sql/008`) | SELECT, INSERT, UPDATE | 5 |
-| Inscrição em evento | associado × evento (inclui Congresso), ativo | área (interesse; LA-06) | `evento_inscricao` (`sql/008`) | SELECT, INSERT, UPDATE | 5 |
-| Comunidade / programa | comunidades e programas (`rede`, embaixadores), link `wa.me`, contagens opcionais | área (seed, comunicação) | `comunidade` (`sql/009`) | SELECT | 6 |
-| Adesão a comunidade | associado × comunidade/programa, ativo | área | `comunidade_adesao` (`sql/009`) | SELECT, INSERT, UPDATE | 6 |
-| Passo de onboarding | 6 passos + `finalizar`, valor anual, CTA | área (seed) | `onboarding_passo` (`sql/009`) | SELECT | 6 |
-| Progresso de onboarding | associado × passo concluído (append) | área | `onboarding_progresso` (`sql/009`) | SELECT, INSERT | 6 |
+| Notícia | cache de posts do site | WordPress | `noticia_cache` (`sql/010`) | SELECT, INSERT, UPDATE | 5 |
+| Evento | cache de eventos do site (inclui Congresso) | WordPress | `evento_cache` (`sql/010`) | SELECT, INSERT, UPDATE | 5 |
+| Tema | temas disponíveis | área (seed) | `tema` (`sql/010`) | SELECT | 5 |
+| Tema seguido | associado × tema, ativo | área | `associado_tema` (`sql/010`) | SELECT, INSERT, UPDATE | 5 |
+| Notícia salva | associado × notícia, ativo | área | `noticia_salva` (`sql/010`) | SELECT, INSERT, UPDATE | 5 |
+| Inscrição em evento | associado × evento (inclui Congresso), ativo | área (interesse; LA-06) | `evento_inscricao` (`sql/010`) | SELECT, INSERT, UPDATE | 5 |
+| Comunidade / programa | comunidades e programas (`rede`, embaixadores), link `wa.me`, contagens opcionais | área (seed, comunicação) | `comunidade` (`sql/011`) | SELECT | 6 |
+| Adesão a comunidade | associado × comunidade/programa, ativo | área | `comunidade_adesao` (`sql/011`) | SELECT, INSERT, UPDATE | 6 |
+| Passo de onboarding | 6 passos + `finalizar`, valor anual, CTA | área (seed) | `onboarding_passo` (`sql/011`) | SELECT | 6 |
+| Progresso de onboarding | associado × passo concluído (append) | área | `onboarding_progresso` (`sql/011`) | SELECT, INSERT | 6 |
 | Conteúdo editorial | oferta da semana, ofertas do clube, trilhas do Congresso, coberturas | comunicação (P-11) | — (`app/dominio/catalogo.py`, versionado) | — | 5–6 |
-| Execução de job | job, início, fim, status, itens, erro resumido | área | `job_execucao` (`sql/010`) | SELECT, INSERT, UPDATE | 3 |
+| Execução de job | job, início, fim, status, itens, erro resumido | área | `job_execucao` (`sql/012`) | SELECT, INSERT, UPDATE | 3 |
 | Post de comunidade | — | sem fonte | — | — | fora (flag) |
 | Mensalidade / patrocínio | valores e patrocinador | negócio/ERP (P-12) | — | — | 8 |
 | Fatura de valor | derivada de `beneficio_ativacao` × valor | área (cálculo) | — (derivada) | — | 8 |
@@ -1016,7 +1017,7 @@ proibidas (mesma lista de `app/audit.py:29`), remoção lógica por coluna (sem 
 
 Allowlist de `UPDATE` (`scripts/db_check.py: TABELAS_COM_UPDATE`): `associado`, `associado_perfil`,
 `solicitacao`, `beneficio_ativacao`, `noticia_cache`, `evento_cache`, `associado_tema`,
-`noticia_salva`, `evento_inscricao`, `comunidade_adesao`, `job_execucao`. `DELETE`: nenhuma tabela.
+`noticia_salva`, `evento_inscricao`, `comunidade_adesao`, `job_execucao`, `email_verificacao`. `DELETE`: nenhuma tabela.
 
 ---
 
@@ -1155,7 +1156,7 @@ sessão); o servidor ignora `contact_id` vindo do cliente e usa o da sessão.
 | `mobilephone` | Celular | direto | só dígitos após normalização; DDD válido (11–99, lista ANATEL); 9 dígitos iniciando em 9 | gravado no formato já usado no CRM (confirmar em P-05) |
 | `telephone1` | Telefone | direto | DDD válido + 8 ou 9 dígitos; vazio permitido | — |
 | `telephone2` | Telefone alternativo | direto | idem | — |
-| `emailaddress1` | E-mail | direto (**P-10**: pode virar "com verificação") | ≤ 254, sintaxe RFC 5322 simplificada, domínio com ponto, minúsculas no domínio, sem espaços | e-mail é usado pelo IdP para notificações de segurança (LA-05) |
+| `emailaddress1` | E-mail | **direto com código no novo endereço + login recente no IdP** (decidido em 2026-10-17, ADR-0015) | ≤ 254, sintaxe estrita, minúsculas; código de 6 dígitos, 10 min, 5 tentativas, 60 s entre envios, 5/h | aviso de troca enviado ao e-mail antigo |
 | `address1_postalcode` | CEP | direto | 8 dígitos | preenchimento automático de endereço por CEP fora de escopo |
 | `address1_line1` | Logradouro | direto | 1–250, sem caracteres de controle | semântica de `line1/2/3` a confirmar com o CRM (P-05) |
 | `address1_line2` | Número | direto | 1–20 | idem |
@@ -1218,8 +1219,8 @@ decisão do dono.
 | LA-01 | Três vocabulários de categoria: grupos de benefícios (4: TECNOLOGIA E IA; CONSULTÓRIO E FINANÇAS; SAÚDE, BEM-ESTAR E PROTEÇÃO; EDUCAÇÃO E CARREIRA), tiles da home (8: Tecnologia e IA, Consultório e prática, Saúde mental e bem-estar, Finanças e proteção, Educação e carreira, Defesa e jurídico, Comunidade, Vida e lazer) e barras da fatura (Consultório, Tecnologia e IA, Saúde e bem-estar) | filtro por tile, contagens e agregação da fatura inconsistentes | categoria (8) é atributo do benefício; grupo (4) é agrupamento de categorias: Tecnologia e IA → TECNOLOGIA E IA; Consultório e prática e Finanças e proteção → CONSULTÓRIO E FINANÇAS; Saúde mental e bem-estar e Defesa e jurídico → SAÚDE, BEM-ESTAR E PROTEÇÃO; Educação e carreira → EDUCAÇÃO E CARREIRA; barras da fatura usam o grupo | negócio | P-10 |
 | LA-02 | Toasts sem texto: submeter trabalho, Wallet, mentoria (pedir e oferecer), embaixadores, rede de encaminhamento, garantir vaga no Congresso, desativar benefício, pedir Cartão APM | feedback inconsistente; risco de prometer o que não acontece | propostas: "Recebemos seu interesse em publicar. A equipe da revista entra em contato." · "Carteirinha adicionada à Wallet." · "Pedido de mentoria recebido. Acompanhe em Minhas solicitações." · "Obrigado! Recebemos seu interesse em ser mentor." · "Abrindo Embaixadores acadêmicos…" · rede: sem toast (rótulo "Você está na rede ✓" basta) · Congresso: sem toast até LA-07 · "{título} desativado" · "Pedido do Cartão APM recebido. Acompanhe em Minhas solicitações." | comunicação | P-10 |
 | LA-03 | Destino de "Gerenciar" | sem forma de desativar ou acessar benefício ativo | diálogo com "Acessar" e "Desativar" (RF-BE-08) | negócio | P-10 |
-| LA-04 | Regra de validade da carteirinha ("válida até 12/2026"); não há claim nem campo conhecido | carteirinha e verificação pública podem afirmar validade falsa | omitir "válida até" no cartão; verificação mostra status + "verificado em" | negócio / CRM | P-10, P-09 |
-| LA-05 | E-mail editável direto × com verificação de posse | e-mail é canal de segurança do IdP; troca sem verificação permite sequestro de notificações | direto (plano), com auditoria e limite; reavaliar verificação por código antes da Fase 2 com Sentinela | negócio / Sentinela | P-10 |
+| LA-04 | Regra de validade da carteirinha ("válida até 12/2026"); não há claim nem campo conhecido | carteirinha e verificação pública podem afirmar validade falsa | omitir "válida até" no cartão; verificação mostra status + "verificado em" | negócio / CRM | P-10, P-09 · **Decidido (2026-10-17): omitir a validade até regra do negócio; mostrar situação e "verificado em".** |
+| LA-05 | E-mail editável direto × com verificação de posse | e-mail é canal de segurança do IdP; troca sem verificação permite sequestro de notificações | direto (plano), com auditoria e limite; reavaliar verificação por código antes da Fase 2 com Sentinela | negócio / Sentinela | P-10 · **Decidido (2026-10-17): direto com código no novo e-mail + reautenticação recente (ADR-0015).** |
 | LA-06 | "Inscrever" em evento: interesse local × inscrição real no site/sistema de eventos | associado pode acreditar estar inscrito sem estar | registra interesse local e abre `link_externo` do evento quando existir; toast da spec mantido | negócio | P-10, P-07 |
 | LA-07 | "Garantir minha vaga" no Congresso: onde a inscrição acontece de fato; Congresso 2026 (26–28/09) já ocorreu | promessa de vaga sem inscrição; banner desatualizado | registra interesse; banner/hero só com Congresso futuro no cache; CTA abre a página de inscrição do site quando houver link | negócio | P-10 |
 | LA-08 | Entidade do CRM para solicitações (`task` × custom), mapeamento de status e campo de mensagem pública; flows em create | bloqueia espelho (Fase 3) | `task` regarding contact, mapeamento da seção 7.5 | CRM / negócio | P-06 |
@@ -1233,7 +1234,7 @@ decisão do dono.
 | LA-16 | Personas "residente" (sem tipo no CRM) e "sem patrocínio" (spec só cobre patrocinado) | textos e rota inicial errados para parte da base | persona = tipo do CRM; sem flag de patrocínio, nenhum texto de patrocínio | negócio / CRM | P-10, P-12 |
 | LA-17 | "Todo resgate acontece dentro da Minha APM", mas o resgate do clube ocorre em `clubapm.com.br` sem retorno | fatura de valor e economia do clube sem dado; afirmação falsa | registra só o clique; textos que afirmam o contrário ficam sob `clube_economia` | negócio | P-12 |
 | LA-18 | Mensagem pré-preenchida da Central APM não definida | atendimento sem contexto | "Olá! Sou associado(a) da APM e preciso de ajuda." (proposta) — sem dado pessoal na URL | comunicação | P-11 |
-| LA-19 | Tratamento "Dr./Dra." e concordância ("associada/associado") | saudação e carteirinha com gênero errado | sem prefixo na saudação; concordância por `alf_sexo`; desconhecido → construções neutras ("na APM desde") | comunicação | P-10 |
+| LA-19 | Tratamento "Dr./Dra." e concordância ("associada/associado") | saudação e carteirinha com gênero errado | sem prefixo na saudação; concordância por `alf_sexo`; desconhecido → construções neutras ("na APM desde") | comunicação | P-10 · **Fase 2a: carteirinha usa "na APM desde {ano}"; saudação sem prefixo.** |
 | LA-20 | Acadêmico sem CRM: linha "CRM-SP 000000" | carteirinha com campo vazio | linha mostra só "na APM desde {ano}" | negócio | P-10 |
 | LA-21 | Item "Onboarding acadêmico" exibido a todos no protótipo; critério de "onboarding concluído" | não acadêmicos veem trilha que não se aplica; rota inicial indefinida | item visível só a Acadêmico; concluído = passo `finalizar` ("Ir para a Minha APM →") | negócio | P-10 |
 | LA-22 | Busca "Buscar especialista por área..." da rede de encaminhamento sem fonte | campo que não funciona | campo oculto | negócio | P-10 |
@@ -1243,7 +1244,7 @@ decisão do dono.
 | LA-26 | "RECOMENDADOS PARA A SUA SITUAÇÃO": regra de recomendação | recomendação arbitrária | seleção editorial por tipo de associado no seed | negócio | P-10 |
 | LA-27 | Elegibilidade TotalPass "status 2 ou 3" × gate do IdP (só status 2 entra) | regra morta para status 3 | elegível = sessão válida; registrar no ADR-0008 | negócio | P-10 |
 | LA-28 | Tag `patrocinado` em benefícios (patrocínio de parceiro) × flag `patrocinio` | perda de fidelidade visual ou exposição de patrocínio indefinido | tag, borda e chip sob `patrocinio` | negócio | P-12 |
-| LA-29 | Userinfo sem `tipo_associado`/`associado` (CRM incompleto) | persona indefinida | recusar login (fail-closed) ou sessão sem persona → decisão Sentinela antes da Fase 1 (RF-AU-09) | Sentinela | P-20 |
+| LA-29 | Userinfo sem `tipo_associado`/`associado` (CRM incompleto) | persona indefinida | recusar login (fail-closed) ou sessão sem persona → decisão Sentinela antes da Fase 1 (RF-AU-09) | Sentinela | P-20 · **Decidido (2026-10-17): recusa o login (ADR-0016).** |
 | LA-30 | Deixar de seguir tema: spec só adiciona | lista de temas só cresce | API suporta (`PUT /temas`); UI de remoção a definir (ex.: chip com ×) | comunicação | P-10 |
 
 ---

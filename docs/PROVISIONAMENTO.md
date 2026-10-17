@@ -63,6 +63,13 @@ for v in 003 004 005; do
 done
 ```
 
+### 2.2 Fase 2a — `sql/006` e `sql/007` (2026-10-17)
+
+`006_associado_perfil` (cache do cadastro e miniatura da foto; UPDATE só nela) e
+`007_email_verificacao` (só HMACs; UPDATE só nela). Mesmo procedimento do §2.1, com
+`for v in 006 007`. Validadas num MySQL 8.4 descartável com a suíte de integração
+(`TESTE_DB_HOST=... python -m pytest`).
+
 Sem as tabelas a aplicação **continua no ar** (fail-safe): flags ficam todas desligadas,
 `evento_uso` e o registro de acesso só geram log de erro e o contador `uso_falhas` em `/db-health`.
 

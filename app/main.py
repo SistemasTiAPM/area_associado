@@ -8,7 +8,6 @@ Internas (bloqueadas no edge): `/db-health`, `/auth-health`.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import secrets
 import time
@@ -20,14 +19,13 @@ from fastapi import Depends, FastAPI, Form, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_303_SEE_OTHER
 
-from . import audit, spa, uso
+from . import audit, publico, spa, uso
 from .api import v1 as api_v1
 from .api.erros import (
     MENSAGENS_PADRAO,
@@ -41,7 +39,7 @@ from .api.erros import (
 from .config import get_settings
 from .csrf import csrf_ok, csrf_token
 from .database import check_connection, get_session, tls_status
-from .dominio.associado import contact_id_stub, registrar_acesso
+from .dominio.associado import contact_id_stub, registrar_login
 from .oidc import (
     AssociadoClaims,
     OidcError,
@@ -53,6 +51,7 @@ from .oidc import (
     pending_is_valid,
 )
 from .sessao import SessaoCifradaMiddleware, construir_cifrador
+from .templating import templates
 from .session_guard import (
     SESSION_PENDING,
     LoginRequired,
@@ -67,30 +66,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 settings = get_settings()
 BASE_DIR = Path(__file__).resolve().parent
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-
-_VERSIONED_STATIC = ("style.css", "fonts.css")
 # Assets do build do Vite têm hash no nome: podem ser imutáveis para sempre.
 _PREFIXO_IMUTAVEL = "/static/spa/assets/"
 
 # Opções do login stub para testar personas (rótulos de `alf_tipo_associado`).
 TIPOS_STUB = ("Efetivo", "Aspirante", "Acadêmico", "Correspondente Nacional", "Correspondente no Exterior")
 
-
-def _static_version() -> str:
-    digest = hashlib.md5(usedforsecurity=False)
-    for nome in _VERSIONED_STATIC:
-        caminho = BASE_DIR / "static" / nome
-        digest.update(nome.encode("utf-8"))
-        if caminho.is_file():
-            digest.update(caminho.read_bytes())
-    return digest.hexdigest()[:8]
-
-
-templates.env.globals["static_v"] = _static_version()
-templates.env.globals["auth_mode"] = settings.auth_mode
-templates.env.globals["app_env"] = settings.app_env
-templates.env.globals["issuer"] = settings.effective_issuer
 
 # Mensagens ao associado por código de erro do fluxo OIDC. O código vai para o
 # evento_log; o associado vê só a frase e o request_id.
@@ -104,6 +85,9 @@ _OIDC_MESSAGES = {
     "token_invalid_grant": "O código de acesso já foi utilizado ou expirou. Entre novamente.",
     "userinfo_unavailable": "Não foi possível obter seus dados cadastrais agora. Tente novamente em instantes.",
     "jwks_unavailable": "O Login APM está temporariamente indisponível. Tente novamente em instantes.",
+    # P-20 (decisão de 2026-10-17): cadastro sem tipo/situação não abre sessão.
+    "persona_incompleta": "Seu cadastro na APM está incompleto (tipo de associado ou situação). "
+                          "Fale com a Central de Relacionamento para regularizar e tente de novo.",
 }
 _OIDC_DEFAULT_MESSAGE = "Não foi possível concluir o login. Tente novamente."
 
@@ -208,6 +192,7 @@ async def _request_context(request: Request, call_next):
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 app.include_router(api_v1.router)
 app.include_router(spa.router)
+app.include_router(publico.router)
 
 
 # --------------------------------------------------------------------------- #
@@ -265,7 +250,8 @@ async def home(request: Request):
 async def auth_login(request: Request, next: str | None = None, reauth: str | None = None):
     destino = safe_next(next)
     if settings.auth_mode == "stub":
-        if current_associado(request) is not None:
+        # reauth=1 (step-up) exige digitar o token de novo, como o prompt=login do IdP.
+        if current_associado(request) is not None and reauth != "1":
             return RedirectResponse(destino, status_code=HTTP_303_SEE_OTHER)
         return templates.TemplateResponse(
             request, "stub_login.html", {"csrf": csrf_token(request), "next": destino, "tipos": TIPOS_STUB}
@@ -310,12 +296,13 @@ async def auth_login_stub(
     claims = AssociadoClaims(
         sub=sub, contact_id=contact_id_stub(digits), nome=" ".join(nome.split())[:160] or "Associado (stub)",
         email=email.strip()[:254] or None, cpf_mask=mask_cpf(digits), amr=["stub"], auth_time=int(time.time()),
-        tipo=tipo, status="Ativo",
+        tipo=tipo, status="Ativo", num_contato=f"800{digits[:5]}", crm=str(100000 + int(digits[:5]) % 900000),
+        crm_uf="SP", data_filiacao="2014-03-01",
     )
     store_identity(request, claims)
     audit.registrar(db, request, categoria="seguranca", tipo="login_stub", sub=sub,
                     contact_id=claims.contact_id, status_http=303)
-    await run_in_threadpool(registrar_acesso, claims.contact_id, sub)
+    await run_in_threadpool(registrar_login, claims, origem="stub")
     return RedirectResponse(destino, status_code=HTTP_303_SEE_OTHER)
 
 
@@ -343,7 +330,7 @@ async def auth_callback(request: Request, db: Session = Depends(get_session)):
     store_identity(request, claims)
     audit.registrar(db, request, categoria="seguranca", tipo="login_ok", sub=claims.sub,
                     contact_id=claims.contact_id, status_http=303, detalhes={"amr": claims.amr})
-    await run_in_threadpool(registrar_acesso, claims.contact_id, claims.sub)
+    await run_in_threadpool(registrar_login, claims, origem="userinfo")
     return RedirectResponse(pending["next"], status_code=HTTP_303_SEE_OTHER)
 
 

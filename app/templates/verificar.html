@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Verificação de associado — APM{% endblock %}
+{% block brand_title %}Verificação de<br>carteirinha APM.{% endblock %}
+{% block brand_lead %}Confirme se uma pessoa é associada à Associação Paulista de Medicina.{% endblock %}
+{% block content %}
+<div class="form-card">
+  {% if indisponivel %}
+    <h1 class="form-card__title">Verificação indisponível</h1>
+    <p class="form-card__sub">Não foi possível verificar agora. Tente novamente em instantes.</p>
+  {% elif encontrado %}
+    <h1 class="form-card__title">{{ nome }}</h1>
+    <dl class="dados">
+      <dt>Situação na APM</dt><dd>{{ situacao }}</dd>
+      {% if quando %}<dt>Verificado em</dt><dd>{{ quando }}</dd>{% endif %}
+    </dl>
+    <p class="hint">Esta página mostra apenas nome e situação associativa, conforme a política de privacidade da APM.</p>
+  {% else %}
+    <h1 class="form-card__title">Carteirinha não encontrada</h1>
+    <p class="form-card__sub">O código de verificação não corresponde a nenhum associado. Confira o QR code com o portador.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -16,6 +16,8 @@ from starlette.concurrency import run_in_threadpool
 
 from ...config import get_settings
 from ...csrf import csrf_token
+from ...dominio import perfil
+from ...dominio.associado import contact_id_valido
 from ...flags import flags_efetivas
 from ...session_guard import Associado, require_associado
 
@@ -44,7 +46,8 @@ def iniciais(nome: str) -> str:
     return (significativas[0][:1] + significativas[-1][:1]).upper()
 
 
-def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]) -> dict[str, Any]:
+def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool],
+                  foto_versao: str | None = None) -> dict[str, Any]:
     s = get_settings()
     nome = formatar_nome(associado.nome)
     expira = datetime.fromtimestamp(associado.auth_at + s.session_absolute_max, tz=timezone.utc)
@@ -55,7 +58,8 @@ def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]
             "iniciais": iniciais(nome),
             "tipo": associado.tipo,
             "status": associado.status,
-            "tem_foto": False,  # Fase 2 (foto no CRM, ADR-0005)
+            "tem_foto": foto_versao is not None,
+            "foto_versao": foto_versao,
         },
         "csrf": csrf_token(request),
         "rota_inicial": "/area",  # regra por persona na Fase 6 (RF-AU-04)
@@ -74,4 +78,5 @@ def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]
 @router.get("/sessao")
 async def obter_sessao(request: Request, associado: Associado = Depends(require_associado)) -> dict[str, Any]:
     flags = await run_in_threadpool(flags_efetivas)
-    return montar_sessao(request, associado, flags)
+    versao = await run_in_threadpool(perfil.foto_etag, contact_id_valido(associado.contact_id))
+    return montar_sessao(request, associado, flags, versao)

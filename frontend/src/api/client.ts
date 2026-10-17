@@ -88,26 +88,10 @@ async function lerErro(resposta: Response): Promise<ApiError> {
   return new ApiError(resposta.status, erro, MENSAGEM_PADRAO, requestId);
 }
 
-export async function api<T>(caminho: string, opcoes: OpcoesRequisicao = {}): Promise<T> {
-  const metodo = opcoes.metodo ?? 'GET';
-  const cabecalhos: Record<string, string> = { Accept: 'application/json' };
-  if (metodo !== 'GET') {
-    cabecalhos['Content-Type'] = 'application/json';
-    if (tokenCsrf) cabecalhos['X-CSRF-Token'] = tokenCsrf;
-  }
-  const init: RequestInit = {
-    method: metodo,
-    headers: cabecalhos,
-    credentials: 'same-origin',
-    cache: 'no-store',
-    redirect: 'error',
-  };
-  if (opcoes.corpo !== undefined) init.body = JSON.stringify(opcoes.corpo);
-  if (opcoes.sinal) init.signal = opcoes.sinal;
-
+async function executar<T>(caminho: string, init: RequestInit): Promise<T> {
   let resposta: Response;
   try {
-    resposta = await fetch(`/api/v1${caminho}`, init);
+    resposta = await fetch(`/api/v1${caminho}`, { ...init, credentials: 'same-origin', cache: 'no-store', redirect: 'error' });
   } catch (falha) {
     if (falha instanceof DOMException && falha.name === 'AbortError') throw falha;
     throw new ApiError(0, 'sem_conexao', MENSAGEM_SEM_CONEXAO);
@@ -124,4 +108,24 @@ export async function api<T>(caminho: string, opcoes: OpcoesRequisicao = {}): Pr
   }
   if (resposta.status === 204) return undefined as T;
   return (await resposta.json()) as T;
+}
+
+export async function api<T>(caminho: string, opcoes: OpcoesRequisicao = {}): Promise<T> {
+  const metodo = opcoes.metodo ?? 'GET';
+  const cabecalhos: Record<string, string> = { Accept: 'application/json' };
+  if (metodo !== 'GET') {
+    cabecalhos['Content-Type'] = 'application/json';
+    if (tokenCsrf) cabecalhos['X-CSRF-Token'] = tokenCsrf;
+  }
+  const init: RequestInit = { method: metodo, headers: cabecalhos };
+  if (opcoes.corpo !== undefined) init.body = JSON.stringify(opcoes.corpo);
+  if (opcoes.sinal) init.signal = opcoes.sinal;
+  return executar<T>(caminho, init);
+}
+
+/** Envio multipart (foto). O navegador define o Content-Type com o boundary. */
+export async function enviarFormulario<T>(caminho: string, formulario: FormData): Promise<T> {
+  const cabecalhos: Record<string, string> = { Accept: 'application/json' };
+  if (tokenCsrf) cabecalhos['X-CSRF-Token'] = tokenCsrf;
+  return executar<T>(caminho, { method: 'POST', headers: cabecalhos, body: formulario });
 }

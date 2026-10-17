@@ -30,14 +30,15 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 | **Backend** | FastAPI 0.115 + Gunicorn 23 / workers Uvicorn | 2 workers, bind `0.0.0.0:8000`, `--timeout 60`. [atual] API JSON em `/api/v1` [atual: `sessao`, `uso`; demais recursos nas fases 2–8]. |
 | **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Fontes Figtree e JetBrains Mono self-hosted (OFL). Ícones SVG próprios. React Router `basename="/area"` com URLs reais (sem `localStorage` de rota). ADR-0001. |
 | **Páginas Jinja2** | `/` (landing), `/auth/*`, `stub_login`, `erro`, `/verificar/{token}` | [atual] Só as páginas fora da SPA. `boot.js` removido. Visual antigo (Neo Sans) até P-24. |
-| **Autenticação** | OIDC Authorization Code + PKCE S256, client **confidencial** (`client_secret_basic`) | [atual] `app/oidc.py` com `httpx` + `pyjwt` (RS256 fixo, `iss`/`aud`/`nonce`/`exp`/`auth_time` obrigatórios). **Sem refresh token**: sessão própria; expirou → SSO silencioso no IdP. Escopo `carteirinha` [alvo Fase 2, P-09]. |
+| **Autenticação** | OIDC Authorization Code + PKCE S256, client **confidencial** (`client_secret_basic`) | [atual] `app/oidc.py` com `httpx` + `pyjwt` (RS256 fixo, `iss`/`aud`/`nonce`/`exp`/`auth_time` obrigatórios). **Sem refresh token**: sessão própria; expirou → SSO silencioso no IdP. [atual] Escopo `carteirinha` (tipo, situação, CRM, UF, filiação); sem tipo ou situação o login é recusado (ADR-0016). O client do IdP precisa permitir o escopo (P-09). |
 | **Back-channel IdP** | `http://login_associado:8000` na `rede_publica`, header `Host: login.apm.org.br` | [atual] Evita hairpin via Cloudflare e a zona `oauth_token` (3 r/s) do edge. `iss` continua `https://login.apm.org.br`. |
-| **Sessão** | Cookie `SessionMiddleware`, `same_site=lax`, Secure fora de `development` | [atual] **cifrado e autenticado** (`app/sessao.py`, Fernet/MultiFernet; `SESSION_ENC_KEYS` obrigatória em produção), nome `__Host-area` (`area_sessao` só em development) — ADR-0011. Conteúdo: `sub, cid, nome, email, cpf_mask, auth_at, amr, idt, csrf` + `tipo, status`. **CPF completo, access e refresh token nunca.** |
+| **Sessão** | Cookie `SessionMiddleware`, `same_site=lax`, Secure fora de `development` | [atual] **cifrado e autenticado** (`app/sessao.py`, Fernet/MultiFernet; `SESSION_ENC_KEYS` obrigatória em produção), nome `__Host-area` (`area_sessao` só em development) — ADR-0011. Conteúdo: `sub, cid, nome, email, cpf_mask, auth_at, idp_at, amr, idt, csrf, tipo, status` (`idp_at` = `auth_time` do IdP, base do step-up). **CPF completo, access e refresh token nunca.** |
 | **CSRF** | [atual] Form field `csrf` (`/auth/*`); na API, `X-CSRF-Token` + `Sec-Fetch-Site: same-origin` (ou `Origin` = `PUBLIC_BASE_URL`) + `Content-Type` JSON/multipart | `app/csrf.py` (`exigir_csrf`). Token entregue em `GET /api/v1/sessao`. Recusa vai para `evento_log` (`csrf_recusado`). |
-| **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials`, REST `/api/v1/ferramentas/{nome}` | [alvo Fase 2] `app/integracoes/hub.py`. Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Token do hub só em memória de processo. `HUB_MODE=real\|stub` (stub proibido em produção). ADR-0002, P-02..P-05. |
+| **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials`, REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`; hub real na Fase 2b (P-28). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Token do hub só em memória de processo. `HUB_MODE=real\|stub` (stub proibido em produção). ADR-0002, P-02..P-05. |
 | **Site WordPress** | MySQL `portal_apm` (Locaweb), usuário somente leitura próprio | [alvo Fase 5] `app/integracoes/portal_wp.py`, **só no serviço de jobs**; o processo web nunca conecta na Locaweb. Cache em `noticia_cache`/`evento_cache`. ADR-0006, P-07. |
 | **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [alvo Fase 3] Sincronização do portal, outbox de solicitações para o CRM, status de volta, cache de perfil. Rastro em `job_execucao`. |
-| **Imagens** | Pillow (foto de perfil) | [alvo Fase 2] Em memória, magic bytes, `MAX_IMAGE_PIXELS`, 512×512 para o CRM (`entityimage`), miniatura 128×128 local. ADR-0005. |
+| **Imagens** | Pillow 13 (foto de perfil), segno (QR em SVG) | [atual] Em memória, magic bytes, `MAX_IMAGE_PIXELS`, 512×512 para o CRM (`entityimage`), miniatura 128×128 local. ADR-0005. |
+| **E-mail** | SMTP com STARTTLS (`app/integracoes/email.py`), `SMTP_MODE=real\|stub` | [atual] Código de troca de e-mail e aviso ao endereço antigo (ADR-0015). Stub proibido em produção; credencial própria pendente (P-27). |
 | **ORM / Driver** | SQLAlchemy 2.0 + PyMySQL 1.1 | [atual] `ssl_ca=/etc/ssl/rds/global-bundle.pem`, `ssl_verify_cert`, `ssl_verify_identity`. Bundle baixado no `Dockerfile`. |
 | **Banco** | MySQL 8.4 (RDS `mysql-producao`), schema `area_associado`, usuário `apm_area` (`REQUIRE SSL`) | [atual] `SELECT, INSERT, EXECUTE` no schema. [alvo] **`UPDATE` concedido tabela a tabela** na migração que a cria, com justificativa; **DELETE nunca**; trilhas append-only. Migrações em `sql/NNN_*.sql`, aplicadas pelo operador (`docs/PROVISIONAMENTO.md`). ADR-0004. |
 | **Auditoria** | `evento_log` (append-only), `app/audit.py` | [atual] HMAC de `sub`/IP/UA com `LOG_HASH_KEY`; `request_id` ecoado em `X-Request-Id`. CHECK recusa segredo/CPF em `detalhes`. |
@@ -62,25 +63,30 @@ app/
   uso.py           # evento_uso: catálogo fechado, transação própria, nunca lança
   limites.py       # limite de taxa por associado (janela deslizante, por processo)
   audit.py         # evento_log (INSERT only, nunca lança) + registrar_isolado
+  templating.py    # instância única do Jinja2 (páginas fora da SPA)
+  publico.py       # GET /verificar/{token} (verificação pública da carteirinha)
   api/erros.py     # contrato único de erro {erro, mensagem, request_id, detalhes?}
-  api/v1/          # sessao.py (GET /sessao), uso.py (POST /uso)
-  dominio/         # associado.py (upsert de acesso; contact_id stub determinístico)
-  templates/       # base, home, erro, stub_login (com persona)
+  api/v1/          # sessao, uso, perfil (contato, e-mail, foto), carteirinha (dados, QR, compartilhar), deps
+  dominio/         # associado (acesso + pós-login), perfil (cache), foto (Pillow), carteirinha (token, QR),
+                   # email_verificacao (código HMAC)
+  integracoes/     # hub.py (cliente mcp_hub), hub_stub.py, email.py (SMTP)
+  templates/       # base, home, erro, stub_login (com persona), verificar
   static/          # style.css, fonts.css (Neo Sans, páginas Jinja), logo, favicons; spa/ = build (gitignored)
 frontend/          # Vite + React + TS: src/{styles,api,shell,components,pages,state,lib,test}, e2e/ (Playwright)
 scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py
-sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado (UPDATE só aqui)
-tests/             # config, guard, oidc, sessão cifrada, API/SPA/CSRF, unidades da Fase 1 (sem rede/banco)
+sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado, 006 associado_perfil,
+                   # 007 email_verificacao (UPDATE só em 005, 006, 007)
+tests/             # unidades sem rede/banco + integração com MySQL real (marcador `mysql`, TESTE_DB_*)
 deploy/nginx_porteiro/
 docs/              # SPEC, REQUISITOS, PENDENCIAS, CONCLUIDO, adr/, PROVISIONAMENTO, CUTOVER, ACESSO-CONSTRUCAO
 
 [alvo — fases 2 a 8, ver docs/REQUISITOS-minha-apm.md]
 app/
-  api/v1/          # perfil, carteirinha, solicitacoes, beneficios, noticias, eventos, comunidade, ...
-  dominio/         # perfil, foto, carteirinha, solicitacoes, beneficios, ... (regras + SQL, sem HTTP)
-  integracoes/     # hub.py, hub_stub.py, portal_wp.py, portal_wp_stub.py
+  api/v1/          # solicitacoes, beneficios, noticias, eventos, comunidade, onboarding, clube, ...
+  dominio/         # solicitacoes, beneficios, noticias, eventos, ... (regras + SQL, sem HTTP)
+  integracoes/     # portal_wp.py, portal_wp_stub.py
   jobs/            # agendador e jobs (portal, outbox de solicitações, sync de status, perfis)
-sql/006..010       # solicitacao, beneficios, conteudo_portal, comunidade/onboarding, job_execucao (+ associado_perfil)
+sql/008..012       # solicitacao, beneficios, conteudo_portal, comunidade/onboarding, job_execucao
 scripts/           # + check_hub.py, check_portal_wp.py
 ```
 
@@ -90,13 +96,15 @@ túnel SSH ao porteiro e usa o login stub — regras em `docs/ACESSO-CONSTRUCAO.
 
 **Endpoints [atual]:** `GET /`, `GET /auth/login[?next=&reauth=1]`, `POST /auth/login` (só stub),
 `GET /auth/callback`, `GET /area` e `GET /area/{caminho}` (SPA, exige sessão), `GET /api/v1/sessao`,
-`POST /api/v1/uso` (CSRF), `POST /auth/logout` (CSRF → `/oauth/logout` do IdP), `GET /health`;
+`POST /api/v1/uso` (CSRF), `GET /api/v1/perfil`, `PUT /api/v1/perfil/contato`, `POST /api/v1/perfil/email`
+e `/perfil/email/confirmar`, `GET|POST|DELETE /api/v1/perfil/foto`, `GET /api/v1/carteirinha`,
+`GET /api/v1/carteirinha/qr.svg`, `POST /api/v1/carteirinha/compartilhar`, `GET /verificar/{token}`
+(público: só nome, situação e "verificado em"), `POST /auth/logout` (CSRF → `/oauth/logout` do IdP), `GET /health`;
 internos (403 no edge): `GET /db-health` (inclui `uso_falhas` e presença da SPA), `GET /auth-health`.
 Erro único da API `{"erro", "mensagem", "request_id", "detalhes"?}`; sem sessão em `/api/` → 401
 JSON, nunca 303.
 
-**Endpoints [alvo]:** demais recursos de `/api/v1` (contrato em `docs/REQUISITOS-minha-apm.md`) e
-`GET /verificar/{token}` (público, HTML, só nome/status/validade).
+**Endpoints [alvo]:** demais recursos de `/api/v1` (contrato em `docs/REQUISITOS-minha-apm.md`).
 
 ---
 
@@ -158,6 +166,12 @@ JSON, nunca 303.
 21. **Escrita no CRM só pelo `mcp_hub`**, por ferramenta tipada com allowlist de campos. A área
     nunca fala com Dataverse ou F&O. O ERP é somente leitura e só aparece com a flag
     `erp_financeiro`, após o parecer de licença (P-08).
+22. **Operação que troca canal de segurança exige step-up.** Troca de e-mail: `auth_time` do IdP
+    (`idp_at`) a no máximo `REAUTH_MAX_IDADE` + código no novo endereço (ADR-0015). Nunca usar
+    `auth_at` (login na área), que o SSO silencioso renova sem senha.
+23. **Upload só depois de sessão, CSRF e limite.** Nada de `UploadFile` como parâmetro (o FastAPI
+    leria o corpo antes das dependências): ler `request.form(max_files=1)` dentro da rota. Tipo pelos
+    bytes mágicos, teto de bytes e pixels, recodificação do zero (sem metadados).
 
 ---
 
@@ -195,4 +209,4 @@ Invariantes: código pronto para produção (erros, bordas, segurança, desempen
 
 ---
 *Criado em 2026-10-01. Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
-regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*
+regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*

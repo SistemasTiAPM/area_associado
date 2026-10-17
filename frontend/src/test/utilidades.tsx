@@ -24,6 +24,7 @@ export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flag
       tipo: 'Efetivo',
       status: 'Ativo',
       tem_foto: false,
+      foto_versao: null,
       ...parcial.associado,
     },
     flags: {
@@ -48,21 +49,29 @@ export function respostaJson(corpo: unknown, status = 200): Response {
   });
 }
 
-/** `fetch` falso: `/api/v1/sessao` devolve a sessão; o resto, 202 vazio. */
-export function simularApi(sessao: Sessao) {
+export type Rotas = (url: string, init: RequestInit | undefined) => Response | undefined;
+
+/** `fetch` falso: `/api/v1/sessao` devolve a sessão; `rotas` responde o resto; senão 202 vazio. */
+export function simularApi(sessao: Sessao, rotas?: Rotas) {
   const chamadas: { url: string; init: RequestInit | undefined }[] = [];
   const fetchFalso = vi.fn(async (entrada: RequestInfo | URL, init?: RequestInit) => {
     const url = String(entrada);
     chamadas.push({ url, init });
     if (url === '/api/v1/sessao') return respostaJson(sessao);
+    const especifica = rotas?.(url, init);
+    if (especifica) return especifica;
     return respostaJson({ gravados: 0, descartados: 0 }, 202);
   });
   vi.stubGlobal('fetch', fetchFalso);
   return { fetchFalso, chamadas };
 }
 
-export function montarApp(rota: string, sessao: Sessao = fabricarSessao()): ReturnType<typeof render> & ReturnType<typeof simularApi> {
-  const api = simularApi(sessao);
+export function montarApp(
+  rota: string,
+  sessao: Sessao = fabricarSessao(),
+  rotas?: Rotas,
+): ReturnType<typeof render> & ReturnType<typeof simularApi> {
+  const api = simularApi(sessao, rotas);
   const resultado = render(
     <MemoryRouter initialEntries={[rota]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <App />

@@ -7,6 +7,7 @@ export interface Sessao {
     tipo: string | null;
     status: string | null;
     tem_foto: boolean;
+    foto_versao: string | null;
   };
   csrf: string;
   rota_inicial: string;

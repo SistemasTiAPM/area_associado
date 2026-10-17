@@ -58,3 +58,15 @@ def registrar_acesso(contact_id: str | None, sub: str) -> bool:
         logger.error("associado: falha ao registrar acesso: %s", type(exc).__name__)
         return False
     return True
+
+
+def registrar_login(claims, *, origem: str) -> None:
+    """Pós-login (callback OIDC e stub): acesso, cache do perfil e token da
+    carteirinha. Cada passo nunca lança — o login não depende de nenhum deles."""
+    from . import carteirinha, perfil  # import tardio: evita ciclo no import de app.main
+
+    cid = contact_id_valido(claims.contact_id)
+    if cid is None or not registrar_acesso(cid, claims.sub):
+        return
+    perfil.gravar_de_login(cid, claims, origem=origem)
+    carteirinha.garantir_token(cid)

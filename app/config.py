@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     )
     oidc_client_id: str = Field("area-associado", alias="OIDC_CLIENT_ID")
     oidc_client_secret: str | None = Field(None, alias="OIDC_CLIENT_SECRET")
-    oidc_scopes: str = Field("openid profile email cpf", alias="OIDC_SCOPES")
+    oidc_scopes: str = Field("openid profile email cpf carteirinha", alias="OIDC_SCOPES")
     oidc_pending_ttl: int = Field(600, alias="OIDC_PENDING_TTL")
     oidc_jwks_ttl: int = Field(300, alias="OIDC_JWKS_TTL")
     oidc_http_timeout: float = Field(10.0, alias="OIDC_HTTP_TIMEOUT")
@@ -101,6 +101,39 @@ class Settings(BaseSettings):
     flags_cache_ttl: int = Field(60, alias="FLAGS_CACHE_TTL")
     # Origens https permitidas em img-src (CSP) e no filtro de imagens do job do portal.
     csp_img_hosts: str = Field("https://www.apm.org.br", alias="CSP_IMG_HOSTS")
+
+    # ------------------------------------------------------------------ #
+    # mcp_hub (ADR-0002) — único caminho até o CRM/ERP. `stub` = dados    #
+    # determinísticos em memória, proibido em produção.                   #
+    # ------------------------------------------------------------------ #
+    hub_mode: str = Field("stub", alias="HUB_MODE")
+    hub_base_url: str = Field("http://mcp_hub:8000", alias="HUB_BASE_URL")
+    hub_public_host: str = Field("mcp.apm.org.br", alias="HUB_PUBLIC_HOST")
+    hub_client_id: str = Field("area-associado", alias="HUB_CLIENT_ID")
+    hub_client_secret: str | None = Field(None, alias="HUB_CLIENT_SECRET")
+    hub_timeout: float = Field(10.0, alias="HUB_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # E-mail (código de troca de e-mail e aviso ao endereço antigo).      #
+    # `stub` não envia nada; fora de produção devolve o código na API.    #
+    # ------------------------------------------------------------------ #
+    smtp_mode: str = Field("stub", alias="SMTP_MODE")
+    smtp_host: str | None = Field(None, alias="SMTP_HOST")
+    smtp_port: int = Field(587, alias="SMTP_PORT")
+    smtp_user: str | None = Field(None, alias="SMTP_USER")
+    smtp_password: str | None = Field(None, alias="SMTP_PASSWORD")
+    smtp_from: str = Field("Associação Paulista de Medicina <naoresponda@apm.org.br>", alias="SMTP_FROM")
+    smtp_starttls: bool = Field(True, alias="SMTP_STARTTLS")
+    smtp_timeout: float = Field(20.0, alias="SMTP_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # Perfil, foto e carteirinha (Fase 2).                                #
+    # ------------------------------------------------------------------ #
+    carteirinha_hmac_key: str | None = Field(None, alias="CARTEIRINHA_HMAC_KEY")
+    perfil_cache_ttl: int = Field(86400, alias="PERFIL_CACHE_TTL")
+    reauth_max_idade: int = Field(900, alias="REAUTH_MAX_IDADE")
+    foto_max_bytes: int = Field(5 * 1024 * 1024, alias="FOTO_MAX_BYTES")
+    email_codigo_ttl: int = Field(600, alias="EMAIL_CODIGO_TTL")
 
     # ------------------------------------------------------------------ #
     # Propriedades derivadas                                             #
@@ -174,6 +207,21 @@ class Settings(BaseSettings):
         return [h.strip().rstrip("/") for h in self.csp_img_hosts.split(",") if h.strip()]
 
     @property
+    def effective_hub_base_url(self) -> str:
+        return self.hub_base_url.rstrip("/")
+
+    @property
+    def effective_carteirinha_key(self) -> bytes:
+        """Chave do token público da carteirinha (ADR-0014). Fora de produção,
+        derivada de SECRET_KEY com separação de domínio."""
+        if self.carteirinha_hmac_key:
+            return self.carteirinha_hmac_key.encode("utf-8")
+        import hashlib
+        import hmac as _hmac
+
+        return _hmac.new(self.secret_key.encode("utf-8"), b"area_associado/carteirinha/v1", hashlib.sha256).digest()
+
+    @property
     def sqlalchemy_dsn(self) -> str:
         # Senha vai por connect_args (database.py), nunca na URL.
         return (
@@ -232,6 +280,7 @@ class Settings(BaseSettings):
         for flag in self.flags_forcadas:
             if not _FLAG_KEY.match(flag):
                 raise ValueError(f"FLAGS_FORCAR_DESLIGADAS contém chave inválida: {flag!r}")
+        self._validar_integracoes()
         if not 5 <= self.flags_cache_ttl <= 3600:
             raise ValueError("FLAGS_CACHE_TTL deve ficar entre 5 e 3600 segundos")
         for host in self.csp_img_host_list:
@@ -244,6 +293,51 @@ class Settings(BaseSettings):
                 raise ValueError(f"CSP_IMG_HOSTS aceita só origens https sem caminho: {host!r}")
 
 
+    def _validar_integracoes(self) -> None:
+        self.hub_mode = self.hub_mode.lower().strip()
+        self.smtp_mode = self.smtp_mode.lower().strip()
+        if self.hub_mode not in ("real", "stub"):
+            raise ValueError("HUB_MODE inválido (use real|stub)")
+        if self.smtp_mode not in ("real", "stub"):
+            raise ValueError("SMTP_MODE inválido (use real|stub)")
+        if self.is_production:
+            if self.hub_mode == "stub":
+                raise ValueError("HUB_MODE=stub é proibido com APP_ENV=production")
+            if self.smtp_mode == "stub":
+                raise ValueError("SMTP_MODE=stub é proibido com APP_ENV=production")
+            if not self.carteirinha_hmac_key or len(self.carteirinha_hmac_key) < _MIN_SECRET_LEN:
+                raise ValueError("CARTEIRINHA_HMAC_KEY (>= 32) é obrigatória com APP_ENV=production")
+        elif self.carteirinha_hmac_key is not None and len(self.carteirinha_hmac_key) < _MIN_SECRET_LEN:
+            raise ValueError("CARTEIRINHA_HMAC_KEY precisa de ao menos 32 caracteres")
+        if self.hub_mode == "real":
+            if not self.hub_client_secret or len(self.hub_client_secret) < 16:
+                raise ValueError("HUB_MODE=real exige HUB_CLIENT_SECRET")
+            partes = urlsplit(self.effective_hub_base_url)
+            # https sempre; http só para nome de serviço da rede Docker (sem ponto),
+            # que nunca sai da máquina.
+            interno = partes.scheme == "http" and partes.hostname and "." not in partes.hostname
+            if not (partes.scheme == "https" or interno) or partes.path or partes.query or "@" in partes.netloc:
+                raise ValueError("HUB_BASE_URL deve ser https:// (ou http:// de serviço Docker interno), sem caminho")
+            if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", self.hub_public_host):
+                raise ValueError("HUB_PUBLIC_HOST inválido")
+        if self.smtp_mode == "real":
+            if not (self.smtp_host and self.smtp_user and self.smtp_password and self.smtp_from):
+                raise ValueError("SMTP_MODE=real exige SMTP_HOST, SMTP_USER, SMTP_PASSWORD e SMTP_FROM")
+            if not self.smtp_starttls and self.smtp_port != 465:
+                raise ValueError("SMTP sem STARTTLS só na porta 465 (TLS implícito)")
+        if not 1.0 <= self.hub_timeout <= 30.0 or not 1.0 <= self.smtp_timeout <= 60.0:
+            raise ValueError("HUB_TIMEOUT/SMTP_TIMEOUT fora da faixa")
+        if not 60 <= self.reauth_max_idade <= 3600:
+            raise ValueError("REAUTH_MAX_IDADE deve ficar entre 60 e 3600 segundos")
+        if not 300 <= self.perfil_cache_ttl <= 7 * 86400:
+            raise ValueError("PERFIL_CACHE_TTL deve ficar entre 300 s e 7 dias")
+        if not 256 * 1024 <= self.foto_max_bytes <= 10 * 1024 * 1024:
+            raise ValueError("FOTO_MAX_BYTES deve ficar entre 256 KiB e 10 MiB")
+        if not 120 <= self.email_codigo_ttl <= 1800:
+            raise ValueError("EMAIL_CODIGO_TTL deve ficar entre 120 e 1800 segundos")
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
