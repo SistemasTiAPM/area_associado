@@ -4,6 +4,23 @@ Registro do que já foi feito, do mais recente para o mais antigo. Cada entrada 
 está e qual a evidência. Itens que saem de [PENDENCIAS.md](PENDENCIAS.md) entram aqui com a
 data de conclusão e o ID original.
 
+## 📍 Ponto de parada — 2026-10-17
+
+| Commit | Entrega |
+|---|---|
+| `0607974` | Estrutura inicial (RP OIDC, sessão, auditoria, banco base) |
+| `1ab497b` | Fase 0 — requisitos, ADRs 0001–0014, pendências e concluídos |
+| `55674bd` | Fase 1 — fundação da Minha APM |
+| `061d7dc` | Fase 2a — perfil, e-mail por código, foto, carteirinha, ADRs 0015–0016 |
+
+**Estado verificado no último commit:** 135 testes de backend com MySQL real, 42 de front,
+20 de 20 no e2e na imagem de produção, Lighthouse 100 em acessibilidade nas telas novas,
+nenhum CPF gravado. Detalhes e evidências nas entradas abaixo.
+
+**Ainda não feito:** implantação no ambiente de construção (P-23), mcp_hub real (Fase 2b, P-28),
+SMTP real (P-27). Próximo passo e responsáveis em [PENDENCIAS.md](PENDENCIAS.md), seção
+"Onde paramos".
+
 ---
 
 ## 2026-10-17 — Fase 2a: perfil e carteirinha na área (código)

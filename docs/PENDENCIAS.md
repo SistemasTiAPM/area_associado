@@ -8,6 +8,31 @@ resolvido, ele **sai daqui e entra em [CONCLUIDO.md](CONCLUIDO.md)** com data e 
 - **Referências:** decisões em [docs/adr/](adr/), requisitos em [REQUISITOS-minha-apm.md](REQUISITOS-minha-apm.md),
   plano por fases em [REQUISITOS-minha-apm.md §12](REQUISITOS-minha-apm.md) e no roteiro abaixo.
 
+## 📍 Onde paramos — 2026-10-17
+
+**Último commit:** `061d7dc` na `main`, já no GitHub (`SistemasTiAPM/area_associado`).
+Fases 0, 1 e 2a concluídas no código e verificadas. Nada foi implantado ainda: o container de
+construção roda o esqueleto de 01/10.
+
+| Fase | Situação | Depende de |
+|---|---|---|
+| 0 — Documentação | concluída | — |
+| 1 — Fundação (SPA, sessão cifrada, API, flags, analytics) | código concluído | implantação P-23 |
+| 2a — Perfil, e-mail por código, foto, carteirinha | código concluído (hub e SMTP simulados) | implantação P-23 |
+| 2b — Extensão do mcp_hub | **não iniciada** | P-02, P-03, P-04, P-05, P-28 |
+| 3 — Solicitações | **não iniciada**, pode começar já (fila local não depende do hub) | P-06 só para o espelho no CRM |
+| 4 a 8 | não iniciadas | ver roteiro no fim deste arquivo |
+
+**O que está nas mãos de quem**
+- **Operador (você):** P-23, implantar Fases 1 e 2a no ambiente de construção; P-01, certificado de origem.
+- **IdP / Sentinela:** P-09, permitir o escopo `carteirinha` no client `area-associado` antes de usar `AUTH_MODE=oidc`.
+- **TI / infra:** P-27, credencial SMTP; P-02, provisionar o mcp_hub.
+- **CRM admin:** P-05, app registration de escrita; P-06, entidade das solicitações.
+- **Negócio:** P-10 (lacunas restantes da spec) e P-22 (validar ajustes de contraste).
+
+**Para retomar:** escolher entre a Fase 2b (plano no repositório `mcp_hub`) e a Fase 3
+(plano neste repositório). Cada fase começa com plano e aprovação (CLAUDE.md, sessão 4).
+
 ---
 
 ## Bloqueadores externos e de infraestrutura
