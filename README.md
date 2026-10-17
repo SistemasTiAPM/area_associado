@@ -1,7 +1,22 @@
-# area_associado — Área do Associado (APM)
+# area_associado — Minha APM (Área do Associado)
 
 Aplicação FastAPI atrás do `nginx_porteiro` (`associado.apm.org.br`), autenticada pelo
 `login_associado` via OIDC. Arquitetura e regras: [CLAUDE.md](CLAUDE.md).
+
+## Documentação
+
+| Documento | Para quê |
+|---|---|
+| [docs/SPEC-minha-apm.md](docs/SPEC-minha-apm.md) | Interface "Minha APM": telas, tokens visuais, componentes, textos. Em UI, a spec vence. |
+| [docs/REQUISITOS-minha-apm.md](docs/REQUISITOS-minha-apm.md) | Requisitos RF/RNF, integrações (IdP, mcp_hub, CRM, ERP, WordPress, TotalPass), modelo de dados, solicitações, perfil, flags, lacunas. |
+| [docs/adr/](docs/adr/) | Decisões de arquitetura (SPA React + Vite, D365 via mcp_hub, UPDATE por tabela, foto no CRM, cache do site, flags, CSP...). |
+| [docs/PENDENCIAS.md](docs/PENDENCIAS.md) | Backlog vivo com dono, prioridade e fase bloqueada, mais o roteiro das fases 1 a 8. |
+| [docs/CONCLUIDO.md](docs/CONCLUIDO.md) | O que já foi entregue, com data e evidência. |
+| [docs/PROVISIONAMENTO.md](docs/PROVISIONAMENTO.md) · [docs/CUTOVER.md](docs/CUTOVER.md) · [docs/ACESSO-CONSTRUCAO.md](docs/ACESSO-CONSTRUCAO.md) | Banco, virada de chave e acesso na fase de construção. |
+
+**Estado:** Fase 0 (documentação) concluída. A SPA React (`frontend/`), a API `/api/v1`, a
+integração com o `mcp_hub` e o serviço de jobs são o alvo das fases 1 a 8 e ainda não existem
+no código. O que roda hoje é o esqueleto Jinja2 + OIDC descrito abaixo.
 
 ## Subir
 
