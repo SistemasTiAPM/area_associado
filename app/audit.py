@@ -126,3 +126,20 @@ def registrar(
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         logger.error("audit: falha ao gravar evento %s/%s: %s", categoria, tipo, type(exc).__name__)
+
+
+def registrar_isolado(request: Request, **kwargs: Any) -> None:
+    """`registrar` em transação PRÓPRIA — para quem não tem (ou não pode
+    comprometer) a sessão de banco da rota. Bloqueante: chamar via
+    `run_in_threadpool`. Nunca lança."""
+    from .database import SessionLocal  # import tardio: evita ciclo config→database no import do módulo
+
+    try:
+        db = SessionLocal()
+    except SQLAlchemyError as exc:  # pragma: no cover - criação de sessão não toca a rede
+        logger.error("audit: sessão indisponível: %s", type(exc).__name__)
+        return
+    try:
+        registrar(db, request, **kwargs)
+    finally:
+        db.close()

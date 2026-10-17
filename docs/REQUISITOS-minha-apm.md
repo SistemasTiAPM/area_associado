@@ -31,7 +31,7 @@ marcados como **(proposta)** não existem na spec e dependem de validação (se�
 | D-09 | TotalPass | Adesão lida do CRM via hub (`totalpass.adesao_consultar`) + deep-link `https://totalpass.apm.org.br` | Aceita | [0008](adr/0008-totalpass-leitura-via-hub-e-deep-link.md) |
 | D-10 | Parceiros | Sob demanda, fora de escopo | Aceita | [0009](adr/0009-parceiros-fora-de-escopo.md) |
 | — | ERP F&O | Somente leitura via hub, após parecer de licença (P-08), atrás de flag | Aceita | [0010](adr/0010-erp-somente-leitura-pos-parecer.md) |
-| D-11 | Cookie de sessão | Cifrado (Fernet sobre JSON antes do assinador), nome `__Host-area` fora de `development` | **Proposta** (P-17) | [0011](adr/0011-cookie-de-sessao-cifrado.md) |
+| D-11 | Cookie de sessão | Cifrado e autenticado (Fernet/MultiFernet), nome `__Host-area` fora de `development` | Aceita (2026-10-17) | [0011](adr/0011-cookie-de-sessao-cifrado.md) |
 | D-12 | Analytics | Tabela própria `evento_uso`, gravada em transação própria, nunca derruba a resposta | Aceita | [0012](adr/0012-analytics-evento-uso-transacao-propria.md) |
 | D-13 | CSP | Sem `'unsafe-inline'` em `script-src`/`style-src` no SPA; estilos dinâmicos por classe + custom properties via CSSOM | Aceita | [0013](adr/0013-csp-sem-inline-no-spa.md) |
 | D-14 | Chave de integração | `contact_id` (GUID do contact) é a chave de integração; CPF nunca | Aceita | [0014](adr/0014-chave-de-integracao-contact-id-nunca-cpf.md) |
@@ -130,7 +130,7 @@ não sofrem redirecionamento de persona.
 | D-09 | TotalPass: adesão lida pelo hub por `contact_id` (P-04), ativação por deep-link para `https://totalpass.apm.org.br`. | [0008](adr/0008-totalpass-leitura-via-hub-e-deep-link.md) |
 | D-10 | Integração com parceiros fora de escopo; entra sob demanda com plano próprio. | [0009](adr/0009-parceiros-fora-de-escopo.md) |
 | ERP | F&O somente leitura via hub (`financeiro.*`), atrás de `erp_financeiro`, após parecer de licença (P-08). | [0010](adr/0010-erp-somente-leitura-pos-parecer.md) |
-| D-11 | Cookie de sessão cifrado + assinado, `__Host-area`; conteúdo deixa de ser legível em base64 (hoje `idt` é legível). Proposta. | [0011](adr/0011-cookie-de-sessao-cifrado.md) |
+| D-11 | Cookie de sessão cifrado + assinado, `__Host-area`; conteúdo deixa de ser legível em base64 (antes `idt` era legível). Aceita e implementada na Fase 1. | [0011](adr/0011-cookie-de-sessao-cifrado.md) |
 | D-12 | `app/uso.py:registrar` grava `evento_uso` com `session_scope()` próprio, nunca lança; não reaproveita a sessão da rota (o `audit.registrar` faz `commit` na sessão recebida, `app/audit.py:125`). | [0012](adr/0012-analytics-evento-uso-transacao-propria.md) |
 | D-13 | CSP final sem inline; E2E falha em `securitypolicyviolation`; `scripts/csp_check.py`. | [0013](adr/0013-csp-sem-inline-no-spa.md) |
 | D-14 | Toda chave entre sistemas é `contact_id`; CPF não sai do IdP/hub, não é parâmetro de ferramenta chamada pela área, não é coluna, não é log. | [0014](adr/0014-chave-de-integracao-contact-id-nunca-cpf.md) |

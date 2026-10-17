@@ -67,6 +67,10 @@ class AssociadoClaims:
     amr: list[str] = field(default_factory=list)
     auth_time: int | None = None
     id_token: str = ""  # guardado na sessão só para o `id_token_hint` do logout
+    # Persona (rótulos do CRM, escopo `carteirinha`). Fase 1: só o login stub
+    # preenche; o OIDC passa a pedir o escopo na Fase 2 (P-09, P-20).
+    tipo: str | None = None
+    status: str | None = None
 
 
 # --------------------------------------------------------------------------- #

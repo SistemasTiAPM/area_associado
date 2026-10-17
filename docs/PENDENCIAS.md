@@ -28,9 +28,8 @@ resolvido, ele **sai daqui e entra em [CONCLUIDO.md](CONCLUIDO.md)** com data e 
 | ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
 |---|---|---|---|---|---|---|
 | P-09 | P1 | Pedir o escopo `carteirinha` no RP: `OIDC_SCOPES` em `app/config.py` e `.env.example`, conferência em `scripts/check_oidc.py` e comando `generate_client` em `docs/CUTOVER.md`. **Divergência a confirmar no IdP:** o levantamento indica o escopo já permitido ao client `area-associado`, mas `docs/CUTOVER.md:20` registra o client só com `openid profile email cpf`. | Sentinela | Fase 2 | aberta | 2026-10-16 |
-| P-20 | P1 | Decidir o comportamento quando o userinfo vier sem `tipo_associado` ou `associado` (CRM incompleto): recusar o login (fail-closed) ou abrir sessão sem persona, com rota inicial padrão. REQUISITOS LA-29 e RF-AU-09. | Sentinela | Fase 1 | aberta | 2026-10-17 |
-| P-17 | P1 | Confirmar ADR-0011 (cookie de sessão cifrado com Fernet, nome `__Host-area` fora de development) e definir a origem da chave (`SESSION_ENC_KEY` própria ou HKDF de `SECRET_KEY`). | Sentinela | Fase 1 | aberta | 2026-10-16 |
-| P-18 | P1 | Corrigir o defeito `html.js .alert { display:none }` (`app/static/style.css:323` + `boot.js`): a faixa do login stub e as mensagens de erro ficam invisíveis com JS ativo. O SweetAlert2 citado no comentário não existe. | Vitrine | Fase 1 | aberta | 2026-10-16 |
+| P-20 | P1 | Decidir o comportamento quando o userinfo vier sem `tipo_associado` ou `associado` (CRM incompleto): recusar o login (fail-closed) ou abrir sessão sem persona, com rota inicial padrão. REQUISITOS LA-29 e RF-AU-09. | Sentinela | Fase 2 (o escopo `carteirinha` só entra lá; na Fase 1 sessão sem persona cai em `/area`) | aberta | 2026-10-17 |
+| P-22 | P1 | Contraste AA: 7 pares de cor da spec falham em WCAG AA (ex.: branco sobre `#0e8f78` = 4,02; branco sobre `#1faa59` = 3,02). Na Fase 1 foram criadas variantes `-texto` com o menor escurecimento que passa (`frontend/src/styles/tokens.css`). Falta: validação visual com a agência/negócio e os pares das tags `novo` (3,33) e `ativo` (4,41), usados a partir da Fase 4. | Vitrine / negócio | Fase 4 (tags) | aberta | 2026-10-17 |
 
 ## Definições de negócio e conteúdo
 
@@ -45,11 +44,14 @@ resolvido, ele **sai daqui e entra em [CONCLUIDO.md](CONCLUIDO.md)** com data e 
 
 | ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
 |---|---|---|---|---|---|---|
-| P-14 | P2 | Fontes Figtree (400–800) e JetBrains Mono em woff2, subset latin e latin-ext, com a licença OFL em `frontend/public/fonts/LICENSE`. A fonte local atual é Neo Sans e sai das telas novas. | Vitrine | Fase 1 | aberta | 2026-10-16 |
 | P-15 | P2 | Política de retenção e purga de `evento_uso`, `noticia_cache`, `evento_cache` e `job_execucao`, executada pelo operador (sem DELETE pela aplicação). | Atlas | após Fase 5 | aberta | 2026-10-16 |
 | P-16 | P2 | Migrar o appapm para o usuário somente leitura novo da Locaweb (P-07) e aposentar `portal_apm@%`. | appapm | — | aberta | 2026-10-16 |
 | P-21 | P1 | Mapear no WordPress `portal_apm` como as **notícias** são publicadas (post type, taxonomia de tema, campos de imagem e fonte). As queries do appapm só cobrem `evento`, `banner-header` e `regional`. Exige o usuário RO de P-07. | Integrador / Planeta W | Fase 5 | aberta | 2026-10-17 |
 | P-19 | P2 | Incluir `area_associado` e `area-associado-jobs` em `/home/ubuntu/verificar-pos-reboot.sh` (hoje fora da lista de 12 containers). | Estivador | após Fase 1 | aberta | 2026-10-16 |
+| P-23 | P0 | **Implantar a Fase 1 no ambiente de construção** (ato do operador): aplicar `sql/003` a `sql/005` no RDS e registrar o sha256 (`docs/PROVISIONAMENTO.md` §2.1); gerar `SESSION_ENC_KEYS` no `.env` e no Secrets Manager; `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d`; copiar o vhost atualizado para o porteiro (`nginx -t` e `reload`); rodar `db_check` e `csp_check`. Até lá o container de construção roda o esqueleto anterior. | operador / Estivador | uso da Fase 1 pela equipe | aberta | 2026-10-17 |
+| P-24 | P2 | Páginas Jinja fora da SPA (`/`, login stub, erro) ainda usam o visual antigo (Neo Sans, paleta azul/dourado). Unificar com os tokens da spec quando a landing pública for desenhada. | Vitrine | cutover | aberta | 2026-10-17 |
+| P-25 | P2 | Sem CI: pytest, Vitest, lint e typecheck rodam no build da imagem, mas o e2e (Playwright) e o Lighthouse são manuais. Avaliar GitHub Actions com a deploy key do repositório. | Estivador | — | aberta | 2026-10-17 |
+| P-26 | P2 | O host não tem o plugin `docker-buildx`: build com BuildKit falha; hoje se usa `DOCKER_BUILDKIT=0`. Instalar o plugin (`apt install docker-buildx`) é mudança de sistema, decisão do operador. | infra | — | aberta | 2026-10-17 |
 
 ---
 
@@ -60,10 +62,10 @@ Cada fase tem plano próprio e aprovação antes de codar (CLAUDE.md, sessão 4)
 | Fase | Entrega | Pendências que bloqueiam | Estado |
 |---|---|---|---|
 | 0 | Requisitos, ADRs, pendências, concluídos, CLAUDE.md | — | concluída em 2026-10-17 |
-| 1 | Fundação: Vite + shell + tokens + fontes, `spa.py`, sessão cifrada, CSRF por header, `uso.py`, `flags.py`, `sql/003-005`, Dockerfile multi-stage, vhost, testes de rotas | P-14, P-17, P-18, P-20 | próxima |
-| 2 | Perfil e carteirinha: cliente do hub (stub até P-02), escopo `carteirinha`, edição direta, foto, `/verificar/{token}`; extensão de escrita do hub | P-02, P-03, P-04, P-05, P-09, P-10 | — |
+| 1 | Fundação: Vite + shell + tokens + fontes, `spa.py`, sessão cifrada, CSRF por header, `uso.py`, `flags.py`, `sql/003-005`, Dockerfile multi-stage, vhost, testes de rotas | — | código concluído em 2026-10-17; implantação pendente (P-23) |
+| 2 | Perfil e carteirinha: cliente do hub (stub até P-02), escopo `carteirinha`, edição direta, foto, `/verificar/{token}`; extensão de escrita do hub | P-02, P-03, P-04, P-05, P-09, P-10, P-20 | próxima |
 | 3 | Solicitações: `sql/006`, máquina de estados, API, jobs de outbox e sincronização, tela | P-06 | — |
-| 4 | Benefícios: `sql/007` seed, ativações, TotalPass via hub + deep-link, home | P-04, P-10 | — |
+| 4 | Benefícios: `sql/007` seed, ativações, TotalPass via hub + deep-link, home | P-04, P-10, P-22 | — |
 | 5 | Notícias e eventos: `portal_wp.py` só no job, caches, temas, salvos, inscrições, banner do Congresso | P-07, P-10, P-21 | — |
 | 6 | Comunidade, onboarding acadêmico e clube | P-11 | — |
 | 7 | ERP via hub `financeiro.*` atrás da flag `erp_financeiro` | P-04, P-08 | — |

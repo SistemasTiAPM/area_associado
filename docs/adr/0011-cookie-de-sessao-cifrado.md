@@ -1,7 +1,11 @@
 # ADR-0011: Cookie de sessão cifrado
 
-- **Status:** Proposta (aguarda P-17)
+- **Status:** Aceita em 2026-10-17 (P-17 resolvida: aprovada com o plano da Fase 1)
 - **Data:** 2026-10-16
+- **Implementação:** `app/sessao.py` (`SessaoCifradaMiddleware`, Fernet/MultiFernet). Chave em
+  `SESSION_ENC_KEYS` (lista; a primeira cifra, todas decifram), **obrigatória em produção**; fora
+  dela, derivada de `SECRET_KEY` por HKDF-SHA256 (`info=area_associado/sessao/v1`). Cookie
+  `__Host-area` (`area_sessao` só em development). Teto de 4000 bytes testado no pior caso.
 - **Decisores:** Sistemas TI (William) · Claude Code (Sentinela/Atlas/Maestro/Vitrine/Estivador/Integrador)
 - **Relacionadas:** ADR-0013
 

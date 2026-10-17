@@ -44,6 +44,28 @@ for v in 002; do
 done
 ```
 
+### 2.1 Fase 1 da Minha APM — `sql/003` a `sql/005` (2026-10-17)
+
+`003_feature_flag` (8 flags, todas desligadas), `004_evento_uso` (analytics, append-only) e
+`005_associado` (identidade da área; **concede `UPDATE` só na tabela `associado`**, ADR-0004).
+Validadas num MySQL 8.4.11 descartável antes do commit (grants, CHECKs, recusa de DELETE).
+
+```bash
+for f in sql/003_feature_flag.sql sql/004_evento_uso.sql sql/005_associado.sql; do
+  echo "aplicando $f"
+  mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado < "$f" || break
+done
+for v in 003 004 005; do
+  f=$(ls sql/${v}_*.sql); h=$(sha256sum "$f" | cut -d' ' -f1)
+  mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado -e \
+    "INSERT INTO schema_migrations (versao, arquivo, sha256) VALUES ('$v', '$(basename $f)', '$h') AS novo
+     ON DUPLICATE KEY UPDATE sha256 = novo.sha256;"
+done
+```
+
+Sem as tabelas a aplicação **continua no ar** (fail-safe): flags ficam todas desligadas,
+`evento_uso` e o registro de acesso só geram log de erro e o contador `uso_falhas` em `/db-health`.
+
 ## 3. Conferir
 
 ```bash
@@ -81,8 +103,17 @@ docker compose ps                                   # (healthy)
 docker compose exec area-associado python -m scripts.db_check
 ```
 
-`db_check` imprime usuário efetivo, cifra TLS e grants; sai com 1 se não houver TLS ou se o
-usuário for a conta master.
+`db_check` imprime usuário efetivo, cifra TLS e grants; sai com 1 se não houver TLS, se o
+usuário for a conta master ou se os grants violarem a ADR-0004 (UPDATE fora da allowlist
+`TABELAS_COM_UPDATE`, qualquer DELETE, ALL ou privilégio em outro schema).
+
+Este host não tem o plugin `buildx`: com BuildKit ligado o build falha. Construir com o
+builder clássico (suporta o Dockerfile multi-stage):
+
+```bash
+DOCKER_BUILDKIT=0 docker compose build && docker compose up -d
+docker compose exec area-associado python -m scripts.csp_check   # cabeçalhos de segurança
+```
 
 ## 5. Cópia de segurança do `.env`
 

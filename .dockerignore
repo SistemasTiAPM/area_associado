@@ -14,3 +14,11 @@ deploy/
 sql/
 tests/
 docker-compose*.yml
+# Frontend: só o código-fonte e o lockfile entram no contexto; dependências e
+# build são refeitos no estágio Node (Dockerfile). app/static/spa local seria
+# um build velho sobrescrevendo o novo.
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+app/static/spa/

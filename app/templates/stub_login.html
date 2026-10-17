@@ -13,6 +13,10 @@
     <input id="nome" name="nome" type="text" maxlength="160">
     <label for="email">E-mail</label>
     <input id="email" name="email" type="email" maxlength="254">
+    <label for="tipo">Tipo de associado (persona)</label>
+    <select id="tipo" name="tipo">
+      {% for t in tipos %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+    </select>
     <label for="cpf">CPF (apenas para a máscara)</label>
     <input id="cpf" name="cpf" type="text" inputmode="numeric" maxlength="14" required>
     <div><button class="btn-ghost" type="submit">Entrar</button></div>

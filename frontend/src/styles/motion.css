@@ -1,0 +1,67 @@
+/* Movimento (spec "Forma, espaçamento e movimento"; RF-SH-10).
+   Desligado com prefers-reduced-motion OU com a configuração ANIMATIONS=0
+   (atributo data-animacoes="off" no <html>, aplicado pela SPA). */
+
+@keyframes entrada-pagina {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes entrada-toast {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Filhos diretos do conteúdo entram em cascata: 420 ms, 60 ms entre eles, até 6. */
+.pagina-entrada > * {
+  animation: entrada-pagina var(--dur-pagina) var(--easing) both;
+}
+
+.pagina-entrada > :nth-child(2) {
+  animation-delay: 60ms;
+}
+.pagina-entrada > :nth-child(3) {
+  animation-delay: 120ms;
+}
+.pagina-entrada > :nth-child(4) {
+  animation-delay: 180ms;
+}
+.pagina-entrada > :nth-child(5) {
+  animation-delay: 240ms;
+}
+.pagina-entrada > :nth-child(n + 6) {
+  animation-delay: 300ms;
+}
+
+.toast {
+  animation: entrada-toast var(--dur-toast) var(--easing) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:root[data-animacoes='off'] *,
+:root[data-animacoes='off'] *::before,
+:root[data-animacoes='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+}

@@ -1,5 +1,33 @@
-# Mesma base do login_associado: Python 3.12 slim tem wheels prontas para
-# cryptography/pymysql, dispensando toolchain de compilação na imagem.
+# =====================================================================
+# Estágio 1 — build da SPA (ADR-0001). Node existe SÓ aqui: a imagem final
+# não tem Node, npm nem node_modules.
+# Node 24 (LTS): o npm 11 que acompanha resolve a árvore de pares do
+# Vitest/Vite que o npm 10 do Node 22 não resolve (erro "edgesOut").
+# =====================================================================
+FROM node:24-bookworm-slim AS frontend
+
+ENV npm_config_update_notifier=false \
+    npm_config_fund=false \
+    npm_config_audit=false
+
+WORKDIR /frontend
+
+# Dependências primeiro (cache de camada): só muda quando o lock muda.
+# --ignore-scripts: nenhum pacote roda código na instalação; os binários
+# nativos (rolldown) chegam como dependências opcionais por plataforma.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts
+
+COPY frontend/ ./
+# Portão de qualidade: tipos, lint (regras de CSP/segurança) e testes
+# unitários. Se algo falhar, a imagem não é construída.
+RUN npm run check && npm run build
+
+
+# =====================================================================
+# Estágio 2 — runtime. Mesma base do login_associado: Python 3.12 slim tem
+# wheels prontas para cryptography/pymysql, dispensando toolchain na imagem.
+# =====================================================================
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -27,9 +55,13 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY app ./app
 COPY scripts ./scripts
+# Build da SPA (estágio 1) servido pelo FastAPI em /static/spa (index em /area).
+COPY --from=frontend /frontend/dist ./app/static/spa
 
-# Usuário sem privilégios (mesmo uid do login_associado).
-RUN useradd --create-home --uid 10001 appuser
+# Usuário sem privilégios (mesmo uid do login_associado). Os arquivos da
+# aplicação ficam do root: o processo lê, não altera (e o container é read_only).
+RUN useradd --create-home --uid 10001 appuser \
+    && test -f /app/app/static/spa/index.html
 USER appuser
 
 EXPOSE 8000

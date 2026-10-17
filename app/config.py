@@ -7,6 +7,7 @@ Os validadores no fim são a lei do projeto: combinações inseguras (modo stub 
 produção, TLS do banco sem verificação em produção) impedem o container de subir.
 """
 
+import re
 from functools import lru_cache
 from urllib.parse import urlsplit
 
@@ -16,6 +17,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _ENVS = ("production", "staging", "development", "test")
 _AUTH_MODES = ("oidc", "stub")
 _MIN_SECRET_LEN = 32
+# Chave de flag: minúsculas, dígitos e sublinhado (mesmo formato da tabela feature_flag).
+_FLAG_KEY = re.compile(r"^[a-z][a-z0-9_]{1,47}$")
+# Número do WhatsApp em formato E.164 sem o "+": DDI + DDD + número.
+_WHATSAPP = re.compile(r"^[1-9][0-9]{9,14}$")
 
 
 class Settings(BaseSettings):
@@ -77,6 +82,27 @@ class Settings(BaseSettings):
     evento_log_table: str = Field("evento_log", alias="EVENTO_LOG_TABLE")
 
     # ------------------------------------------------------------------ #
+    # Sessão cifrada (ADR-0011). Lista separada por vírgula: a PRIMEIRA   #
+    # cifra; todas decifram (rotação sem derrubar sessões). Ausente fora  #
+    # de produção → derivada de SECRET_KEY por HKDF.                      #
+    # ------------------------------------------------------------------ #
+    session_enc_keys: str | None = Field(None, alias="SESSION_ENC_KEYS")
+
+    # ------------------------------------------------------------------ #
+    # Interface (SPA) — configurações entregues em GET /api/v1/sessao.    #
+    # ------------------------------------------------------------------ #
+    whatsapp_central: str = Field("551131886200", alias="WHATSAPP_CENTRAL")
+    show_whatsapp: bool = Field(True, alias="SHOW_WHATSAPP")
+    animations: bool = Field(True, alias="ANIMATIONS")
+    # Flags forçadas desligadas: vencem a tabela feature_flag (ADR-0007).
+    flags_forcar_desligadas: str = Field(
+        "mensalidade_zero,fatura_valor,patrocinio", alias="FLAGS_FORCAR_DESLIGADAS"
+    )
+    flags_cache_ttl: int = Field(60, alias="FLAGS_CACHE_TTL")
+    # Origens https permitidas em img-src (CSP) e no filtro de imagens do job do portal.
+    csp_img_hosts: str = Field("https://www.apm.org.br", alias="CSP_IMG_HOSTS")
+
+    # ------------------------------------------------------------------ #
     # Propriedades derivadas                                             #
     # ------------------------------------------------------------------ #
     @property
@@ -129,6 +155,25 @@ class Settings(BaseSettings):
         return self.log_hash_key or self.secret_key
 
     @property
+    def session_cookie_name(self) -> str:
+        """`__Host-` exige Secure, Path=/ e nenhum Domain — impede que um
+        subdomínio irmão sobrescreva o cookie. Em development (http) o
+        navegador recusaria o prefixo, então usa nome simples."""
+        return "area_sessao" if self.app_env == "development" else "__Host-area"
+
+    @property
+    def session_enc_key_list(self) -> list[str]:
+        return [k.strip() for k in (self.session_enc_keys or "").split(",") if k.strip()]
+
+    @property
+    def flags_forcadas(self) -> frozenset[str]:
+        return frozenset(f.strip().lower() for f in self.flags_forcar_desligadas.split(",") if f.strip())
+
+    @property
+    def csp_img_host_list(self) -> list[str]:
+        return [h.strip().rstrip("/") for h in self.csp_img_hosts.split(",") if h.strip()]
+
+    @property
     def sqlalchemy_dsn(self) -> str:
         # Senha vai por connect_args (database.py), nunca na URL.
         return (
@@ -164,7 +209,39 @@ class Settings(BaseSettings):
             raise ValueError("PUBLIC_BASE_URL precisa ser https:// fora de development")
         if self.session_absolute_max < self.session_max_age:
             raise ValueError("SESSION_ABSOLUTE_MAX deve ser >= SESSION_MAX_AGE")
+        self._validar_sessao_e_interface()
         return self
+
+    def _validar_sessao_e_interface(self) -> None:
+        # Import local: cryptography só é necessária para validar o formato.
+        from cryptography.fernet import Fernet
+
+        chaves = self.session_enc_key_list
+        if self.is_production and not chaves:
+            raise ValueError("SESSION_ENC_KEYS é obrigatória com APP_ENV=production")
+        for chave in chaves:
+            try:
+                Fernet(chave.encode("ascii"))
+            except (ValueError, UnicodeEncodeError) as exc:
+                raise ValueError(
+                    "SESSION_ENC_KEYS contém chave inválida (gere com "
+                    "`python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'`)"
+                ) from exc
+        if not _WHATSAPP.match(self.whatsapp_central):
+            raise ValueError("WHATSAPP_CENTRAL deve ter só dígitos, com DDI e DDD (ex.: 551131886200)")
+        for flag in self.flags_forcadas:
+            if not _FLAG_KEY.match(flag):
+                raise ValueError(f"FLAGS_FORCAR_DESLIGADAS contém chave inválida: {flag!r}")
+        if not 5 <= self.flags_cache_ttl <= 3600:
+            raise ValueError("FLAGS_CACHE_TTL deve ficar entre 5 e 3600 segundos")
+        for host in self.csp_img_host_list:
+            partes = urlsplit(host)
+            # Só origem https, sem caminho, curinga, query ou credencial: o valor
+            # vai literalmente para o cabeçalho CSP.
+            if (partes.scheme != "https" or not partes.netloc or partes.path or partes.query
+                    or partes.fragment or "@" in partes.netloc or "*" in host
+                    or not re.fullmatch(r"[A-Za-z0-9.-]+(:[0-9]{1,5})?", partes.netloc)):
+                raise ValueError(f"CSP_IMG_HOSTS aceita só origens https sem caminho: {host!r}")
 
 
 @lru_cache

@@ -12,6 +12,10 @@
 limit_req_zone $binary_remote_addr zone=area_publico:10m rate=10r/s;
 # /auth/*: login + callback consomem ~3 requests por entrada.
 limit_req_zone $binary_remote_addr zone=area_auth:10m    rate=5r/s;
+# /api/*: a SPA dispara algumas chamadas por tela (sessao, dados, uso).
+limit_req_zone $binary_remote_addr zone=area_api:10m     rate=20r/s;
+# /static/*: carga inicial da SPA (~15 arquivos com fontes) de uma vez.
+limit_req_zone $binary_remote_addr zone=area_static:10m  rate=30r/s;
 
 server {
     listen 80;
@@ -62,6 +66,33 @@ server {
     # Fluxo de autenticacao (login, callback do IdP, logout).
     location ^~ /auth/ {
         limit_req zone=area_auth burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://$up_area:8000$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
+    }
+
+    # API JSON da SPA (/api/v1). Corpo pequeno: nenhuma rota da Fase 1
+    # recebe mais que um lote de eventos. A foto (Fase 2) ganha location
+    # própria com client_max_body_size 6m.
+    location ^~ /api/ {
+        limit_req zone=area_api burst=40 nodelay;
+        limit_req_status 429;
+        client_max_body_size 64k;
+        proxy_pass http://$up_area:8000$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
+    }
+
+    # Estáticos (SPA com hash = cache imutável, definido pelo backend).
+    location ^~ /static/ {
+        limit_req zone=area_static burst=80 nodelay;
         limit_req_status 429;
         proxy_pass http://$up_area:8000$request_uri;
         proxy_set_header Host $host;

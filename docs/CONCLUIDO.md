@@ -6,6 +6,54 @@ data de conclusão e o ID original.
 
 ---
 
+## 2026-10-17 — Fase 1: fundação da Minha APM (código)
+
+Implantação no ambiente de construção pendente: P-23 (migrações no RDS, `SESSION_ENC_KEYS`,
+rebuild, vhost). O container de construção segue com o esqueleto anterior até lá.
+
+**Entregue**
+- **SPA React 18 + Vite 8 + TypeScript** em `frontend/`: shell da spec (sidebar 248 px, header
+  com busca, drawer acessível, bottom-nav de 5 abas, botão "Central APM", toast único, faixa do
+  stub), 11 rotas reais em `/area/*` (sem `localStorage`), tokens da spec em
+  `src/styles/tokens.css`, ícones SVG próprios, movimento com `prefers-reduced-motion` e
+  `ANIMATIONS`. Páginas das fases 2 a 8 como "em construção".
+- **Backend:** `app/sessao.py` (cookie cifrado Fernet, ADR-0011), `app/csrf.py` (header
+  `X-CSRF-Token` + `Sec-Fetch-Site`/`Origin` + `Content-Type`), `app/spa.py`, `app/flags.py`,
+  `app/uso.py` (catálogo fechado de 36 ações), `app/api/v1/{sessao,uso}.py`, contrato único de
+  erro (`app/api/erros.py`), 401 JSON na API, CSP final com `CSP_IMG_HOSTS`,
+  `Cross-Origin-Opener-Policy`, `immutable` só para assets 200, login stub com persona,
+  registro de acesso em `associado`.
+- **Banco:** `sql/003_feature_flag`, `sql/004_evento_uso`, `sql/005_associado` (UPDATE só em
+  `associado`); `scripts/db_check.py` com allowlist de UPDATE (ADR-0004); `scripts/csp_check.py`.
+- **Infra:** Dockerfile multi-stage (estágio `node:24` roda typecheck, lint e testes antes do
+  build; imagem final sem Node), `.dockerignore`/`.gitignore`, vhost com zonas `area_api` e
+  `area_static`, `.env.example` com as variáveis novas.
+
+**Pendências resolvidas**
+- **P-14** fontes Figtree/JetBrains Mono: `@fontsource` (OFL, `frontend/LICENSES.md`), só
+  latin/latin-ext, `font-display: swap`, servidas como arquivo (sem `data:`).
+- **P-17** cookie cifrado: ADR-0011 aceita e implementada.
+- **P-18** defeito `html.js .alert { display:none }`: `boot.js` e a regra removidos; faixa do
+  stub e erros voltam a aparecer.
+
+**Evidências (2026-10-17)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest (backend, também dentro da imagem final) | 88 passaram |
+| Vitest (front) | 36 passaram |
+| Playwright e2e na imagem real, `read_only`, 1440 e 390 px | 16 de 16 |
+| axe (WCAG 2.1 AA) em Início, Benefícios e Carteirinha | 0 violações |
+| Lighthouse acessibilidade nas mesmas 3 rotas, autenticado | 100, 100, 100 |
+| Violações de CSP durante o e2e | 0 |
+| Migrações 000–005 num MySQL 8.4.11 descartável, como `apm_area` via TLS 1.3 | aplicadas; DELETE e UPDATE fora da allowlist recusados (1142); CHECKs recusam CPF e GUID inválido (3819) |
+| `db_check` / `csp_check` contra as instâncias de teste | conforme / conforme |
+| `nginx -t` do vhost (nginx 1.31.0, includes reais do porteiro) | sintaxe ok |
+| Bundle inicial | JS 60 kB gz, CSS 4 kB gz (meta RNF-12: 250 kB) |
+
+**Descobertas registradas:** P-22 (7 pares de cor da spec abaixo de AA; variantes `-texto`
+criadas), P-23, P-24, P-25, P-26.
+
 ## 2026-10-17 — Fase 0: documentação de base
 
 - **Requisitos consolidados** em [REQUISITOS-minha-apm.md](REQUISITOS-minha-apm.md): requisitos

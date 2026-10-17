@@ -14,17 +14,20 @@ Aplicação FastAPI atrás do `nginx_porteiro` (`associado.apm.org.br`), autenti
 | [docs/CONCLUIDO.md](docs/CONCLUIDO.md) | O que já foi entregue, com data e evidência. |
 | [docs/PROVISIONAMENTO.md](docs/PROVISIONAMENTO.md) · [docs/CUTOVER.md](docs/CUTOVER.md) · [docs/ACESSO-CONSTRUCAO.md](docs/ACESSO-CONSTRUCAO.md) | Banco, virada de chave e acesso na fase de construção. |
 
-**Estado:** Fase 0 (documentação) concluída. A SPA React (`frontend/`), a API `/api/v1`, a
-integração com o `mcp_hub` e o serviço de jobs são o alvo das fases 1 a 8 e ainda não existem
-no código. O que roda hoje é o esqueleto Jinja2 + OIDC descrito abaixo.
+**Estado:** Fase 1 (fundação) concluída no código: SPA React em `/area`, API `/api/v1`
+(`sessao`, `uso`), sessão cifrada, CSRF da API, flags e analytics. Implantação no ambiente de
+construção pendente (P-23 em [docs/PENDENCIAS.md](docs/PENDENCIAS.md)). Integração com o
+`mcp_hub`, jobs e as telas de domínio são as fases 2 a 8.
 
 ## Subir
 
 ```bash
 cp .env.example .env && chmod 600 .env     # preencher; ver docs/PROVISIONAMENTO.md para o banco
-docker compose up -d --build
+DOCKER_BUILDKIT=0 docker compose build    # este host não tem buildx (P-26)
+docker compose up -d
 docker compose ps                           # (healthy)
 docker compose exec area-associado python -m scripts.db_check
+docker compose exec area-associado python -m scripts.csp_check
 docker compose exec area-associado python -m scripts.check_oidc   # com AUTH_MODE=oidc
 ```
 
@@ -43,13 +46,29 @@ Regras e passo a passo: [docs/ACESSO-CONSTRUCAO.md](docs/ACESSO-CONSTRUCAO.md).
 - `AUTH_MODE=stub` — construção de telas, só com `APP_ENV` ≠ `production` e `DEV_STUB_TOKEN`.
   Em produção o container se recusa a subir. Virada: [docs/CUTOVER.md](docs/CUTOVER.md).
 
-## Testes (na imagem, sem rede)
+## Testes
+
+Backend (na imagem, sem rede nem banco; `/dev/null` sobre o `.env` impede que o teste leia
+segredo real):
 
 ```bash
-docker run --rm -v "$PWD:/app:ro" -w /app -e PYTHONDONTWRITEBYTECODE=1 \
+docker run --rm -v "$PWD:/app:ro" -v /dev/null:/app/.env:ro -w /app -e PYTHONDONTWRITEBYTECODE=1 \
   --entrypoint sh area_associado-area-associado:latest \
   -c "pip install -q --user -r requirements-dev.txt && python -m pytest -p no:cacheprovider"
 ```
+
+Frontend (Node 24 em container; o Node do host é antigo para Vitest/jsdom). O build da imagem
+roda o mesmo `npm run check` e falha se algo quebrar:
+
+```bash
+cd frontend
+docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp -v "$PWD:/w" -w /w node:24-bookworm-slim \
+  sh -c "npm ci --ignore-scripts && npm run check && npm run build"
+```
+
+E2E (Playwright, contra um container da imagem com `AUTH_MODE=stub`, `APP_ENV=development`,
+porta `127.0.0.1:18000`): `E2E_STUB_TOKEN=<DEV_STUB_TOKEN> npx playwright test` em `frontend/`.
+Cobre 1440 e 390 px, violações de CSP, axe (WCAG 2.1 AA), drawer, flags, persona, CSRF e logout.
 
 ## Operação
 

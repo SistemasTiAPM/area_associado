@@ -308,7 +308,7 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
 }
 .btn-ghost:hover { background: var(--brand-700); color: #fff; }
 
-/* ---------------------------------------------- Alertas inline (fallback) */
+/* --------------------------------------------------------- Alertas inline */
 .alert {
   margin: 0 0 16px;
   padding: 11px 14px;
@@ -320,10 +320,7 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
 .alert--error { background: #fdecea; color: var(--danger); border-color: #f3c4bd; }
 .alert--warn  { background: #fff6e6; color: #9a6a00; border-color: #f0dcae; }
 .alert--ok    { background: #eafaf1; color: var(--ok);   border-color: #b7e4c7; }
-html.js .alert { display: none; }   /* com JS, os avisos vão pelo SweetAlert */
 
-/* SweetAlert — lista de erros */
-.swal-list { text-align: left; margin: 0; padding-left: 1.15em; line-height: 1.6; }
 
 /* ------------------------------------------------------------- Responsivo */
 @media (max-width: 860px) {
@@ -362,3 +359,4 @@ html.js .alert { display: none; }   /* com JS, os avisos vão pelo SweetAlert */
 .dados dt { font-weight: 500; opacity: .75; }
 .dados dd { margin: 0; }
 .inline-form { display: inline; }
+select { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }

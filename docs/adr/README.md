@@ -22,7 +22,7 @@ Pendências referenciadas (P-xx) estão no plano de implementação; as regras c
 | [ADR-0008](0008-totalpass-leitura-via-hub-e-deep-link.md) | TotalPass por leitura via hub e deep link, sem escrita | Aceita | 2026-10-16 |
 | [ADR-0009](0009-parceiros-fora-de-escopo.md) | Integrações com parceiros fora de escopo nesta versão | Aceita | 2026-10-16 |
 | [ADR-0010](0010-erp-somente-leitura-pos-parecer.md) | ERP (F&O) somente leitura, via hub, após parecer de licença | Aceita | 2026-10-16 |
-| [ADR-0011](0011-cookie-de-sessao-cifrado.md) | Cookie de sessão cifrado | Proposta (aguarda P-17) | 2026-10-16 |
+| [ADR-0011](0011-cookie-de-sessao-cifrado.md) | Cookie de sessão cifrado | Aceita (2026-10-17) | 2026-10-16 |
 | [ADR-0012](0012-analytics-evento-uso-transacao-propria.md) | Analytics em `evento_uso` com transação própria | Aceita | 2026-10-16 |
 | [ADR-0013](0013-csp-sem-inline-no-spa.md) | CSP sem inline no SPA | Aceita | 2026-10-16 |
 | [ADR-0014](0014-chave-de-integracao-contact-id-nunca-cpf.md) | Chave de integração é `contact_id`, nunca CPF | Aceita | 2026-10-16 |

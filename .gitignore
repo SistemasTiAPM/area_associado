@@ -10,3 +10,9 @@ __pycache__/
 venv/
 .DS_Store
 logs/
+# Frontend (SPA): dependências e saídas de build/teste nunca vão para o git.
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+app/static/spa/

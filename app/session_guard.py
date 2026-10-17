@@ -1,9 +1,9 @@
 """Identidade na sessão e guarda das rotas autenticadas.
 
-O cookie (assinado pelo SessionMiddleware) carrega só o necessário para
-renderizar a área e encerrar a sessão no IdP: `sub`, `cid`, `nome`, `email`,
-`cpf_mask`, `auth_at`, `amr`, `idt`. CPF completo, access token e refresh
-token nunca entram aqui.
+O cookie (cifrado e autenticado por `app/sessao.py`, ADR-0011) carrega só o
+necessário para renderizar a área e encerrar a sessão no IdP: `sub`, `cid`,
+`nome`, `email`, `cpf_mask`, `auth_at`, `amr`, `idt`, `tipo`, `status` (+ `csrf`).
+CPF completo, access token e refresh token nunca entram aqui.
 """
 
 from __future__ import annotations
@@ -41,6 +41,8 @@ class Associado:
     cpf_mask: str | None
     auth_at: int
     amr: tuple[str, ...]
+    tipo: str | None = None
+    status: str | None = None
 
     @property
     def is_stub(self) -> bool:
@@ -61,6 +63,14 @@ def safe_next(raw: object) -> str:
     return raw
 
 
+def _rotulo(valor: object) -> str | None:
+    """Rótulo curto de option set do CRM (ex.: "Efetivo", "Ativo"); outra coisa vira None."""
+    if not isinstance(valor, str):
+        return None
+    valor = " ".join(valor.split())
+    return valor[:40] if valor else None
+
+
 def store_identity(request: Request, claims: AssociadoClaims, *, amr: list[str] | None = None) -> None:
     """Substitui a sessão inteira (fixation): só o CSRF é regenerado depois."""
     request.session.clear()
@@ -74,6 +84,8 @@ def store_identity(request: Request, claims: AssociadoClaims, *, amr: list[str] 
             "auth_at": int(time.time()),
             "amr": list(amr if amr is not None else claims.amr),
             "idt": claims.id_token or None,
+            "tipo": _rotulo(claims.tipo),
+            "status": _rotulo(claims.status),
         }
     )
 
@@ -97,6 +109,8 @@ def current_associado(request: Request) -> Associado | None:
         cpf_mask=sess.get("cpf_mask") if isinstance(sess.get("cpf_mask"), str) else None,
         auth_at=auth_at,
         amr=tuple(a for a in amr if isinstance(a, str)) if isinstance(amr, list) else (),
+        tipo=_rotulo(sess.get("tipo")),
+        status=_rotulo(sess.get("status")),
     )
 
 

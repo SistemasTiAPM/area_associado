@@ -1,7 +1,8 @@
-"""Aplicação FastAPI — Área do Associado (APM).
+"""Aplicação FastAPI — Minha APM (Área do Associado).
 
 Rotas públicas: `/`, `/auth/login`, `/auth/callback`, `/health`.
-Rotas autenticadas: `/area`, `/auth/logout` (POST, CSRF).
+Rotas autenticadas: `/area` e `/area/{caminho}` (SPA), `/api/v1/*` (JSON),
+`/auth/logout` (POST, CSRF).
 Internas (bloqueadas no edge): `/db-health`, `/auth-health`.
 """
 
@@ -16,18 +17,31 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
-from starlette.middleware.sessions import SessionMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_303_SEE_OTHER
 
-from . import audit
+from . import audit, spa, uso
+from .api import v1 as api_v1
+from .api.erros import (
+    MENSAGENS_PADRAO,
+    ApiError,
+    e_rota_api,
+    resposta_erro,
+    resposta_http_api,
+    tratar_api_error,
+    tratar_validacao,
+)
 from .config import get_settings
-from .database import check_connection, get_session, session_scope, tls_status
+from .csrf import csrf_ok, csrf_token
+from .database import check_connection, get_session, tls_status
+from .dominio.associado import contact_id_stub, registrar_acesso
 from .oidc import (
     AssociadoClaims,
     OidcError,
@@ -38,13 +52,12 @@ from .oidc import (
     mask_cpf,
     pending_is_valid,
 )
+from .sessao import SessaoCifradaMiddleware, construir_cifrador
 from .session_guard import (
     SESSION_PENDING,
-    Associado,
     LoginRequired,
     current_associado,
     login_redirect,
-    require_associado,
     safe_next,
     store_identity,
 )
@@ -56,7 +69,12 @@ settings = get_settings()
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-_VERSIONED_STATIC = ("style.css", "fonts.css", "boot.js")
+_VERSIONED_STATIC = ("style.css", "fonts.css")
+# Assets do build do Vite têm hash no nome: podem ser imutáveis para sempre.
+_PREFIXO_IMUTAVEL = "/static/spa/assets/"
+
+# Opções do login stub para testar personas (rótulos de `alf_tipo_associado`).
+TIPOS_STUB = ("Efetivo", "Aspirante", "Acadêmico", "Correspondente Nacional", "Correspondente no Exterior")
 
 
 def _static_version() -> str:
@@ -90,20 +108,18 @@ _OIDC_MESSAGES = {
 _OIDC_DEFAULT_MESSAGE = "Não foi possível concluir o login. Tente novamente."
 
 
-# --------------------------------------------------------------------------- #
-# CSRF (token por sessão, comparação em tempo constante)                       #
-# --------------------------------------------------------------------------- #
-def _csrf_token(request: Request) -> str:
-    token = request.session.get("csrf")
-    if not token:
-        token = secrets.token_urlsafe(32)
-        request.session["csrf"] = token
-    return token
-
-
-def _csrf_ok(request: Request, token: str | None) -> bool:
-    expected = request.session.get("csrf")
-    return bool(expected) and secrets.compare_digest(expected, token or "")
+def _csp(nonce: str) -> str:
+    """CSP final (ADR-0013, RNF-01). Sem 'unsafe-inline' em lugar nenhum."""
+    img = " ".join(["'self'", "data:", *settings.csp_img_host_list])
+    return (
+        "default-src 'self'; "
+        f"script-src 'self' 'nonce-{nonce}'; "
+        "style-src 'self'; "
+        f"img-src {img}; "
+        "font-src 'self'; connect-src 'self'; manifest-src 'self'; "
+        "frame-ancestors 'none'; base-uri 'self'; "
+        f"form-action 'self' {settings.effective_issuer}; object-src 'none'"
+    )
 
 
 @asynccontextmanager
@@ -127,19 +143,24 @@ async def lifespan(app: FastAPI):
             logger.error("JWKS indisponível no boot (%s); será buscado no primeiro login.", exc.code)
     else:
         logger.warning("AUTH_MODE=stub ativo (APP_ENV=%s): login sem IdP. NUNCA em produção.", settings.app_env)
+    if spa.carregar_index() is None:
+        logger.error("SPA não encontrada em %s: /area responderá 503.", spa.INDEX)
+    if not settings.session_enc_key_list:
+        logger.warning("SESSION_ENC_KEYS ausente: chave da sessão derivada de SECRET_KEY (só fora de produção).")
     yield
 
 
 app = FastAPI(
-    title="Área do Associado",
+    title="Minha APM",
     lifespan=lifespan,
     docs_url="/docs" if settings.expose_openapi else None,
     redoc_url="/redoc" if settings.expose_openapi else None,
     openapi_url="/openapi.json" if settings.expose_openapi else None,
 )
 app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.secret_key,
+    SessaoCifradaMiddleware,
+    cifrador=construir_cifrador(settings.session_enc_key_list, settings.secret_key),
+    cookie_name=settings.session_cookie_name,
     max_age=settings.session_max_age,
     https_only=settings.session_https_only,
     # `lax`, não `strict`: o retorno do IdP (/auth/callback) é navegação top-level
@@ -156,19 +177,20 @@ async def _request_context(request: Request, call_next):
     inicio = time.perf_counter()
     response = await call_next(request)
     response.headers["X-Request-Id"] = request.state.request_id
-    response.headers.setdefault(
-        "Content-Security-Policy",
-        "default-src 'self'; "
-        f"script-src 'self' 'nonce-{request.state.csp_nonce}'; "
-        "style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; "
-        "frame-ancestors 'none'; base-uri 'self'; form-action 'self' "
-        f"{settings.effective_issuer}; object-src 'none'",
-    )
+    response.headers.setdefault("Content-Security-Policy", _csp(request.state.csp_nonce))
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-    if request.scope.get("path", "").startswith("/static/"):
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    caminho = request.scope.get("path", "")
+    if caminho.startswith(_PREFIXO_IMUTAVEL):
+        # Só sucesso é imutável: um 404 de asset (deploy pela metade) nunca
+        # pode ficar preso no cache do navegador por um ano.
+        response.headers.setdefault(
+            "Cache-Control", "public, max-age=31536000, immutable" if response.status_code == 200 else "no-store"
+        )
+    elif caminho.startswith("/static/"):
         query = request.scope.get("query_string", b"").decode("latin-1")
         versionada = query.startswith("v=") or "&v=" in query
         response.headers.setdefault(
@@ -184,19 +206,49 @@ async def _request_context(request: Request, call_next):
 
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+app.include_router(api_v1.router)
+app.include_router(spa.router)
 
 
-@app.exception_handler(LoginRequired)
-async def _login_required(request: Request, exc: LoginRequired) -> RedirectResponse:
-    return login_redirect(exc.next_path)
-
-
+# --------------------------------------------------------------------------- #
+# Erros: JSON em /api/, HTML no resto                                           #
+# --------------------------------------------------------------------------- #
 def _erro(request: Request, mensagem: str, status: int) -> HTMLResponse:
     return templates.TemplateResponse(
         request, "erro.html",
         {"mensagem": mensagem, "request_id": request.state.request_id, "status": status},
         status_code=status,
     )
+
+
+@app.exception_handler(LoginRequired)
+async def _login_required(request: Request, exc: LoginRequired) -> Response:
+    if e_rota_api(request):
+        # API nunca redireciona: a SPA recebe 401 e navega para o login (RF-AU-02/08).
+        erro, mensagem = MENSAGENS_PADRAO[401]
+        return resposta_erro(request, 401, erro, mensagem)
+    return login_redirect(exc.next_path)
+
+
+app.add_exception_handler(ApiError, tratar_api_error)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validacao(request: Request, exc: RequestValidationError) -> Response:
+    if e_rota_api(request):
+        return await tratar_validacao(request, exc)
+    return _erro(request, "Requisição inválida.", 400)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http(request: Request, exc: StarletteHTTPException) -> Response:
+    if e_rota_api(request):
+        return resposta_http_api(request, exc)
+    if exc.status_code == 404:
+        return _erro(request, "Página não encontrada.", 404)
+    if exc.status_code == 405:
+        return _erro(request, "Operação não permitida.", 405)
+    return _erro(request, _OIDC_DEFAULT_MESSAGE if exc.status_code < 500 else "Algo deu errado.", exc.status_code)
 
 
 # --------------------------------------------------------------------------- #
@@ -216,7 +268,7 @@ async def auth_login(request: Request, next: str | None = None, reauth: str | No
         if current_associado(request) is not None:
             return RedirectResponse(destino, status_code=HTTP_303_SEE_OTHER)
         return templates.TemplateResponse(
-            request, "stub_login.html", {"csrf": _csrf_token(request), "next": destino}
+            request, "stub_login.html", {"csrf": csrf_token(request), "next": destino, "tipos": TIPOS_STUB}
         )
     if current_associado(request) is not None and reauth != "1":
         return RedirectResponse(destino, status_code=HTTP_303_SEE_OTHER)
@@ -234,31 +286,36 @@ async def auth_login_stub(
     nome: str = Form(""),
     email: str = Form(""),
     cpf: str = Form(""),
+    tipo: str = Form("Efetivo"),
     next: str = Form("/area"),
     db: Session = Depends(get_session),
 ):
     if settings.auth_mode != "stub":
         return _erro(request, "Recurso indisponível.", 404)
-    if not _csrf_ok(request, csrf):
+    if not csrf_ok(request, csrf):
         return _erro(request, "Sessão expirada. Recarregue a página e tente novamente.", 400)
     destino = safe_next(next)
     if not secrets.compare_digest(token, settings.dev_stub_token or ""):
         audit.registrar(db, request, categoria="seguranca", tipo="login_stub_falha", severidade="aviso", status_http=403)
         return _erro(request, "Token de construção inválido.", 403)
     digits = "".join(ch for ch in cpf if ch.isdigit())
-    if len(digits) != 11:
+    if len(digits) != 11 or tipo not in TIPOS_STUB:
         return templates.TemplateResponse(
             request, "stub_login.html",
-            {"csrf": _csrf_token(request), "next": destino, "error": "Informe um CPF com 11 dígitos."},
+            {"csrf": csrf_token(request), "next": destino, "tipos": TIPOS_STUB,
+             "error": "Informe um CPF com 11 dígitos e um tipo de associado da lista."},
             status_code=400,
         )
     sub = audit.hash_sub(f"stub:{digits}") or "stub"
     claims = AssociadoClaims(
-        sub=sub, contact_id=None, nome=" ".join(nome.split())[:160] or "Associado (stub)",
+        sub=sub, contact_id=contact_id_stub(digits), nome=" ".join(nome.split())[:160] or "Associado (stub)",
         email=email.strip()[:254] or None, cpf_mask=mask_cpf(digits), amr=["stub"], auth_time=int(time.time()),
+        tipo=tipo, status="Ativo",
     )
     store_identity(request, claims)
-    audit.registrar(db, request, categoria="seguranca", tipo="login_stub", sub=sub, status_http=303)
+    audit.registrar(db, request, categoria="seguranca", tipo="login_stub", sub=sub,
+                    contact_id=claims.contact_id, status_http=303)
+    await run_in_threadpool(registrar_acesso, claims.contact_id, sub)
     return RedirectResponse(destino, status_code=HTTP_303_SEE_OTHER)
 
 
@@ -286,26 +343,20 @@ async def auth_callback(request: Request, db: Session = Depends(get_session)):
     store_identity(request, claims)
     audit.registrar(db, request, categoria="seguranca", tipo="login_ok", sub=claims.sub,
                     contact_id=claims.contact_id, status_http=303, detalhes={"amr": claims.amr})
+    await run_in_threadpool(registrar_acesso, claims.contact_id, claims.sub)
     return RedirectResponse(pending["next"], status_code=HTTP_303_SEE_OTHER)
 
 
 # --------------------------------------------------------------------------- #
-# Autenticado                                                                   #
+# Autenticado (a área em si é a SPA: app/spa.py + app/api/v1)                   #
 # --------------------------------------------------------------------------- #
-@app.get("/area", response_class=HTMLResponse)
-async def area(request: Request, associado: Associado = Depends(require_associado)):
-    return templates.TemplateResponse(
-        request, "area.html", {"a": associado, "csrf": _csrf_token(request)}
-    )
-
-
 @app.post("/auth/logout")
 async def auth_logout(request: Request, csrf: str = Form(""), db: Session = Depends(get_session)):
     associado = current_associado(request)
     if associado is None:
         request.session.clear()
         return RedirectResponse("/", status_code=HTTP_303_SEE_OTHER)
-    if not _csrf_ok(request, csrf):
+    if not csrf_ok(request, csrf):
         return _erro(request, "Sessão expirada. Recarregue a página e tente novamente.", 400)
     idt = request.session.get("idt")
     request.session.clear()
@@ -335,13 +386,14 @@ async def favicon() -> RedirectResponse:
 
 @app.get("/db-health", include_in_schema=False)
 async def db_health() -> JSONResponse:
+    corpo = {"database": settings.db_name, "uso_falhas": uso.falhas(), "spa": spa.carregar_index() is not None}
     try:
         st = await run_in_threadpool(tls_status)
-        return JSONResponse({"status": "ok", "database": settings.db_name, "user": st.get("current_user"),
+        return JSONResponse({"status": "ok", **corpo, "user": st.get("current_user"),
                              "ssl_version": st.get("Ssl_version"), "ssl_cipher": st.get("Ssl_cipher")})
     except SQLAlchemyError as exc:
         logger.error("db-health falhou: %s", exc)
-        return JSONResponse({"status": "error", "detail": "database unavailable"}, status_code=503)
+        return JSONResponse({"status": "error", **corpo, "detail": "database unavailable"}, status_code=503)
 
 
 @app.get("/auth-health", include_in_schema=False)
