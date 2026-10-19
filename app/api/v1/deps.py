@@ -27,12 +27,18 @@ def contexto(associado: Associado = Depends(require_associado)) -> Contexto:
     return Contexto(associado, cid)
 
 
+MENSAGEM_ENDERECO_INDISPONIVEL = ("O endereço ainda não pode ser alterado por aqui. "
+                                  "Para corrigir, fale com a Central de Relacionamento.")
+
+
 def erro_do_hub(exc: HubError) -> ApiError:
     if exc.status == 400:
         return ApiError(400, "entrada_invalida", "O cadastro recusou os dados enviados. Confira e tente de novo.",
                         detalhes=exc.detalhes)
     if exc.status == 404:
         return ApiError(404, "nao_encontrado", "Não encontramos o seu cadastro. Fale com a Central de Relacionamento.")
+    if exc.status == 409 and exc.codigo == "endereco_indisponivel":
+        return ApiError(409, "endereco_indisponivel", MENSAGEM_ENDERECO_INDISPONIVEL)
     if exc.status == 429:
         return ApiError(429, "limite_taxa")
     return ApiError(503, "fonte_indisponivel", MENSAGENS_PADRAO[503][1])

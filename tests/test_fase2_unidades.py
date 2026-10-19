@@ -173,12 +173,13 @@ def test_hub_token_em_memoria_host_e_cpf_descartado(monkeypatch):
         if req.url.path == "/oauth/token":
             return httpx.Response(200, json={"access_token": "tok", "expires_in": 600})
         return httpx.Response(200, json={"colunas": [], "linhas": [{"nome": "Ana", "cpf": "12345678901",
-                                                                    "endereco": {"uf": "SP"}, "tem_foto": True}]})
+                                                                    "endereco": {"uf": "SP"}, "endereco_disponivel": True,
+                                                                    "tem_foto": True}]})
 
     cliente, chamadas = _hub(monkeypatch, rotas)
     p = cliente.perfil_consultar("cid")
     p2 = cliente.perfil_consultar("cid")
-    assert p.nome == "Ana" and p.tem_foto and p.endereco.uf == "SP"
+    assert p.nome == "Ana" and p.tem_foto and p.endereco.uf == "SP" and p.endereco_disponivel
     assert "cpf" not in cliente.chamar("associado.perfil_consultar", {"contact_id": "cid"})[0]
     assert [c.url.path for c in chamadas].count("/oauth/token") == 1  # token reaproveitado (3 chamadas)
     chamada = chamadas[1]
@@ -205,6 +206,9 @@ def test_hub_401_renova_token_uma_vez(monkeypatch):
     (400, {"erro": "entrada_invalida", "detalhes": [{"campo": "celular", "mensagem": "x"}]}, "entrada_invalida", 400),
     (429, {"erro": "limite_taxa"}, "limite_taxa", 429),
     (404, {"erro": "ferramenta_inexistente"}, "fonte_indisponivel", 503),
+    (409, {"erro": "endereco_indisponivel"}, "endereco_indisponivel", 409),
+    (409, {"erro": "outro_conflito"}, "fonte_indisponivel", 503),
+    (504, {"erro": "escrita_indeterminada"}, "fonte_indisponivel", 503),
     (403, {"erro": "nao_permitido"}, "fonte_indisponivel", 503),
     (500, {}, "fonte_indisponivel", 503),
     (302, {}, "fonte_indisponivel", 503),
@@ -221,6 +225,34 @@ def test_hub_mapeia_erros(monkeypatch, status, corpo, codigo, http):
     with pytest.raises(HubError) as e:
         cliente.contato_atualizar("cid", {"celular": "x"})
     assert (e.value.codigo, e.value.status) == (codigo, http)
+
+
+def test_hub_uf_so_sigla_e_endereco_fail_closed():
+    from app.integracoes.hub import perfil_de_linha
+
+    end = {"logradouro": "Rua A", "numero": "1", "bairro": "B", "cidade": "C", "uf": "sp", "cep": "01000-000"}
+    p = perfil_de_linha({"crm_uf": "São Paulo", "endereco": end, "endereco_disponivel": True})
+    assert p.crm_uf is None and p.endereco.uf == "SP"  # nunca "SÃ"
+    assert perfil_de_linha({"crm_uf": " rj "}).crm_uf == "RJ"
+    sem = perfil_de_linha({"endereco": end})  # hub antigo / campo ausente
+    assert sem.endereco is None and sem.endereco_disponivel is False
+    assert perfil_de_linha({"endereco": end, "endereco_disponivel": "true"}).endereco_disponivel is False
+
+
+def test_hub_escrita_usa_timeout_proprio(monkeypatch):
+    monkeypatch.setenv("HUB_TIMEOUT_ESCRITA", "30")
+
+    def rotas(req, n):
+        if req.url.path == "/oauth/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 600})
+        return httpx.Response(200, json={"linhas": [{"campos_alterados": ["celular"]}]})
+
+    cliente, chamadas = _hub(monkeypatch, rotas)
+    cliente.perfil_consultar("cid")
+    assert cliente.contato_atualizar("cid", {"celular": "x"}) == ["celular"]
+    cliente.foto_atualizar("cid", None)
+    leituras = [c.extensions["timeout"]["read"] for c in chamadas if c.url.path.startswith("/api/")]
+    assert leituras == [10.0, 30.0, 30.0]
 
 
 def test_hub_fora_do_ar(monkeypatch):
@@ -293,6 +325,12 @@ def test_producao_exige_hub_smtp_reais_e_chave_da_carteirinha(monkeypatch):
     with pytest.raises(ValidationError, match="CARTEIRINHA_HMAC_KEY"):
         _build(monkeypatch, **base, HUB_MODE="real", HUB_CLIENT_SECRET="s" * 32, SMTP_MODE="real",
                SMTP_HOST="smtp.x", SMTP_USER="u", SMTP_PASSWORD="p")
+
+
+@pytest.mark.parametrize("valor", ["4", "61", "abc"])
+def test_timeout_de_escrita_validado(monkeypatch, valor):
+    with pytest.raises(ValidationError):
+        _build(monkeypatch, HUB_TIMEOUT_ESCRITA=valor)
 
 
 @pytest.mark.parametrize("url", ["http://mcp.apm.org.br", "ftp://mcp_hub", "https://mcp.apm.org.br/api", "https://u@h.com"])

@@ -30,7 +30,7 @@ from ...integracoes.hub import HubError, obter_hub
 from ...limites import LimiteJanela
 from ...session_guard import autenticacao_recente, require_associado
 from ..erros import ApiError
-from .deps import Contexto, contexto, erro_do_hub
+from .deps import MENSAGEM_ENDERECO_INDISPONIVEL, Contexto, contexto, erro_do_hub
 
 logger = logging.getLogger("area_associado.api.perfil")
 router = APIRouter(tags=["perfil"])
@@ -144,7 +144,8 @@ class ContatoEntrada(BaseModel):
 
 class EmailEntrada(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, min_length=3, max_length=254)]
+    # 100 = limite de emailaddress1 no CRM (CONTRATO-HUB): recusar aqui, antes de mandar código.
+    email: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, min_length=3, max_length=100)]
 
 
 class ConfirmacaoEntrada(EmailEntrada):
@@ -163,6 +164,7 @@ def _saida(p: perfil.Perfil, request: Request, ctx: Contexto) -> dict[str, Any]:
         "endereco": p.endereco, "num_contato": p.num_contato, "crm": p.crm, "crm_uf": p.crm_uf,
         "tipo_associado": p.tipo_associado, "status_associativo": p.status_associativo,
         "data_filiacao": p.data_filiacao, "tem_foto": p.tem_foto, "foto_versao": p.foto_etag,
+        "endereco_disponivel": perfil.endereco_disponivel() is True,
         "atualizado_em": _iso(p.contato_atualizado_em or p.atualizado_em), "desatualizado": p.desatualizado,
         "email_exige_reautenticacao": not autenticacao_recente(ctx.associado, s.reauth_max_idade),
     }
@@ -200,11 +202,17 @@ async def atualizar_contato(entrada: ContatoEntrada, request: Request, ctx: Cont
         campos = entrada.campos()
     except ValueError as exc:
         raise ApiError(400, "entrada_invalida", str(exc).capitalize() + ".") from exc
+    # Sabidamente indisponível: recusa aqui, sem gastar o limite nem chamar o hub.
+    # Desconhecido neste worker: o hub decide (409 se indisponível).
+    if "endereco" in campos and perfil.endereco_disponivel() is False:
+        raise ApiError(409, "endereco_indisponivel", MENSAGEM_ENDERECO_INDISPONIVEL)
     if not _limite_contato.permitir(ctx.contact_id):
         raise ApiError(429, "limite_taxa")
     try:
         await run_in_threadpool(obter_hub().contato_atualizar, ctx.contact_id, campos)
     except HubError as exc:
+        if exc.codigo == "endereco_indisponivel":
+            perfil.marcar_endereco_disponivel(False)
         raise erro_do_hub(exc) from exc
     await run_in_threadpool(perfil.aplicar_contato, ctx.contact_id, campos)
     detalhes = {"campos": sorted(campos)}

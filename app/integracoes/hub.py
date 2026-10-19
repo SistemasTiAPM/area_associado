@@ -9,6 +9,8 @@ Regras (CLAUDE.md 4, 5, 16, 17):
 - token de serviço SÓ em memória de processo (nunca sessão, banco ou log);
 - timeout explícito, sem seguir redirecionamento, sem logar corpo do hub;
 - 401 → renova o token uma vez; demais falhas viram `HubError` tipado;
+- escrita com timeout próprio (`HUB_TIMEOUT_ESCRITA`), maior que o do hub
+  (25 s), para a área não desistir antes de o hub saber o resultado;
 - defesa em profundidade da ADR-0014: chave `cpf` em qualquer linha devolvida
   é descartada e registrada como anomalia.
 
@@ -33,6 +35,7 @@ logger = logging.getLogger("area_associado.hub")
 
 _ESCOPOS = "ferramentas:ler ferramentas:escrever"
 _RE_FERRAMENTA = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+_RE_UF = re.compile(r"^[A-Z]{2}$")
 _CORPO_MAX = 2 * 1024 * 1024  # foto 512x512 em base64 cabe com folga
 
 
@@ -79,6 +82,9 @@ class PerfilCrm:
     status_associativo: str | None = None
     data_filiacao: str | None = None
     tem_foto: bool = False
+    # O hub só lê/grava endereço com a flag ligada E a Metadata confirmando os
+    # campos (CONTRATO-HUB). Ausente na resposta = indisponível (fail-closed).
+    endereco_disponivel: bool = False
     extras: dict[str, Any] = field(default_factory=dict)
 
 
@@ -96,12 +102,19 @@ def _texto(valor: Any, limite: int) -> str | None:
     return valor[:limite] or None
 
 
+def _uf(valor: Any) -> str | None:
+    """Só sigla de 2 letras; qualquer outra coisa vira None — nunca um corte ("Sã")."""
+    texto = _texto(valor, 40)
+    return texto.upper() if texto and _RE_UF.match(texto.upper()) else None
+
+
 def perfil_de_linha(linha: dict[str, Any]) -> PerfilCrm:
+    disponivel = linha.get("endereco_disponivel") is True
     end = linha.get("endereco")
     endereco = None
-    if isinstance(end, dict):
+    if disponivel and isinstance(end, dict):
         endereco = Endereco(**{k: _texto(end.get(k), 120) for k in Endereco.__dataclass_fields__})
-    uf = _texto(linha.get("crm_uf"), 2)
+        endereco.uf = _uf(end.get("uf"))
     return PerfilCrm(
         nome=_texto(linha.get("nome"), 160),
         email=_texto(linha.get("email"), 254),
@@ -111,11 +124,12 @@ def perfil_de_linha(linha: dict[str, Any]) -> PerfilCrm:
         endereco=endereco,
         num_contato=_texto(linha.get("num_contato"), 20),
         crm=_texto(linha.get("crm"), 20),
-        crm_uf=uf.upper() if uf else None,
+        crm_uf=_uf(linha.get("crm_uf")),
         tipo_associado=_texto(linha.get("tipo_associado"), 40),
         status_associativo=_texto(linha.get("status_associativo"), 40),
         data_filiacao=_texto(linha.get("data_filiacao"), 10),
         tem_foto=bool(linha.get("tem_foto")),
+        endereco_disponivel=disponivel,
     )
 
 
@@ -128,12 +142,13 @@ class ClienteHubReal:
         self._client_id = s.hub_client_id
         self._segredo = s.hub_client_secret or ""
         self._timeout = httpx.Timeout(s.hub_timeout, connect=min(5.0, s.hub_timeout))
+        self._timeout_escrita = httpx.Timeout(s.hub_timeout_escrita, connect=min(5.0, s.hub_timeout))
         self._lock = threading.Lock()
         self._token: tuple[str, float] | None = None
 
     # ------------------------------------------------------------- token
-    def _http(self) -> httpx.Client:
-        return httpx.Client(timeout=self._timeout, follow_redirects=False, headers={"Host": self._host},
+    def _http(self, timeout: httpx.Timeout | None = None) -> httpx.Client:
+        return httpx.Client(timeout=timeout or self._timeout, follow_redirects=False, headers={"Host": self._host},
                             transport=self._transporte)
 
     def _obter_token(self, renovar: bool = False) -> str:
@@ -163,18 +178,23 @@ class ClienteHubReal:
         return token
 
     # ------------------------------------------------------------ chamada
-    def chamar(self, ferramenta: str, argumentos: dict[str, Any]) -> list[dict[str, Any]]:
+    def chamar(self, ferramenta: str, argumentos: dict[str, Any], *, escrita: bool = False) -> list[dict[str, Any]]:
         if not _RE_FERRAMENTA.match(ferramenta):
             raise ValueError("nome de ferramenta inválido")
         for tentativa in (1, 2):
             token = self._obter_token(renovar=tentativa == 2)
             try:
-                with self._http() as cliente:
+                with self._http(self._timeout_escrita if escrita else None) as cliente:
                     r = cliente.post(f"{self._base}/api/v1/ferramentas/{ferramenta}",
                                      json={"argumentos": argumentos},
                                      headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
             except httpx.HTTPError as exc:
-                logger.error("hub: %s falhou (%s)", ferramenta, type(exc).__name__)
+                if escrita and not isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+                    # Enviada sem resposta: o hub pode ter gravado. Nada muda no cache;
+                    # a próxima leitura traz o que o CRM tem.
+                    logger.error("hub: %s sem resposta (%s) — resultado incerto", ferramenta, type(exc).__name__)
+                else:
+                    logger.error("hub: %s falhou (%s)", ferramenta, type(exc).__name__)
                 raise HubError("fonte_indisponivel") from exc
             if r.status_code == 401 and tentativa == 1:
                 continue
@@ -205,6 +225,10 @@ class ClienteHubReal:
             raise HubError("limite_taxa", 429)
         if r.status_code == 404 and codigo == "nao_encontrado":
             raise HubError("nao_encontrado", 404)
+        if r.status_code == 409 and codigo == "endereco_indisponivel":
+            raise HubError("endereco_indisponivel", 409)
+        if r.status_code == 504 and codigo in ("escrita_indeterminada", "tempo_esgotado"):
+            logger.error("hub: %s sem confirmação do CRM (%s) — resultado incerto", ferramenta, codigo)
         # 401/403/404 de ferramenta/5xx: problema de integração, não do associado.
         raise HubError("fonte_indisponivel")
 
@@ -214,7 +238,7 @@ class ClienteHubReal:
         return perfil_de_linha(linhas[0]) if linhas else None
 
     def contato_atualizar(self, contact_id: str, campos: dict[str, Any]) -> list[str]:
-        linhas = self.chamar("associado.contato_atualizar", {"contact_id": contact_id, **campos})
+        linhas = self.chamar("associado.contato_atualizar", {"contact_id": contact_id, **campos}, escrita=True)
         alterados = linhas[0].get("campos_alterados") if linhas else None
         return [str(c) for c in alterados] if isinstance(alterados, list) else list(campos)
 
@@ -230,7 +254,7 @@ class ClienteHubReal:
 
     def foto_atualizar(self, contact_id: str, jpeg: bytes | None) -> None:
         b64 = base64.b64encode(jpeg).decode("ascii") if jpeg else None
-        self.chamar("associado.foto_atualizar", {"contact_id": contact_id, "imagem_jpeg_b64": b64})
+        self.chamar("associado.foto_atualizar", {"contact_id": contact_id, "imagem_jpeg_b64": b64}, escrita=True)
 
 
 _instancia: ClienteHub | None = None

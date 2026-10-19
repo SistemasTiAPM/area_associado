@@ -181,6 +181,21 @@ def _gravar_do_hub(contact_id: str, crm: PerfilCrm) -> None:
         })
 
 
+# Disponibilidade do endereço é propriedade do HUB (flag + Metadata do CRM),
+# não do contato: guardada por processo a cada resposta do hub. None = este
+# worker ainda não perguntou (aí o perfil vai ao hub mesmo com cache fresco).
+_endereco_disponivel: bool | None = None
+
+
+def endereco_disponivel() -> bool | None:
+    return _endereco_disponivel
+
+
+def marcar_endereco_disponivel(valor: bool | None) -> None:
+    global _endereco_disponivel
+    _endereco_disponivel = valor
+
+
 def _contato_fresco(p: Perfil) -> bool:
     if p.contato_atualizado_em is None:
         return False
@@ -190,7 +205,7 @@ def _contato_fresco(p: Perfil) -> bool:
 def obter(contact_id: str, *, forcar: bool = False) -> Perfil:
     """Perfil para a tela. Levanta `HubError` só se não houver nem cache."""
     atual = ler(contact_id)
-    if atual is not None and not forcar and _contato_fresco(atual):
+    if atual is not None and not forcar and _contato_fresco(atual) and _endereco_disponivel is not None:
         return atual
     try:
         crm = obter_hub().perfil_consultar(contact_id)
@@ -205,6 +220,7 @@ def obter(contact_id: str, *, forcar: bool = False) -> Perfil:
             raise HubError("nao_encontrado", 404)
         atual.desatualizado = True
         return atual
+    marcar_endereco_disponivel(crm.endereco_disponivel)
     _gravar_do_hub(contact_id, crm)
     novo = ler(contact_id)
     if novo is None:  # pragma: no cover - acabou de ser gravado

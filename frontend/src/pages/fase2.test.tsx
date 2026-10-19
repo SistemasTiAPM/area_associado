@@ -10,7 +10,7 @@ function perfil(parcial: Partial<Perfil> = {}): Perfil {
     endereco: { logradouro: 'Rua A', numero: '10', complemento: null, bairro: 'Centro', cidade: 'São Paulo', uf: 'SP', cep: '01000-000' },
     num_contato: '80012345', crm: '123456', crm_uf: 'SP', tipo_associado: 'Efetivo', status_associativo: 'Ativo',
     data_filiacao: '2014-03-01', tem_foto: false, foto_versao: null, atualizado_em: '2026-10-17T10:00:00Z',
-    desatualizado: false, email_exige_reautenticacao: false, ...parcial,
+    desatualizado: false, email_exige_reautenticacao: false, endereco_disponivel: true, ...parcial,
   };
 }
 
@@ -50,6 +50,52 @@ describe('Meu perfil (RF-PE)', () => {
     expect(await screen.findByText('telefone inválido: use DDD + número')).toBeInTheDocument();
     expect(telefone).toHaveAttribute('aria-invalid', 'true');
     expect(telefone.getAttribute('aria-describedby')).toContain('telefone-erro');
+  });
+
+  it('endereço indisponível no CRM: só o aviso, e o endereço nunca é enviado', async () => {
+    const usuario = userEvent.setup();
+    let envio: Record<string, unknown> | null = null;
+    montarApp('/perfil', fabricarSessao(), (url, init) => {
+      if (url === '/api/v1/perfil') return respostaJson(perfil({ endereco: null, endereco_disponivel: false }));
+      if (url === '/api/v1/perfil/contato') {
+        envio = corpo(init);
+        return respostaJson(perfil({ endereco: null, endereco_disponivel: false, celular: '(11) 99876-5432' }));
+      }
+      return undefined;
+    });
+    expect(await screen.findByText(/O endereço ainda não pode ser alterado por aqui/)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Endereço' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('CEP')).toBeNull();
+    const celular = screen.getByLabelText('Celular');
+    await usuario.clear(celular);
+    await usuario.type(celular, '11998765432');
+    await usuario.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+    await waitFor(() => expect(envio).toEqual({ celular: '11998765432' }));
+  });
+
+  it('409 do CRM no endereço recarrega o perfil e esconde o formulário', async () => {
+    const usuario = userEvent.setup();
+    let leituras = 0;
+    montarApp('/perfil', fabricarSessao(), (url) => {
+      if (url === '/api/v1/perfil') {
+        leituras += 1;
+        return respostaJson(leituras === 1 ? perfil() : perfil({ endereco: null, endereco_disponivel: false,
+          atualizado_em: '2026-10-19T10:00:00Z' }));
+      }
+      if (url === '/api/v1/perfil/contato') {
+        return respostaJson({ erro: 'endereco_indisponivel', request_id: 'abc',
+          mensagem: 'O endereço ainda não pode ser alterado por aqui. Para corrigir, fale com a Central de Relacionamento.' }, 409);
+      }
+      return undefined;
+    });
+    const numero = await screen.findByLabelText('Número');
+    expect(numero).toHaveAttribute('autocomplete', 'off');
+    expect(screen.getByLabelText('Complemento (opcional)')).toHaveAttribute('autocomplete', 'address-line2');
+    await usuario.clear(numero);
+    await usuario.type(numero, '20');
+    await usuario.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+    await waitFor(() => expect(screen.queryByLabelText('Número')).toBeNull());
+    expect(screen.getAllByText(/O endereço ainda não pode ser alterado por aqui/).length).toBeGreaterThan(0);
   });
 
   it('troca de e-mail sem login recente pede confirmação de identidade', async () => {

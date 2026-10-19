@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     hub_client_id: str = Field("area-associado", alias="HUB_CLIENT_ID")
     hub_client_secret: str | None = Field(None, alias="HUB_CLIENT_SECRET")
     hub_timeout: float = Field(10.0, alias="HUB_TIMEOUT")
+    # Escrita: acima do timeout das ferramentas de escrita do hub (25 s).
+    hub_timeout_escrita: float = Field(30.0, alias="HUB_TIMEOUT_ESCRITA")
 
     # ------------------------------------------------------------------ #
     # E-mail (código de troca de e-mail e aviso ao endereço antigo).      #
@@ -327,6 +329,8 @@ class Settings(BaseSettings):
                 raise ValueError("SMTP sem STARTTLS só na porta 465 (TLS implícito)")
         if not 1.0 <= self.hub_timeout <= 30.0 or not 1.0 <= self.smtp_timeout <= 60.0:
             raise ValueError("HUB_TIMEOUT/SMTP_TIMEOUT fora da faixa")
+        if not max(5.0, self.hub_timeout) <= self.hub_timeout_escrita <= 60.0:
+            raise ValueError("HUB_TIMEOUT_ESCRITA deve ficar entre max(5, HUB_TIMEOUT) e 60 segundos")
         if not 60 <= self.reauth_max_idade <= 3600:
             raise ValueError("REAUTH_MAX_IDADE deve ficar entre 60 e 3600 segundos")
         if not 300 <= self.perfil_cache_ttl <= 7 * 86400:

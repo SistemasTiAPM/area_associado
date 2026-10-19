@@ -164,7 +164,9 @@ function SecaoContato({ perfil, aoAtualizar }: { perfil: Perfil; aoAtualizar: (p
     if (celular.trim() !== (perfil.celular ?? '')) campos.celular = celular.trim();
     if (telefone.trim() !== (perfil.telefone ?? '')) campos.telefone = telefone.trim() || null;
     if (telefone2.trim() !== (perfil.telefone2 ?? '')) campos.telefone2 = telefone2.trim() || null;
-    if (mudouEndereco) campos.endereco = { ...endereco, complemento: endereco.complemento?.trim() || null };
+    if (perfil.endereco_disponivel && mudouEndereco) {
+      campos.endereco = { ...endereco, complemento: endereco.complemento?.trim() || null };
+    }
     if (Object.keys(campos).length === 0) {
       mostrar('Nada para salvar');
       return;
@@ -177,6 +179,14 @@ function SecaoContato({ perfil, aoAtualizar }: { perfil: Perfil; aoAtualizar: (p
     } catch (falha) {
       setErros(errosDe(falha));
       mostrarErro(falha);
+      if (falha instanceof ApiError && falha.erro === 'endereco_indisponivel') {
+        // O CRM deixou de aceitar endereço: recarrega para esconder o formulário dele.
+        try {
+          aoAtualizar(await obterPerfil());
+        } catch {
+          /* o aviso do erro já foi mostrado */
+        }
+      }
     } finally {
       setSalvando(false);
     }
@@ -222,29 +232,41 @@ function SecaoContato({ perfil, aoAtualizar }: { perfil: Perfil; aoAtualizar: (p
             )}
           </Campo>
         </div>
-        <fieldset className="grupo-campos">
-          <legend className="grupo-campos__titulo">Endereço</legend>
-          <div className="grade-campos">
-            {campoEndereco('cep', 'CEP', 'postal-code')}
-            {campoEndereco('logradouro', 'Logradouro', 'address-line1')}
-            {campoEndereco('numero', 'Número', 'address-line2')}
-            {campoEndereco('complemento', 'Complemento (opcional)', 'address-line3')}
-            {campoEndereco('bairro', 'Bairro', 'address-level3')}
-            {campoEndereco('cidade', 'Cidade', 'address-level2')}
-            <Campo id="end-uf" rotulo="UF" erro={erros['endereco.uf']}>
-              {(a) => (
-                <select {...a} className="campo__entrada" autoComplete="address-level1" value={endereco.uf}
-                  onChange={(e) => setEndereco({ ...endereco, uf: e.target.value })}>
-                  {UFS.map((uf) => (
-                    <option key={uf} value={uf}>
-                      {uf}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Campo>
+        {perfil.endereco_disponivel ? (
+          <fieldset className="grupo-campos">
+            <legend className="grupo-campos__titulo">Endereço</legend>
+            <div className="grade-campos">
+              {campoEndereco('cep', 'CEP', 'postal-code')}
+              {campoEndereco('logradouro', 'Logradouro', 'address-line1')}
+              {/* Não há token de autocomplete para o número; complemento é a 2ª linha (address1_line2 no CRM). */}
+              {campoEndereco('numero', 'Número', 'off')}
+              {campoEndereco('complemento', 'Complemento (opcional)', 'address-line2')}
+              {campoEndereco('bairro', 'Bairro', 'address-level3')}
+              {campoEndereco('cidade', 'Cidade', 'address-level2')}
+              <Campo id="end-uf" rotulo="UF" erro={erros['endereco.uf']}>
+                {(a) => (
+                  <select {...a} className="campo__entrada" autoComplete="address-level1" value={endereco.uf}
+                    onChange={(e) => setEndereco({ ...endereco, uf: e.target.value })}>
+                    {UFS.map((uf) => (
+                      <option key={uf} value={uf}>
+                        {uf}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Campo>
+            </div>
+          </fieldset>
+        ) : (
+          <div className="grupo-campos" role="group" aria-labelledby="titulo-endereco">
+            <h3 className="grupo-campos__titulo" id="titulo-endereco">
+              Endereço
+            </h3>
+            <p className="aviso">
+              O endereço ainda não pode ser alterado por aqui. Para corrigir, fale com a Central de Relacionamento.
+            </p>
           </div>
-        </fieldset>
+        )}
         <div className="botoes">
           <button type="submit" className="botao botao--primario" disabled={salvando}>
             {salvando ? 'Salvando…' : 'Salvar alterações'}

@@ -32,10 +32,14 @@ def c(monkeypatch):
     monkeypatch.setattr(main.settings, "dev_stub_token", TOKEN_STUB)
     monkeypatch.setattr(rota_perfil, "_limite_contato", LimiteJanela(10, 3600))
     monkeypatch.setattr(rota_perfil, "_limite_foto", LimiteJanela(5, 3600))
+    from app.dominio import perfil as dominio_perfil
+
     redefinir_hub(None)
+    dominio_perfil.marcar_endereco_disponivel(None)
     cliente = TestClient(main.app, base_url=BASE)
     yield cliente
     redefinir_hub(None)
+    dominio_perfil.marcar_endereco_disponivel(None)
 
 
 def _cpf() -> str:
@@ -68,7 +72,7 @@ def test_login_grava_cache_e_perfil_completa_pelo_hub(c):
     assert p["nome"] == "TELMA NOGUEIRA" and p["email"] == "telma@exemplo.org"
     assert p["crm_uf"] == "SP" and p["tipo_associado"] == "Efetivo" and p["status_associativo"] == "Ativo"
     assert re.fullmatch(r"\(11\) 9\d{4}-\d{4}", p["celular"])  # veio do hub (stub)
-    assert p["endereco"]["uf"] == "SP" and p["desatualizado"] is False
+    assert p["endereco"]["uf"] == "SP" and p["desatualizado"] is False and p["endereco_disponivel"] is True
     assert p["email_exige_reautenticacao"] is False  # login stub acabou de acontecer
     assert "cpf" not in p and not any(re.fullmatch(r"\d{11}", str(v)) for v in p.values())
 
@@ -99,6 +103,27 @@ def test_atualiza_contato_so_depois_do_crm(c):
     assert r.status_code == 503 and r.json()["erro"] == "fonte_indisponivel"
     obter_hub().falhar = False
     assert c.get("/api/v1/perfil").json()["celular"] == "(21) 98888-7777"
+
+
+def test_endereco_indisponivel_no_crm(c):
+    from app.dominio import perfil as dominio_perfil
+    from app.integracoes.hub import obter_hub
+
+    s = entrar(c)
+    obter_hub().endereco_disponivel = False
+    p = c.get("/api/v1/perfil").json()  # 1ª leitura do worker vai ao hub mesmo com cache fresco
+    assert p["endereco_disponivel"] is False and p["endereco"] is None
+    end = {"logradouro": "Av. Paulista", "numero": "1000", "bairro": "Bela Vista", "cidade": "São Paulo",
+           "uf": "SP", "cep": "01310-100"}
+    r = c.put("/api/v1/perfil/contato", json={"celular": "11977776666", "endereco": end}, headers=h(s))
+    assert r.status_code == 409 and r.json()["erro"] == "endereco_indisponivel"
+    assert c.get("/api/v1/perfil").json()["celular"] != "(11) 97777-6666"  # nada pela metade
+    # Worker que ainda não perguntou: o hub decide e a área passa a saber.
+    dominio_perfil.marcar_endereco_disponivel(None)
+    r = c.put("/api/v1/perfil/contato", json={"endereco": end}, headers=h(s))
+    assert r.status_code == 409 and dominio_perfil.endereco_disponivel() is False
+    r = c.put("/api/v1/perfil/contato", json={"celular": "11977776666"}, headers=h(s))
+    assert r.status_code == 200 and r.json()["celular"] == "(11) 97777-6666"
 
 
 def test_contato_valida_e_exige_csrf(c):

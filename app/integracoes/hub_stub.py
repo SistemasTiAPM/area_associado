@@ -6,6 +6,8 @@ workers, a memória não é compartilhada — por isso a área sempre relê do c
 `associado_perfil` depois de uma escrita confirmada, nunca do stub.
 
 `falhar = True` simula hub fora do ar (testes de degradação, RNF-18).
+`endereco_disponivel = False` simula o hub sem a flag/Metadata do endereço:
+perfil sem endereço e gravação de endereço com 409.
 Proibido em produção (validador de `Settings`).
 """
 
@@ -21,6 +23,7 @@ from .hub import Endereco, HubError, PerfilCrm
 class ClienteHubStub:
     def __init__(self) -> None:
         self.falhar = False
+        self.endereco_disponivel = True
         self._lock = threading.Lock()
         self._contatos: dict[str, dict[str, Any]] = {}
         self._fotos: dict[str, bytes] = {}
@@ -46,11 +49,14 @@ class ClienteHubStub:
             # Nome, e-mail e dados da carteirinha ficam com o que veio do IdP
             # (None aqui = "não sobrescrever o cache").
             return PerfilCrm(tem_foto=contact_id in self._fotos, **{k: dados.get(k) for k in
-                             ("celular", "telefone", "telefone2", "endereco")},
-                             email=dados.get("email"))
+                             ("celular", "telefone", "telefone2")},
+                             endereco=dados.get("endereco") if self.endereco_disponivel else None,
+                             endereco_disponivel=self.endereco_disponivel, email=dados.get("email"))
 
     def contato_atualizar(self, contact_id: str, campos: dict[str, Any]) -> list[str]:
         self._verificar()
+        if "endereco" in campos and not self.endereco_disponivel:
+            raise HubError("endereco_indisponivel", 409)
         with self._lock:
             dados = self._contatos.setdefault(contact_id, self._base(contact_id))
             for chave, valor in campos.items():
