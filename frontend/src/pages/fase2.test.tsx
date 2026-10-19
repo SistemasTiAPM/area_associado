@@ -137,7 +137,7 @@ describe('Carteirinha digital (RF-CA)', () => {
   const dados = {
     nome: 'TELMA NOGUEIRA', crm: '123456', crm_uf: 'SP', num_contato: '80012345', tipo_associado: 'Efetivo',
     status_associativo: 'Ativo', membro_desde: '2014', verificado_em: '2026-10-17T10:00:00Z',
-    url_verificacao: 'https://associado.apm.org.br/verificar/ABCDEFGHIJKLMNOPQRST', qr: '/api/v1/carteirinha/qr.svg',
+    url_verificacao: 'https://minha.apm.org.br/verificar/ABCDEFGHIJKLMNOPQRST', qr: '/api/v1/carteirinha/qr.svg',
   };
   const rotas = (url: string) => {
     if (url === '/api/v1/carteirinha') return respostaJson(dados);

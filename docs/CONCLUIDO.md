@@ -14,14 +14,64 @@ data de conclusão e o ID original.
 | area_associado | `061d7dc` | Fase 2a — perfil, e-mail por código, foto, carteirinha, ADRs 0015–0016 |
 | mcp_hub | `365a531`..`8bb3c43` | Fase 2b — escrita cercada no CRM e as 4 ferramentas da Minha APM (7 commits) |
 | area_associado | `fe97d8f` + docs | Fase 2b na área — contrato, 409 do endereço, UF, `check_hub` |
+| area_associado | este commit | Domínio `minha.apm.org.br` e ambiente de construção público (Fases 1, 2a e 2b no ar) |
 
 **Estado verificado:** área com 144 testes de backend (MySQL real) e 44 de front; hub com 156
 testes, migrações 000–005 ensaiadas em MySQL 8.4 e ponta a ponta hub + área sem Dataverse.
 Nenhum CPF gravado; na trilha de escrita do hub, nenhum valor em claro.
 
-**Ainda não feito:** implantação da área (P-23) e do hub novo (P-02); credencial e papel de
+**No ar:** `https://minha.apm.org.br`, em modo de construção (login stub, hub e SMTP simulados).
+
+**Ainda não feito:** implantação do hub novo (P-02); credencial e papel de
 escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-29); SMTP real
 (P-27). Próximo passo e responsáveis em [PENDENCIAS.md](PENDENCIAS.md), seção "Onde paramos".
+
+---
+
+## 2026-10-19 — `minha.apm.org.br` no ar (construção pública)
+
+O DNS `minha.apm.org.br` (proxied) foi criado pelo usuário, e o domínio passou a ser o definitivo
+da área, no lugar de `associado.apm.org.br`. O ambiente foi aberto ao público para a agência de
+marketing acompanhar o progresso: qualquer um vê a página inicial e a tela de login de
+construção; só entra quem tem o `DEV_STUB_TOKEN`. Atrás do login não há dado real (hub e SMTP
+simulados).
+
+**Entregue**
+- **Contenção:** antes do vhost novo, o nome caía no `default_server` da 443 do porteiro e abria o
+  **Sistema de Parceiros** (`apm_parceiros.conf`). Resolvido com o vhost próprio; a causa geral
+  virou P-34.
+- **Domínio:** `associado.apm.org.br` → `minha.apm.org.br` em config, `.env.example`, vhost, testes,
+  CUTOVER, ACESSO-CONSTRUCAO (reescrito: sem túnel, acesso público com token), CLAUDE.md, README,
+  REQUISITOS e ADRs.
+- **Vhost público** (`deploy/nginx_porteiro/area_associado.conf.example` → `sites-enabled/`, backup
+  `area_associado.conf.bak-dominio-20261019`): sem allowlist, `X-Robots-Tag: noindex, nofollow`,
+  403 nos probes internos, `limit_req` por rota, foto com 6 MB só na rota dela.
+- **RDS:** `sql/003`–`007` aplicadas e registradas em `schema_migrations` com sha256.
+- **`.env`** (backup `.env.bak-20261019-dominio`, 600): `PUBLIC_BASE_URL`, `SESSION_ENC_KEYS` e
+  `CARTEIRINHA_HMAC_KEY` novas, `HUB_MODE=stub` e `SMTP_MODE=stub` explícitos. Nenhum valor exibido.
+- **Imagem** reconstruída (`DOCKER_BUILDKIT=0`) com as Fases 1, 2a e 2b; container recriado.
+
+**Pendências resolvidas**
+- **P-23** implantação das Fases 1 e 2a no ambiente de construção.
+- **P-09** escopo `carteirinha` no client do IdP: o registro (`update_client_uris --show`) já o
+  permite. Os URIs do client ainda são os antigos (P-35).
+
+**Evidências (2026-10-19)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest da área com o domínio novo | 133 passaram (11 de MySQL pulados; a suíte com MySQL passou antes da troca) |
+| Build da imagem (`npm run check` + Vitest) | 44 testes do front passaram; build ok |
+| `db_check` no container contra o RDS | conforme; TLS 1.3; UPDATE só em `associado`, `associado_perfil`, `email_verificacao` |
+| `nginx -t` + reload do porteiro | ok, sem `emerg`/`alert` |
+| Pela internet: `/`, `/auth/login`, `/health` | 200; `/area` 303 para o login; `/db-health`, `/auth-health`, `/docs` 403; `X-Robots-Tag` em todas |
+| Pela internet: jornada do login stub | login 303 → `/area` 200 (SPA, CSP sem inline) → sessão, perfil (sem CPF), carteirinha, verificação pública e QR 200; POST sem CSRF 403; logout 303 |
+| Cabeçalhos pela Cloudflare (user-agent de navegador) | CSP com nonce, XFO DENY, nosniff, `no-referrer`, `no-store`, `X-Request-Id` |
+| Outros sites do porteiro | parceiros, login, formulario, totalpass 200; app 302 (inalterados) |
+
+Observação: o `scripts/csp_check.py` pela URL pública recebe 403 da **Cloudflare** (bloqueio do
+user-agent `Python-urllib`). Não é a aplicação; o mesmo conjunto de cabeçalhos foi conferido
+com curl.
 
 ---
 

@@ -17,7 +17,7 @@ _ENV = {
     "OIDC_CLIENT_SECRET": "c" * 48,
     "OIDC_ISSUER": "https://login.apm.org.br",
     "OIDC_BACKCHANNEL_BASE_URL": "http://login_associado:8000",
-    "PUBLIC_BASE_URL": "https://associado.apm.org.br",
+    "PUBLIC_BASE_URL": "https://minha.apm.org.br",
 }
 
 

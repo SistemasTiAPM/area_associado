@@ -7,7 +7,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-BASE = "https://associado.apm.org.br"
+BASE = "https://minha.apm.org.br"
 TOKEN_STUB = "t" * 40
 _PROIBIDAS_NA_SESSAO = ("cpf", "cpf_mask", "email", "sub", "contact_id", "cid", "idt")
 

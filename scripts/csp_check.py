@@ -4,7 +4,7 @@ Uso:
     # dentro do container (rede Docker):
     docker compose exec area-associado python -m scripts.csp_check
     # contra outra base (ex.: túnel de construção):
-    python -m scripts.csp_check --base https://associado.apm.org.br:8443 --inseguro
+    python -m scripts.csp_check --base https://minha.apm.org.br:8443 --inseguro
 
 Não precisa de sessão: confere `/`, `/auth/login`, `/health`, `/api/v1/sessao` (401)
 e `/area` (303). Sai com código 1 em qualquer divergência.

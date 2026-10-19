@@ -147,7 +147,7 @@ def test_token_carteirinha_estavel_opaco_e_dependente_da_chave(monkeypatch):
 def test_qr_svg_sem_script_nem_estilo_inline():
     from app.dominio import carteirinha
 
-    svg = carteirinha.qr_svg("https://associado.apm.org.br/verificar/AAAAAAAAAAAAAAAAAAAA").decode()
+    svg = carteirinha.qr_svg("https://minha.apm.org.br/verificar/AAAAAAAAAAAAAAAAAAAA").decode()
     assert svg.startswith("<svg") and "<script" not in svg and "style=" not in svg and "<?xml" not in svg
 
 

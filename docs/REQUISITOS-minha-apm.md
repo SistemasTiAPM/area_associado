@@ -586,7 +586,7 @@ nao_permitido`, `404 nao_encontrado | recurso_desligado`, `409 estado_invalido`,
 - **Aceite:** nenhum CPF no payload; hub indisponível sem cache → `503 fonte_indisponivel` com toast; com cache ≤ 24 h, exibe o cache.
 
 **RF-CA-02 — QR de verificação**
-- **Descrição:** QR (SVG gerado no cliente, sem biblioteca externa em CDN) com `https://associado.apm.org.br/verificar/{token}`; `token` = base32 de HMAC-SHA256(`CARTEIRINHA_HMAC_KEY`, `contact_id`) truncado a 20 caracteres, chave própria em `Settings` distinta de `SECRET_KEY` (ADR-0014), persistido em `associado.carteirinha_token` com índice único para busca.
+- **Descrição:** QR (SVG gerado no cliente, sem biblioteca externa em CDN) com `https://minha.apm.org.br/verificar/{token}`; `token` = base32 de HMAC-SHA256(`CARTEIRINHA_HMAC_KEY`, `contact_id`) truncado a 20 caracteres, chave própria em `Settings` distinta de `SECRET_KEY` (ADR-0014), persistido em `associado.carteirinha_token` com índice único para busca.
 - **Fonte:** `associado` · **Endpoint:** `GET /carteirinha` (campo `url_verificacao`) · **Evento:** — · **Flag:** — · **Fase:** 2
 - **UI:** 64×64 branco, com texto alternativo "QR code de verificação da carteirinha" (proposta).
 - **Aceite:** token não revela `contact_id`; rotação da chave invalida todos os QRs (documentado em `docs/CUTOVER.md`/runbook).

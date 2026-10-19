@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     secret_key: str = Field(..., alias="SECRET_KEY")
     session_max_age: int = Field(28800, alias="SESSION_MAX_AGE")          # 8 h deslizante
     session_absolute_max: int = Field(43200, alias="SESSION_ABSOLUTE_MAX")  # 12 h desde o login
-    public_base_url: str = Field("https://associado.apm.org.br", alias="PUBLIC_BASE_URL")
+    public_base_url: str = Field("https://minha.apm.org.br", alias="PUBLIC_BASE_URL")
 
     # ------------------------------------------------------------------ #
     # Autenticação: `oidc` (login_associado) ou `stub` (construção).      #

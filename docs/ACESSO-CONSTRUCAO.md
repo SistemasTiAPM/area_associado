@@ -3,70 +3,59 @@
 Válido enquanto `AUTH_MODE=stub` e `APP_ENV=staging`. Revogado pelo procedimento de
 [CUTOVER.md](CUTOVER.md); depois disso este documento vira histórico.
 
+**Desde 2026-10-19 o ambiente é público em `https://minha.apm.org.br`**, para a agência de
+marketing e a equipe acompanharem o progresso sem túnel nem VPN. Antes disso, o acesso era só
+por túnel SSH, sem DNS.
+
 ## Quem acessa e como
 
 | Situação | Regra |
 | --- | --- |
-| DNS `associado.apm.org.br` | **Não existe ainda.** Não criar até a virada. |
-| Acesso pela internet | **Bloqueado.** O Security Group só aceita 80/443 das faixas do Cloudflare, e sem DNS o Cloudflare não roteia para cá. |
-| Acesso da equipe | **Somente por túnel SSH** até o `nginx_porteiro` (abaixo). |
-| Login na área | **Somente o login de construção** (`AUTH_MODE=stub`): token `DEV_STUB_TOKEN` do `.env` + nome, e-mail e um CPF de 11 dígitos (vira só a máscara). Não há consulta ao CRM nem ao Login APM. |
-| Login pelo Login APM | **Desligado nesta app** (`/auth/callback` responde 404 em stub). O client `area-associado` já está registrado no IdP e o segredo já está no `.env`; nada precisa ser feito lá na virada. |
-| Dados reais de associado | **Nenhum.** O que entra no stub é o que o desenvolvedor digitar; não usar CPF/e-mail reais de terceiros. |
-| Produção | **Impossível por desenho**: `AUTH_MODE=stub` com `APP_ENV=production` impede o container de subir (`app/config.py`). |
-
-## Acesso pela sua máquina
-
-```bash
-# túnel: porta local 8443 → porta 443 do porteiro na EC2
-ssh -N -L 8443:127.0.0.1:443 ubuntu@15.228.223.178
-```
-
-No arquivo `hosts` da sua máquina (`/etc/hosts` no Linux/macOS,
-`C:\Windows\System32\drivers\etc\hosts` no Windows):
-
-```
-127.0.0.1  associado.apm.org.br
-```
-
-Abrir **`https://associado.apm.org.br:8443/`** e aceitar o aviso de certificado (é o Origin CA
-do Cloudflare, confiável só para o Cloudflare). Tem de ser HTTPS: o cookie de sessão é `Secure`.
-
-Ao terminar, remover a linha do `hosts` — senão, depois da virada, o navegador continuará
-indo para o túnel em vez do site real.
+| Endereço | **`https://minha.apm.org.br`**: DNS na Cloudflare (proxied), vhost `area_associado.conf` no porteiro, sem allowlist de IP. |
+| Indexação | Bloqueada: o vhost envia `X-Robots-Tag: noindex, nofollow` em toda resposta. Sai na virada. |
+| Quem vê o quê | Qualquer pessoa vê a página inicial e a tela de login de construção. **Só entra na área quem tem o token de construção.** |
+| Login na área | **Somente o login de construção** (`AUTH_MODE=stub`): token `DEV_STUB_TOKEN` + nome, e-mail, um CPF de 11 dígitos (vira só a máscara) e uma persona (tipo de associado). Não há consulta ao CRM nem ao Login APM. |
+| Login pelo Login APM | **Desligado nesta app** (`/auth/callback` responde 404 em stub). O client `area-associado` existe no IdP, mas com os endereços antigos (`associado.apm.org.br`): atualizar antes da virada (P-35). |
+| Dados reais de associado | **Nenhum.** Hub do CRM e e-mail são simulados (`HUB_MODE=stub`, `SMTP_MODE=stub`): o perfil mostra celular e endereço fictícios, e o código de troca de e-mail aparece na própria resposta, sem envio. Não digitar CPF nem e-mail reais de terceiros. |
+| Produção | **Impossível por desenho**: stub com `APP_ENV=production` impede o container de subir (`app/config.py`). |
+| Rotas internas | `/db-health`, `/auth-health`, `/docs`, `/redoc` e `/openapi.json` respondem 403 na borda. |
 
 ## Token de construção
 
 - Está em `DEV_STUB_TOKEN` no `.env` (`chmod 600`, só o usuário `ubuntu` lê).
-- Compartilhar apenas com quem desenvolve a área, por canal privado. Nunca em chat, ticket ou commit.
-- Para trocar: gerar outro (`python3 -c "import secrets; print(secrets.token_urlsafe(36))"`),
-  atualizar o `.env` e `docker compose up -d`. Sessões abertas continuam até expirar.
+- **Compartilhar só por canal privado** (nunca em chat aberto, ticket, e-mail em grupo ou commit),
+  com quem desenvolve a área e com as pessoas nominadas da agência.
+- Quem tem o token só enxerga dados de teste. Mesmo assim, troque o token quando alguém sair do
+  projeto: gere outro (`python3 -c "import secrets; print(secrets.token_urlsafe(36))"`), atualize
+  o `.env` e rode `docker compose up -d`. Sessões abertas continuam até expirar.
 - Token errado é auditado em `evento_log` (`login_stub_falha`); login certo, em `login_stub`.
+  `/auth/*` tem limite de 5 r/s por IP no vhost.
+- Na virada o token deixa de existir.
+
+## Observações para quem testa
+
+- Use um navegador comum. A Cloudflare barra clientes de script com user-agent genérico
+  (`Python-urllib`, por exemplo) com um 403 próprio, que não vem da aplicação.
+- Telas que ainda não existem aparecem como "em construção".
 
 ## Como o código chega ao container
 
-O código é copiado para a imagem (sem bind-mount). Depois de editar `app/`:
+O código é copiado para a imagem (sem bind-mount). Depois de editar:
 
 ```bash
 cd /home/ubuntu/area_associado
-docker compose up -d --build
-docker compose ps        # (healthy)
+DOCKER_BUILDKIT=0 docker compose build    # o host não tem buildx (P-26); o build roda o check do front
+docker compose up -d
+docker compose ps                          # (healthy)
+docker compose exec area-associado python -m scripts.db_check
 ```
 
-Testes (sem rede, dentro da imagem):
-
-```bash
-docker run --rm -v "$PWD:/app:ro" -w /app -e HOME=/tmp --entrypoint sh \
-  area_associado-area-associado:latest \
-  -c "pip install -q --user pytest==8.3.4 && python -m pytest -p no:cacheprovider"
-```
+Testes: ver [README.md](../README.md#testes).
 
 ## O que NÃO fazer nesta fase
 
-- Não publicar porta no `docker-compose.yml` nem abrir o SG: o túnel já resolve.
-- Não ligar `AUTH_MODE=oidc` "para testar" sem o DNS: o IdP redireciona para
-  `https://associado.apm.org.br/auth/callback`, que ainda não resolve.
-- Não descomentar o bloco `allow/deny` do vhost sem preencher os IPs: `deny all` sozinho fecha
-  tudo, inclusive o túnel (o IP visto pelo nginx no túnel é `127.0.0.1`).
+- Não ligar `AUTH_MODE=oidc` "para testar": o client do IdP ainda aponta para o endereço antigo
+  (P-35), e com o hub simulado associados reais veriam dados fictícios como se fossem deles.
+- Não publicar porta no `docker-compose.yml`: o acesso é pelo porteiro.
 - Não guardar CPF completo, tokens ou segredos em sessão, log ou `evento_log` (regras 4 e 8 do
   `CLAUDE.md`).

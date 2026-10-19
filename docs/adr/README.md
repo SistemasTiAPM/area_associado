@@ -1,6 +1,6 @@
 # Registros de Decisão de Arquitetura (ADR) — area_associado
 
-Decisões de arquitetura da Área do Associado da APM (`associado.apm.org.br`), tomadas durante o
+Decisões de arquitetura da Área do Associado da APM (`minha.apm.org.br`), tomadas durante o
 planejamento da interface "Minha APM" (`docs/SPEC-minha-apm.md`). Cada ADR é imutável depois de
 aceita: mudança de rumo gera uma ADR nova que **substitui** a anterior (status `Substituída por
 ADR-xxxx`), nunca edição retroativa.

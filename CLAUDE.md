@@ -1,6 +1,6 @@
 # MEMÓRIA DO TECHLEAD: PROJETO area_associado
 
-> **Minha APM — Área do Associado da APM** (`associado.apm.org.br`). Serviço web conteinerizado,
+> **Minha APM — Área do Associado da APM** (`minha.apm.org.br`). Serviço web conteinerizado,
 > exposto via `nginx_porteiro` na rede Docker `rede_publica`. **Não tem login próprio**: é um
 > *Relying Party* OIDC do `login_associado` (`https://login.apm.org.br`), com um modo interino
 > (`AUTH_MODE=stub`) para construir telas antes da virada de chave (`docs/CUTOVER.md`).
@@ -90,9 +90,11 @@ sql/008..012       # solicitacao, beneficios, conteudo_portal, comunidade/onboar
 scripts/           # + check_portal_wp.py
 ```
 
-**Fase de construção (01/10/2026 → virada):** sem DNS, sem acesso público; equipe entra por
-túnel SSH ao porteiro e usa o login stub — regras em `docs/ACESSO-CONSTRUCAO.md`. A virada
-(`docs/CUTOVER.md`) revoga essas regras. Bloqueio atual da virada: P-01 (certificado de origem).
+**Fase de construção (01/10/2026 → virada):** desde 19/10 **pública em `https://minha.apm.org.br`**
+(a agência acompanha o progresso), com `noindex`, login stub (só quem tem o `DEV_STUB_TOKEN` entra)
+e hub/SMTP simulados — nenhum dado real atrás do login. Regras em `docs/ACESSO-CONSTRUCAO.md`.
+A virada (`docs/CUTOVER.md`) revoga essas regras. Bloqueiam a virada: P-35 (URIs do client no IdP),
+hub e SMTP reais (P-02, P-05, P-27, P-29) e P-01 (certificado de origem).
 
 **Endpoints [atual]:** `GET /`, `GET /auth/login[?next=&reauth=1]`, `POST /auth/login` (só stub),
 `GET /auth/callback`, `GET /area` e `GET /area/{caminho}` (SPA, exige sessão), `GET /api/v1/sessao`,

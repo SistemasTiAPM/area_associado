@@ -1,10 +1,12 @@
 # =====================================================================
-# associado.apm.org.br — Area do Associado (container area_associado:8000)
+# minha.apm.org.br — Area do Associado (container area_associado:8000)
 # Copiar para /home/ubuntu/nginx-proxy/sites-enabled/area_associado.conf
 # e aplicar: docker exec nginx_porteiro nginx -t && docker exec nginx_porteiro nginx -s reload
 #
 # Ordem de carga: este arquivo ordena DEPOIS de apm_parceiros.conf, que
-# continua sendo o default_server. Conferir:
+# continua sendo o default_server da 443 (host sem vhost cai nele — por
+# isso este server_name precisa existir ANTES de o DNS ser criado; ver
+# P-34). Conferir:
 #   docker exec nginx_porteiro nginx -T | grep "^# configuration file"
 # =====================================================================
 
@@ -24,7 +26,7 @@ server {
     listen 443 ssl;
     http2 on;
     include /etc/nginx/conf.d/_ssl.inc;
-    server_name associado.apm.org.br;
+    server_name minha.apm.org.br;
 
     # Resolucao do backend POR REQUISICAO: se o container nao estiver no DNS
     # do Docker, so este dominio da 502 — o porteiro continua subindo.
@@ -45,12 +47,12 @@ server {
     if ($req_varredura) { return 403; }
 
     # ---------------------------------------------------------------- #
-    # FASE DE CONSTRUCAO — allowlist de IP. Remover no cutover         #
-    # (docs/CUTOVER.md). Avaliada apos o real_ip: usa o IP do visitante. #
+    # FASE DE CONSTRUCAO — PUBLICO desde 2026-10-19 (a agencia acompanha #
+    # o progresso). Quem entra na area e so quem tem o DEV_STUB_TOKEN; o #
+    # hub e o SMTP sao simulados (nenhum dado real). Remover o noindex   #
+    # no cutover (docs/CUTOVER.md).                                      #
     # ---------------------------------------------------------------- #
-    # allow 203.0.113.10;        # escritorio APM
-    # allow 203.0.113.11;        # desenvolvedor
-    # deny  all;
+    add_header X-Robots-Tag "noindex, nofollow" always;
 
     # Probes internos — bloqueados na borda; a monitoracao acessa o
     # container direto na rede Docker (area_associado:8000).

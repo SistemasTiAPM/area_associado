@@ -1,6 +1,6 @@
 # area_associado — Minha APM (Área do Associado)
 
-Aplicação FastAPI atrás do `nginx_porteiro` (`associado.apm.org.br`), autenticada pelo
+Aplicação FastAPI atrás do `nginx_porteiro` (`minha.apm.org.br`), autenticada pelo
 `login_associado` via OIDC. Arquitetura e regras: [CLAUDE.md](CLAUDE.md).
 
 ## Documentação
@@ -41,7 +41,8 @@ Vhost: `deploy/nginx_porteiro/area_associado.conf.example` →
 
 ## Fase de construção (até a virada)
 
-Sem DNS e sem acesso público: entrada **só por túnel SSH** e login de construção.
+No ar em **https://minha.apm.org.br** (público, `noindex`): qualquer um vê a página inicial; só
+entra na área quem tem o token de construção. Hub do CRM e e-mail simulados.
 Regras e passo a passo: [docs/ACESSO-CONSTRUCAO.md](docs/ACESSO-CONSTRUCAO.md).
 
 ## Modos de autenticação

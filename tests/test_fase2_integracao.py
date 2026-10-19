@@ -17,7 +17,7 @@ from PIL import Image
 
 pytestmark = pytest.mark.mysql
 
-BASE = "https://associado.apm.org.br"
+BASE = "https://minha.apm.org.br"
 TOKEN_STUB = "t" * 40
 
 

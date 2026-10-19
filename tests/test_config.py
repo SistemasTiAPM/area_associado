@@ -37,8 +37,8 @@ def test_oidc_exige_client_secret(monkeypatch):
 
 
 def test_derivados(settings):
-    assert settings.redirect_uri == "https://associado.apm.org.br/auth/callback"
-    assert settings.post_logout_redirect_uri == "https://associado.apm.org.br/"
+    assert settings.redirect_uri == "https://minha.apm.org.br/auth/callback"
+    assert settings.post_logout_redirect_uri == "https://minha.apm.org.br/"
     assert settings.backchannel_host_header == "login.apm.org.br"
     assert "password" not in settings.sqlalchemy_dsn and "x@" not in settings.sqlalchemy_dsn
 
