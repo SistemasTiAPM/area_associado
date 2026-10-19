@@ -34,7 +34,7 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 | **Back-channel IdP** | `http://login_associado:8000` na `rede_publica`, header `Host: login.apm.org.br` | [atual] Evita hairpin via Cloudflare e a zona `oauth_token` (3 r/s) do edge. `iss` continua `https://login.apm.org.br`. |
 | **Sessão** | Cookie `SessionMiddleware`, `same_site=lax`, Secure fora de `development` | [atual] **cifrado e autenticado** (`app/sessao.py`, Fernet/MultiFernet; `SESSION_ENC_KEYS` obrigatória em produção), nome `__Host-area` (`area_sessao` só em development) — ADR-0011. Conteúdo: `sub, cid, nome, email, cpf_mask, auth_at, idp_at, amr, idt, csrf, tipo, status` (`idp_at` = `auth_time` do IdP, base do step-up). **CPF completo, access e refresh token nunca.** |
 | **CSRF** | [atual] Form field `csrf` (`/auth/*`); na API, `X-CSRF-Token` + `Sec-Fetch-Site: same-origin` (ou `Origin` = `PUBLIC_BASE_URL`) + `Content-Type` JSON/multipart | `app/csrf.py` (`exigir_csrf`). Token entregue em `GET /api/v1/sessao`. Recusa vai para `evento_log` (`csrf_recusado`). |
-| **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials`, REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`; hub real na Fase 2b (P-28). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Token do hub só em memória de processo. `HUB_MODE=real\|stub` (stub proibido em produção). ADR-0002, P-02..P-05. |
+| **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials` com `ferramentas:ler ferramentas:escrever`, REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`, implementado no hub na Fase 2b (`SistemasTiAPM/mcp_hub` `8bb3c43`; provisão P-02, P-05, P-29). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Token do hub só em memória de processo. Timeouts `HUB_TIMEOUT` (leitura) e `HUB_TIMEOUT_ESCRITA` (30 s). `HUB_MODE=real\|stub` (stub proibido em produção). Smoke: `scripts/check_hub.py`. ADR-0002. |
 | **Site WordPress** | MySQL `portal_apm` (Locaweb), usuário somente leitura próprio | [alvo Fase 5] `app/integracoes/portal_wp.py`, **só no serviço de jobs**; o processo web nunca conecta na Locaweb. Cache em `noticia_cache`/`evento_cache`. ADR-0006, P-07. |
 | **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [alvo Fase 3] Sincronização do portal, outbox de solicitações para o CRM, status de volta, cache de perfil. Rastro em `job_execucao`. |
 | **Imagens** | Pillow 13 (foto de perfil), segno (QR em SVG) | [atual] Em memória, magic bytes, `MAX_IMAGE_PIXELS`, 512×512 para o CRM (`entityimage`), miniatura 128×128 local. ADR-0005. |
@@ -73,7 +73,7 @@ app/
   templates/       # base, home, erro, stub_login (com persona), verificar
   static/          # style.css, fonts.css (Neo Sans, páginas Jinja), logo, favicons; spa/ = build (gitignored)
 frontend/          # Vite + React + TS: src/{styles,api,shell,components,pages,state,lib,test}, e2e/ (Playwright)
-scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py
+scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py, check_hub.py
 sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado, 006 associado_perfil,
                    # 007 email_verificacao (UPDATE só em 005, 006, 007)
 tests/             # unidades sem rede/banco + integração com MySQL real (marcador `mysql`, TESTE_DB_*)
@@ -87,7 +87,7 @@ app/
   integracoes/     # portal_wp.py, portal_wp_stub.py
   jobs/            # agendador e jobs (portal, outbox de solicitações, sync de status, perfis)
 sql/008..012       # solicitacao, beneficios, conteudo_portal, comunidade/onboarding, job_execucao
-scripts/           # + check_hub.py, check_portal_wp.py
+scripts/           # + check_portal_wp.py
 ```
 
 **Fase de construção (01/10/2026 → virada):** sem DNS, sem acesso público; equipe entra por
@@ -165,7 +165,10 @@ JSON, nunca 303.
     do commit do negócio, nunca lança e sempre loga a falha. Ação nova = entrada nova no catálogo.
 21. **Escrita no CRM só pelo `mcp_hub`**, por ferramenta tipada com allowlist de campos. A área
     nunca fala com Dataverse ou F&O. O ERP é somente leitura e só aparece com a flag
-    `erp_financeiro`, após o parecer de licença (P-08).
+    `erp_financeiro`, após o parecer de licença (P-08). Endereço só quando o hub diz
+    `endereco_disponivel`: senão a tela mostra o aviso e o PUT responde 409
+    `endereco_indisponivel` sem gravar nada do pedido. Escrita sem resposta do hub = resultado
+    incerto: nada muda no cache, a próxima leitura traz o que o CRM tem.
 22. **Operação que troca canal de segurança exige step-up.** Troca de e-mail: `auth_time` do IdP
     (`idp_at`) a no máximo `REAUTH_MAX_IDADE` + código no novo endereço (ADR-0015). Nunca usar
     `auth_at` (login na área), que o SSO silencioso renova sem senha.
@@ -209,4 +212,4 @@ Invariantes: código pronto para produção (erros, bordas, segurança, desempen
 
 ---
 *Criado em 2026-10-01. Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
-regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*
+regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Revisado em 2026-10-19 (Fase 2b: hub implementado, regra 21 com o endereço e a escrita incerta). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*

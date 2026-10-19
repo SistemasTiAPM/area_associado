@@ -4,22 +4,92 @@ Registro do que já foi feito, do mais recente para o mais antigo. Cada entrada 
 está e qual a evidência. Itens que saem de [PENDENCIAS.md](PENDENCIAS.md) entram aqui com a
 data de conclusão e o ID original.
 
-## 📍 Ponto de parada — 2026-10-17
+## 📍 Ponto de parada — 2026-10-19
 
-| Commit | Entrega |
+| Repositório | Commit | Entrega |
+|---|---|---|
+| area_associado | `0607974` | Estrutura inicial (RP OIDC, sessão, auditoria, banco base) |
+| area_associado | `1ab497b` | Fase 0 — requisitos, ADRs 0001–0014, pendências e concluídos |
+| area_associado | `55674bd` | Fase 1 — fundação da Minha APM |
+| area_associado | `061d7dc` | Fase 2a — perfil, e-mail por código, foto, carteirinha, ADRs 0015–0016 |
+| mcp_hub | `365a531`..`8bb3c43` | Fase 2b — escrita cercada no CRM e as 4 ferramentas da Minha APM (7 commits) |
+| area_associado | `fe97d8f` + docs | Fase 2b na área — contrato, 409 do endereço, UF, `check_hub` |
+
+**Estado verificado:** área com 144 testes de backend (MySQL real) e 44 de front; hub com 156
+testes, migrações 000–005 ensaiadas em MySQL 8.4 e ponta a ponta hub + área sem Dataverse.
+Nenhum CPF gravado; na trilha de escrita do hub, nenhum valor em claro.
+
+**Ainda não feito:** implantação da área (P-23) e do hub novo (P-02); credencial e papel de
+escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-29); SMTP real
+(P-27). Próximo passo e responsáveis em [PENDENCIAS.md](PENDENCIAS.md), seção "Onde paramos".
+
+---
+
+## 2026-10-19 — Fase 2b: mcp_hub com perfil, contato e foto no CRM (código)
+
+Dois repositórios. Provisão real pendente: P-02 (hub no RDS), P-05 (credencial e papel de
+escrita) e, antes de liberar a escrita, P-29 (flows de `contact`). Até lá a área segue com
+`HUB_MODE=stub`.
+
+**Entregue no `mcp_hub`** (`SistemasTiAPM/mcp_hub`, `365a531`..`8bb3c43`, regra 1 reescrita)
+- **Modelo de escrita** (`365a531`): `EfeitoFerramenta`, `TipoTitular`; o registro recusa escrita
+  fora de REST, exportável, com coluna pessoal, sem titular `contact_id`, com `max_linhas ≠ 1` ou
+  timeout acima de 30 s. Política: escrita só com **grant exato** (`associado.*` e `*` não liberam).
+- **Escopos OAuth e taxa por conta** (`af1662c`, `sql/004`): `ferramentas:ler`/`ferramentas:escrever`
+  por conta; o token só leva o que a conta tem; a cada chamada o escopo é intersectado com a
+  conta atual (revoga em até 30 s); `chamadas_por_minuto` por conta (1–6000); painel com os dois.
+- **Trilha de escrita** (`e1e9df9`, `sql/005`): `auditoria_escrita` com intenção **bloqueante antes**
+  do PATCH e resultado depois (`ok`, `erro`, `indeterminado`), só nomes de campos + HMAC dos
+  valores, imagem como bytes + sha256; `auditoria_titular_contato`; CHECK de argumentos ampliado
+  (contato, telefones, e-mail, endereço, imagem, nome). Painel: auditoria por `contact_id` e
+  página `/admin/escritas`. Transporte e escopo checados logo após o catálogo.
+- **Conectores** (`84bc998`): `contato_por_id` sem `sol_st_cpf`; foto (`entityimage/$value?size=full`);
+  Metadata do endereço (flag `CRM_ENDERECO_HABILITADO`, padrão falso, + 7 atributos de texto
+  atualizáveis); conector **`dataverse_escrita`** com credencial própria (client_id diferente do de
+  leitura), allowlist, `If-Match: *`, 1 retry em 401/429/503, resposta do CRM nunca repassada,
+  envio sem resposta = `EscritaIndeterminada`. `check_conectores` prova o papel de cada credencial.
+- **Ferramentas** (`e57f313`): `associado.perfil_consultar`, `contato_atualizar`, `foto_obter`,
+  `foto_atualizar`, só REST, titular `contact_id`; UF sempre sigla; CEP gravado só com dígitos;
+  409 `endereco_indisponivel` antes de qualquer PATCH; foto JPEG 512×512 ≤ 256 KiB conferida pelo
+  SOF; teto de corpo por ferramenta (512 KiB só na foto e só com o escopo de escrita).
+- **Docs** (`5ae7e72`): CLAUDE.md, ARQUITETURA, RUNBOOK (ordem obrigatória da provisão, desligar a
+  escrita em emergência, LGPD por CPF e por contact_id), checklist de ferramenta de escrita.
+- **Correções encontradas no caminho:** `scripts/db_check.py` contava qualquer erro como recusa
+  (o UPDATE de prova em `auditoria_titular` dava 1054 e escondia um UPDATE concedido); agora só
+  1142 vale. Negação 404 devolvia o motivo real em `erro` (permitia enumerar o catálogo); agora
+  é sempre `ferramenta_inexistente` (`8bb3c43`).
+
+**Entregue na área** (`fe97d8f`)
+- `docs/CONTRATO-HUB.md` reescrito com o implementado (endereço no padrão do lead, erros 409/413/504).
+- `hub.py`: UF só em sigla (antes "São Paulo" virava "SÃ"); `endereco_disponivel` fail-closed;
+  409; `HUB_TIMEOUT_ESCRITA` (30 s, acima dos 25 s do hub).
+- Perfil: sem disponibilidade, a tela mostra só o aviso e o endereço nunca é enviado; PUT com
+  endereço sabidamente indisponível → 409 sem chamar o hub; e-mail novo limitado a 100.
+- `scripts/check_hub.py`: token com os dois escopos e perfil de um contact_id de teste, sem
+  imprimir valores; "sem cpf" lido da resposta crua.
+
+**Pendências resolvidas**
+- **P-28** extensão do mcp_hub (em código; provisão em P-02/P-05).
+- **P-03** taxa e cota por conta de serviço (em código: `chamadas_por_minuto` novo, `cota_pii_diaria` já existia por conta).
+- **P-04** parcial: `contato_por_id` e as 4 ferramentas por `contact_id` (segue aberta para as demais).
+
+**Evidências (2026-10-19)**
+
+| Verificação | Resultado |
 |---|---|
-| `0607974` | Estrutura inicial (RP OIDC, sessão, auditoria, banco base) |
-| `1ab497b` | Fase 0 — requisitos, ADRs 0001–0014, pendências e concluídos |
-| `55674bd` | Fase 1 — fundação da Minha APM |
-| `061d7dc` | Fase 2a — perfil, e-mail por código, foto, carteirinha, ADRs 0015–0016 |
+| pytest do hub na imagem (`tests/` com MockTransport para Entra/Dataverse) | 156 passaram |
+| Ensaio MySQL 8.4 descartável: hub `sql/000`–`005` com linhas antes de 004/005 | ok; `apm_mcp_hub` com INSERT nas trilhas novas e 1142 em UPDATE/DELETE; 3819 nos CHECKs novos (fase, campos, HMAC, argumentos com `contact_id`/imagem, escopos vazios, taxa 0) |
+| ALTER do CHECK com linha antiga violadora | falhou inteiro (3819), CHECK antigo mantido; reaplicado depois de tratar a linha |
+| `db_check` do hub contra o ensaio | OK; com UPDATE concedido em `auditoria_titular` acusa `UPDATE PERMITIDO` (antes passava) |
+| Trilha real no ensaio (`registrar_intencao`/`chamada`/`resultado`) | argumentos só com HMAC; titular por contato gravado; intenção sem resultado aparece `indeterminado` |
+| Ponta a ponta: hub real + MySQL, sem Dataverse | token com os 2 escopos; conta só-leitura pedindo escrever → `invalid_scope` (evento `token_escopo_negado`); `contato_atualizar` → 503 `fonte_nao_configurada` com intenção + resultado `erro` + titular; curinga sem escopo → 404 `ferramenta_inexistente`; foto 600 KiB e leitura 600 KiB → 413; `/mcp` `tools/list` sem nenhuma ferramenta da área; log do hub sem segredo, contact_id ou telefone |
+| `scripts/check_hub.py` da área contra esse hub | token ok; perfil 503 `fonte_nao_configurada` (esperado sem credencial do CRM) |
+| pytest da área com MySQL 8.4 real (000–007) | 144 passaram |
+| Vitest + typecheck + ESLint + build do front | 44 passaram; build ok |
 
-**Estado verificado no último commit:** 135 testes de backend com MySQL real, 42 de front,
-20 de 20 no e2e na imagem de produção, Lighthouse 100 em acessibilidade nas telas novas,
-nenhum CPF gravado. Detalhes e evidências nas entradas abaixo.
-
-**Ainda não feito:** implantação no ambiente de construção (P-23), mcp_hub real (Fase 2b, P-28),
-SMTP real (P-27). Próximo passo e responsáveis em [PENDENCIAS.md](PENDENCIAS.md), seção
-"Onde paramos".
+Não verificado aqui (fica para a provisão): Dataverse real, papel de escrita, foto no CRM
+(P-30), campos do endereço (P-31). O e2e Playwright não foi rodado nesta fase (mudança de UI
+restrita ao bloco do endereço, coberta no Vitest). Observação aberta: P-33.
 
 ---
 

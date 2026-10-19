@@ -16,9 +16,11 @@ Aplicação FastAPI atrás do `nginx_porteiro` (`associado.apm.org.br`), autenti
 
 **Estado:** Fases 1 (fundação) e 2a (perfil e carteirinha) concluídas no código: SPA React em
 `/area`, API `/api/v1`, sessão cifrada, CSRF, flags, analytics, perfil com e-mail por código e
-foto, carteirinha com QR e verificação pública. O mcp_hub ainda roda simulado (Fase 2b, P-28). Implantação no ambiente de
-construção pendente (P-23 em [docs/PENDENCIAS.md](docs/PENDENCIAS.md)). Integração com o
-`mcp_hub`, jobs e as telas de domínio são as fases 2 a 8.
+foto, carteirinha com QR e verificação pública. Fase 2b concluída no código: o `mcp_hub` já
+tem as ferramentas de perfil, contato e foto ([docs/CONTRATO-HUB.md](docs/CONTRATO-HUB.md)), mas a
+área segue com o hub simulado até a provisão (P-02, P-05, P-29). Implantação no ambiente de
+construção pendente (P-23 em [docs/PENDENCIAS.md](docs/PENDENCIAS.md)). Jobs e as telas de
+domínio são as fases 3 a 8.
 
 ## Subir
 
@@ -30,6 +32,7 @@ docker compose ps                           # (healthy)
 docker compose exec area-associado python -m scripts.db_check
 docker compose exec area-associado python -m scripts.csp_check
 docker compose exec area-associado python -m scripts.check_oidc   # com AUTH_MODE=oidc
+docker compose exec area-associado python -m scripts.check_hub <contact_id_de_teste>   # com HUB_MODE=real
 ```
 
 Vhost: `deploy/nginx_porteiro/area_associado.conf.example` →

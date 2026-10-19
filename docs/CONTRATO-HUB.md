@@ -27,7 +27,7 @@ Implementado no `mcp_hub` na Fase 2b (19/10/2026, commits `365a531`..`8bb3c43` d
 | Escopos da conta | `ferramentas:ler` e `ferramentas:escrever`. **O de escrita só é marcado em produção depois da P-29** |
 | Origem permitida | CIDR da `rede_publica` |
 | Grants | **exatos** (curinga não libera escrita), `modo_pii=completo`, nas 4 ferramentas abaixo |
-| Taxa e cota | por conta (P-03): `chamadas_por_minuto` (1–6000) e cota PII própria; os padrões por principal (60/min, 500 PII/dia) não servem a um app |
+| Taxa e cota | por conta (antiga P-03, resolvida no hub): `chamadas_por_minuto` (1–6000) e cota PII própria; os padrões por principal (60/min, 500 PII/dia) não servem a um app |
 
 ## Regras para TODAS as ferramentas
 
