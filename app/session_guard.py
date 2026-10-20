@@ -18,6 +18,7 @@ from fastapi import Request
 from starlette.responses import RedirectResponse
 
 from .config import get_settings
+from .csrf import csrf_token
 from .oidc import AssociadoClaims
 
 SESSION_SUB = "sub"
@@ -75,7 +76,12 @@ def _rotulo(valor: object) -> str | None:
 
 
 def store_identity(request: Request, claims: AssociadoClaims, *, amr: list[str] | None = None) -> None:
-    """Substitui a sessão inteira (fixation): só o CSRF é regenerado depois."""
+    """Substitui a sessão inteira (fixation) e já emite o CSRF novo.
+
+    O token nasce aqui, na resposta única do login, e não na primeira leitura de
+    `/api/v1/sessao`: assim nenhuma cópia da sessão em uso fica sem ele (o cookie
+    é reemitido por toda resposta, a partir da sessão lida no início dela).
+    """
     request.session.clear()
     request.session.update(
         {
@@ -92,6 +98,7 @@ def store_identity(request: Request, claims: AssociadoClaims, *, amr: list[str] 
             "status": _rotulo(claims.status),
         }
     )
+    csrf_token(request)
 
 
 def current_associado(request: Request) -> Associado | None:

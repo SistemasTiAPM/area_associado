@@ -1,87 +1,105 @@
 /* ==========================================================================
-   Minha APM — design tokens (docs/SPEC-minha-apm.md, "Fundação visual").
-   Nenhum hex fora deste arquivo: componentes usam só var(--…).
+   Minha APM — design tokens. Referência visual: mockups da agência (ADR-0017),
+   que substituem a "Fundação visual" da spec. Nenhum hex fora deste arquivo:
+   componentes usam só var(--…).
 
-   Contraste (RNF-10, spec "Acessibilidade"): a própria spec exige WCAG AA e
-   pede verificação de pares. Pares da spec que NÃO passam em AA ganham uma
-   variante `-texto` com o menor escurecimento que passa — usada SEMPRE que
-   houver texto sobre/na cor. A cor original continua para fundos sem texto,
-   ícones e bordas. Divergência registrada em docs/PENDENCIAS.md (P-22).
-     green-600  #0e8f78 c/ branco 4,02 → --green-600-texto #0c8370 (4,67)
-     ink-400    #6b7a8d s/ branco 4,38, s/ gray-50 3,86 → --ink-400-texto #5f6e82 (5,20 / 4,58)
-     whatsapp   #1faa59 c/ branco 3,02 → --whatsapp-texto #168246 (4,87)
-     placeholder #7d8a9c s/ gray-100 3,12 → usa --ink-400-texto
+   Contraste (RNF-10, WCAG AA): cor usada com texto tem razão medida ≥ 4,5
+   (texto normal) contra o fundo em que aparece. Cores do mockup que não
+   passam ganham variante `-texto`, usada sempre que houver texto sobre/na cor;
+   a original fica para fundos sem texto, ícones e bordas (P-22).
+     verde-claro #009581 c/ branco 3,74 → --green-600-texto #00675A (6,80)
+     tinta-3     #8A979D s/ branco 3,00 → texto usa --ink-400-texto #5E6E75 (5,30; 4,81 s/ #F5F4F0)
+     azul-tag    #007EA3 s/ #E8F2F6 4,09 → --azul-texto #006B8C (5,30)
+     âmbar       #FFB612 c/ branco 1,7  → nunca com texto branco; texto âmbar #8A5A00
    ========================================================================== */
 :root {
-  /* ---- Navy (shell, heroes) ---- */
-  --navy-900: #063553;
-  --navy-800: #083b5a;
-  --navy-700: #0a4561;
-  --navy-600: #0a3f5f;
-  --navy-muted: #9fb7c8;
-  --navy-muted-2: #9fc3d6;
+  /* ---- Navy (trilho ativo, heros, cabeçalho) ---- */
+  --navy-950: #00172d;
+  --navy-900: #004165;
+  --navy-800: #00324f;
+  --navy-700: #00566b;
+  --navy-600: #123e55;
+  --navy-500: #418091;
+  --navy-muted: #b3d9e6;
+  --navy-muted-2: #c9e3ec;
 
-  /* ---- Teal / verde (ações, positivo financeiro) ---- */
-  --teal-700: #0b5a52;
-  --teal-600: #0e7a66;
-  --green-700: #0b6e5b;
-  --green-600: #0e8f78;
-  --green-600-hover: #0b7a66;
-  --green-600-texto: #0c8370;
-  --mint-400: #5fd1b5;
-  --mint-400-barra: #3fc3a4;
-  --mint-100: #e2f1ec;
-  --mint-100-b: #e2f3ee;
-  --mint-onboarding: #7fdcc4;
+  /* ---- Verde / menta (ações, positivo) ---- */
+  --green-700: #00675a;
+  --green-600: #009581;
+  --green-600-hover: #00564b;
+  --green-600-texto: #00675a;
+  --mint-400: #8fe3d4;
+  --mint-100: #e3f5f1;
+  --mint-borda: #9fd8cc;
+  --mint-onboarding: #8fe3d4;
 
-  /* ---- Âmbar (evento, patrocínio) ---- */
-  --amber-500: #f5a623;
-  --amber-500-b: #f5b43a;
-  --amber-border: #efc76b;
-  --amber-100: #fdebd3;
-  --amber-100-b: #fdf0d8;
+  /* ---- Âmbar e categorias (tags) ---- */
+  --amber-500: #ffb612;
+  --amber-100: #fff4d6;
+  --amber-texto: #8a5a00;
+  --azul-100: #e8f2f6;
+  --azul-texto: #006b8c;
+  --rose-100: #fde8e7;
+  --rose-texto: #9e3039;
 
-  /* ---- Categorias ---- */
-  --purple-bg: #ece8fb;
-  --purple-fg: #5b45c2;
-  --rose-bg: #fbe4e8;
-  --rose-fg: #b23a55;
-  --terracotta-bg: #fbe7e1;
-  --terracotta-fg: #b24d2c;
-
-  /* ---- Cinzas e tinta ---- */
-  --gray-50: #edf1f4;
-  --gray-100: #eef2f5;
-  --gray-150: #edf0f3;
-  --gray-200: #e6eaef;
-  --gray-200-b: #e3e8ee;
-  --chip-borda: #e0e6ec;
-  --ink-900: #13233a;
-  --ink-700: #3d4a5a;
-  --ink-600: #51606f;
-  --ink-500: #5b6878;
-  --ink-400: #6b7a8d;
-  --ink-400-texto: #5f6e82;
+  /* ---- Tinta e cinzas ---- */
+  --ink-900: #132c36;
+  --ink-700: #2f4751;
+  --ink-600: #3e545e;
+  --ink-500: #5e6e75;
+  --ink-400: #8a979d;
+  --ink-400-texto: #5e6e75;
+  --gray-50: #f5f4f0;
+  --gray-100: #edf2f3;
+  --gray-200: #e2eaec;
+  --gray-200-b: #e2eaec;
+  --chip-borda: #e2eaec;
+  --linha: rgba(0, 65, 101, 0.08);
   --branco: #ffffff;
+
+  /* ---- Fundo da página: campos de cor estáticos do mockup ---- */
+  --campo-lavanda: rgba(232, 218, 255, 0.46);
+  --campo-pessego: rgba(255, 226, 190, 0.5);
+  --campo-menta: rgba(192, 224, 215, 0.4);
+
+  /* ---- Vidro (superfície padrão de card) ----
+     O mockup usa fundo transparente; aqui há uma base branca translúcida para
+     garantir contraste do texto sobre os campos de cor e o cabeçalho. */
+  --vidro-fundo: rgba(255, 255, 255, 0.58);
+  --vidro-fundo-forte: rgba(255, 255, 255, 0.82);
+  --vidro-desfoque: blur(12px) saturate(140%);
+  --vidro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -1px 0 rgba(0, 30, 50, 0.06),
+    0 12px 32px rgba(0, 30, 50, 0.08), 0 1px 2px rgba(0, 30, 50, 0.04);
+  --vidro-escuro-fundo: rgba(255, 255, 255, 0.14);
+  --vidro-escuro-sombra: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px rgba(0, 0, 0, 0.14);
+
+  /* ---- Gradientes do mockup ---- */
+  --grad-cabecalho: radial-gradient(700px 260px at 85% -10%, rgba(65, 128, 145, 0.75), transparent 70%),
+    radial-gradient(500px 240px at 10% 20%, rgba(0, 23, 45, 0.6), transparent 70%),
+    linear-gradient(180deg, #00172d 0%, #123e55 30%, rgba(65, 128, 145, 0.92) 56%, rgba(140, 170, 178, 0.4) 78%, rgba(245, 244, 240, 0) 100%);
+  --grad-ativo: linear-gradient(145deg, rgba(0, 65, 101, 0.95), rgba(0, 103, 90, 0.92));
+  --grad-botao: linear-gradient(135deg, #004165, #00566b);
+  --grad-destaque: linear-gradient(150deg, #004165 0%, #00566b 55%, #00675a 100%);
+  --grad-carteirinha: linear-gradient(135deg, #00172d 0%, #004165 45%, #00675a 100%);
+  --grad-hero: linear-gradient(118deg, #00172d 0%, #004165 50%, #00675a 100%);
 
   /* ---- Terceiros ---- */
   --whatsapp: #1faa59;
   --whatsapp-texto: #168246;
 
-  /* ---- Avatar padrão (spec: TN) ---- */
-  --avatar-bg: #f2d9c7;
-  --avatar-fg: #8a4b2a;
-  --avatar-anel: #d7dee6;
+  /* ---- Avatar padrão (iniciais) ---- */
+  --avatar-bg: #e3f5f1;
+  --avatar-fg: #00675a;
+  --avatar-anel: rgba(255, 255, 255, 0.7);
 
-  /* ---- Sobreposições ---- */
-  --scrim: rgba(6, 30, 46, 0.5);
-  --sidebar-divisor: rgba(255, 255, 255, 0.12);
-  --sidebar-rodape: rgba(0, 0, 0, 0.18);
-  --hover-sobre-navy: rgba(255, 255, 255, 0.08);
+  /* ---- Sobreposições e foco ---- */
+  --scrim: rgba(0, 23, 45, 0.5);
+  --hover-claro: rgba(255, 255, 255, 0.6);
+  --hover-sobre-navy: rgba(255, 255, 255, 0.12);
   --foco: #0a6bb2;
   --foco-sobre-escuro: #9fd3ff;
 
-  /* ---- Alertas (faixa stub, erro) ---- */
+  /* ---- Alertas (faixa de construção, erro) ---- */
   --aviso-bg: #fff6e6;
   --aviso-fg: #7a5400;
   --aviso-borda: #f0dcae;
@@ -89,46 +107,47 @@
   --erro-fg: #a12d1a;
 
   /* ---- Tipografia ---- */
-  --fonte-base: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fonte-base: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fonte-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  --fs-base: 15px;
-  --fs-h1: 20px;
-  --fs-h2: 28px;
-  --fs-h3: 13px;
-  --fs-h4: 16.5px;
+  --fs-base: 14px;
+  --fs-h1: 30px;
+  --fs-h2: 26px;
+  --fs-h3: 12px;
+  --fs-h4: 18px;
   --fs-destaque: 32px;
   --fs-pequeno: 13px;
   --fs-meta: 12.5px;
 
   /* ---- Forma e espaçamento ---- */
-  --raio-hero: 22px;
-  --raio-card-grande: 20px;
-  --raio-card: 16px;
-  --raio-subcard: 14px;
-  --raio-controle: 12px;
-  --raio-botao: 10px;
+  --raio-cabecalho: 34px;
+  --raio-hero: 28px;
+  --raio-card-grande: 28px;
+  --raio-card: 24px;
+  --raio-subcard: 18px;
+  --raio-controle: 16px;
+  --raio-botao: 999px;
   --raio-pill: 999px;
-  --pad-card: 18px;
-  --pad-card-grande: 22px;
-  --gap-secao: 28px;
-  --gap-cards: 16px;
-  --largura-max: 1320px;
-  --sidebar-largura: 248px;
-  --drawer-largura: 280px;
+  --pad-card: 20px;
+  --pad-card-grande: 26px;
+  --gap-secao: 20px;
+  --gap-cards: 18px;
+  --largura-max: 1480px;
+  --sidebar-largura: 264px;
+  --drawer-largura: 288px;
 
   /* ---- Sombras ---- */
-  --sombra-card: 0 1px 2px rgba(19, 35, 58, 0.04), 0 6px 16px -10px rgba(19, 35, 58, 0.12);
-  --sombra-card-hover: 0 14px 28px -16px rgba(19, 35, 58, 0.35);
-  --sombra-hero-navy: 0 14px 30px -18px rgba(6, 53, 83, 0.7);
-  --sombra-flutuante: 0 10px 24px -10px rgba(19, 35, 58, 0.45);
+  --sombra-card-hover: 0 18px 40px rgba(0, 65, 101, 0.12);
+  --sombra-hero-navy: 0 24px 50px rgba(0, 40, 70, 0.28);
+  --sombra-botao: 0 12px 28px rgba(0, 65, 101, 0.25);
+  --sombra-flutuante: 0 18px 40px rgba(0, 41, 59, 0.25);
 
   /* ---- Movimento ---- */
   --easing: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur-curta: 180ms;
-  --dur-media: 220ms;
-  --dur-toast: 280ms;
+  --dur-curta: 200ms;
+  --dur-media: 250ms;
+  --dur-toast: 250ms;
   --dur-drawer: 300ms;
   --dur-scrim: 250ms;
-  --dur-pagina: 420ms;
-  --dur-card: 320ms;
+  --dur-pagina: 520ms;
+  --dur-card: 460ms;
 }

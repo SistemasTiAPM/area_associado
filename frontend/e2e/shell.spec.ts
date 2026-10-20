@@ -92,7 +92,7 @@ test('navegação pelo menu (desktop) ou drawer + bottom-nav (mobile)', async ({
   if (info.project.name === 'desktop-1440') {
     const sidebar = page.getByRole('navigation', { name: 'Menu principal', exact: true });
     await expect(sidebar).toBeVisible();
-    expect(await page.locator('aside.sidebar').evaluate((el) => el.getBoundingClientRect().width)).toBe(248);
+    expect(await page.locator('aside.sidebar').evaluate((el) => el.getBoundingClientRect().width)).toBe(264);
     await sidebar.getByRole('link', { name: 'Comunidade' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Comunidade' })).toBeFocused();
     await expect(page.getByRole('button', { name: 'Abrir menu' })).toBeHidden();
@@ -130,6 +130,8 @@ test('acessibilidade (axe) sem violações em Início, Benefícios e Carteirinha
     await page.goto(caminho);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByText(/Carregando/)).toHaveCount(0);
+    // Mede o estado final: no meio da entrada (opacidade < 1) o contraste calculado cai.
+    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === 'finished'));
     const resultado = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(resultado.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
   }

@@ -10,6 +10,8 @@ export interface Rota {
   id: string;
   caminho: string;
   titulo: string;
+  /** Linha editorial sob o título no cabeçalho (texto do mockup da agência, ADR-0017). */
+  chamada?: string;
   icone: NomeIcone;
   /** Rótulo na bottom-nav mobile; ausente = não aparece lá. */
   rotuloInferior?: string;
@@ -22,20 +24,21 @@ export interface Rota {
 }
 
 export const ROTAS: readonly Rota[] = [
-  { id: 'home', caminho: '', titulo: 'Início', icone: 'inicio', rotuloInferior: 'Início' },
-  { id: 'ben', caminho: 'beneficios', titulo: 'Meus benefícios', icone: 'sacola', rotuloInferior: 'Benefícios' },
-  { id: 'clube', caminho: 'clube', titulo: 'Clube de vantagens', icone: 'presente', rotuloInferior: 'Clube' },
-  { id: 'news', caminho: 'noticias', titulo: 'Notícias e ciência', icone: 'jornal', rotuloInferior: 'Notícias' },
-  { id: 'fatura', caminho: 'fatura', titulo: 'Fatura de valor', icone: 'recibo', flag: 'fatura_valor' },
-  { id: 'com', caminho: 'comunidade', titulo: 'Comunidade', icone: 'pessoas' },
-  { id: 'evt', caminho: 'eventos', titulo: 'Congresso e eventos', icone: 'calendario' },
-  { id: 'card', caminho: 'carteirinha', titulo: 'Carteirinha digital', icone: 'cartao', rotuloInferior: 'Carteirinha' },
-  { id: 'perfil', caminho: 'perfil', titulo: 'Meu perfil', icone: 'usuario' },
-  { id: 'solicitacoes', caminho: 'solicitacoes', titulo: 'Minhas solicitações', icone: 'caixa' },
+  { id: 'home', caminho: '', titulo: 'Início', chamada: 'O que faz sentido para você hoje?', icone: 'inicio', rotuloInferior: 'Início' },
+  { id: 'ben', caminho: 'beneficios', titulo: 'Meus benefícios', chamada: 'Valor que acompanha sua vida dentro e fora do consultório.', icone: 'sacola', rotuloInferior: 'Benefícios' },
+  { id: 'clube', caminho: 'clube', titulo: 'Clube de vantagens', chamada: 'Descontos e cashback para usar toda semana.', icone: 'presente', rotuloInferior: 'Clube' },
+  { id: 'news', caminho: 'noticias', titulo: 'Notícias e ciência', chamada: 'Conhecimento que conversa com a sua prática.', icone: 'jornal', rotuloInferior: 'Notícias' },
+  { id: 'fatura', caminho: 'fatura', titulo: 'Fatura de valor', chamada: 'O valor que a sua associação devolve para você.', icone: 'recibo', flag: 'fatura_valor' },
+  { id: 'com', caminho: 'comunidade', titulo: 'Comunidade', chamada: 'Sua comunidade profissional, com propósito.', icone: 'pessoas' },
+  { id: 'evt', caminho: 'eventos', titulo: 'Congresso e eventos', chamada: 'Onde a profissão se encontra, aprende e avança junto.', icone: 'calendario' },
+  { id: 'card', caminho: 'carteirinha', titulo: 'Carteirinha digital', chamada: 'Sua identificação APM, sempre no bolso.', icone: 'cartao', rotuloInferior: 'Carteirinha' },
+  { id: 'perfil', caminho: 'perfil', titulo: 'Meu perfil', chamada: 'Seus dados de contato e de cadastro na APM.', icone: 'usuario' },
+  { id: 'solicitacoes', caminho: 'solicitacoes', titulo: 'Minhas solicitações', chamada: 'Acompanhe cada protocolo em um só lugar.', icone: 'caixa' },
   {
     id: 'onb',
     caminho: 'onboarding',
     titulo: 'Onboarding acadêmico',
+    chamada: 'Primeiros passos na sua associação.',
     icone: 'estrela',
     somenteTipo: 'Acadêmico',
     separada: true,

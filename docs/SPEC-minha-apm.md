@@ -21,6 +21,12 @@ Os valores monetários, contagens e textos de notícias do protótipo são place
 
 ## Fundação visual (design tokens)
 
+> **Substituída em 2026-10-20 pelo ADR-0017.** A referência visual (cor, tipografia, forma,
+> superfície e movimento) passou a ser o conjunto de mockups da agência; os valores vigentes estão
+> em `frontend/src/styles/tokens.css` (fonte Sora, paleta `#004165`/`#00675A`/`#009581`, cards de
+> vidro, trilho em pílula). Esta seção fica como histórico. Estrutura, conteúdo e comportamento
+> descritos no resto da spec continuam valendo.
+
 A identidade é azul-marinho institucional APM no shell, verde-esmeralda nas ações e no "positivo financeiro", âmbar como acento de evento e patrocínio. Fundo da aplicação cinza-azulado claro; cards brancos com raio generoso. Implemente tudo como variáveis CSS (ou tokens Tailwind) com os valores abaixo.
 
 **Cores**

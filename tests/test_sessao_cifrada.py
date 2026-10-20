@@ -81,3 +81,38 @@ def test_cookie_no_pior_caso_cabe_no_limite():
     m = _middleware()
     cookie = f"__Host-area={m.cifrar(_PIOR_CASO)}; Max-Age=28800; {m._flags}"
     assert len(cookie) < COOKIE_MAX_BYTES, len(cookie)
+
+
+def _rodar(m: SessaoCifradaMiddleware, caminho: str, cookie: str) -> tuple[dict, list[bytes]]:
+    """Executa o middleware ASGI sobre um app que só registra a sessão recebida."""
+    import asyncio
+
+    vista: dict = {}
+    enviados: list[dict] = []
+
+    async def app(scope, receive, send):
+        vista.update(scope["session"])
+        scope["session"]["tocada"] = True  # mesmo alterada, não pode virar cookie em /static/
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        enviados.append(message)
+
+    m.app = app
+    scope = {"type": "http", "method": "GET", "path": caminho, "headers": [(b"cookie", f"__Host-area={cookie}".encode())]}
+    asyncio.run(m(scope, receive, send))
+    cabecalhos = [v for k, v in enviados[0]["headers"] if k.lower() == b"set-cookie"]
+    return vista, cabecalhos
+
+
+def test_static_nao_le_nem_reemite_o_cookie():
+    m = _middleware()
+    cookie = m.cifrar({"sub": "x", "csrf": "t"})
+    vista, cabecalhos = _rodar(m, "/static/spa/assets/sora-latin-400-normal.woff2", cookie)
+    assert vista == {} and cabecalhos == []
+    vista, cabecalhos = _rodar(m, "/api/v1/sessao", cookie)
+    assert vista == {"sub": "x", "csrf": "t"} and len(cabecalhos) == 1

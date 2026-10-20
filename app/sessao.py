@@ -10,6 +10,10 @@ Comportamento preservado do Starlette:
 - o cookie é reemitido em toda resposta com sessão não vazia → expiração
   deslizante de `max_age` (o carimbo do Fernet é renovado a cada emissão);
 - sessão esvaziada → cookie apagado;
+- `/static/` fica de fora: arquivos não leem nem mudam a sessão, e reemitir o
+  cookie neles abria corrida (a resposta de uma fonte baixada em paralelo
+  sobrescrevia o cookie com a sessão lida antes, perdendo o que a API acabara
+  de gravar, ou recriando uma sessão recém-encerrada pelo logout);
 - cookie inválido, adulterado ou vencido → sessão vazia, sem erro ao usuário.
 
 Rotação de chave: `SESSION_ENC_KEYS` aceita várias chaves; a primeira cifra e
@@ -55,6 +59,10 @@ def construir_cifrador(chaves: list[str], secret_key: str) -> MultiFernet:
     return MultiFernet([Fernet(k.encode("ascii")) for k in lista])
 
 
+# Arquivos estáticos: sem leitura nem reemissão do cookie (ver docstring do módulo).
+_PREFIXO_SEM_SESSAO = "/static/"
+
+
 class SessaoCifradaMiddleware:
     def __init__(
         self,
@@ -95,6 +103,10 @@ class SessaoCifradaMiddleware:
     # ------------------------------------------------------------------ #
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+        if scope.get("path", "").startswith(_PREFIXO_SEM_SESSAO):
+            scope["session"] = {}  # vazia e descartada: o cookie não é lido nem reemitido
             await self.app(scope, receive, send)
             return
 

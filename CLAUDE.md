@@ -9,9 +9,9 @@
 > (`area_associado`) no RDS `mysql-producao`, com **TLS verificado** e **UPDATE só por tabela**.
 
 **Documentos que governam o projeto**
-- `docs/SPEC-minha-apm.md` — a interface da área do associado segue esta spec; **em dúvida de
-  layout, cor, texto ou comportamento de UI, a spec vence**. Em conflito com segurança, vence a
-  Sentinela (regra 13).
+- `docs/SPEC-minha-apm.md` — estrutura, texto e comportamento da área do associado; o **visual**
+  (cor, fonte, forma, movimento) segue os mockups da agência (ADR-0017). Em conflito com
+  segurança, vence a Sentinela (regra 13).
 - `docs/REQUISITOS-minha-apm.md` — requisitos RF/RNF, integrações, modelo de dados, máquina de
   estados das solicitações, eventos de uso, perfil editável, flags, lacunas.
 - `docs/adr/` — decisões de arquitetura (ADR-0001..0014). Mudança de decisão = ADR nova.
@@ -28,11 +28,11 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 |--------|-----------|-------------|
 | **Linguagem** | Python 3.12 (`python:3.12-slim`) | Mesma base do `login_associado` e do `mcp_hub`. [atual] |
 | **Backend** | FastAPI 0.115 + Gunicorn 23 / workers Uvicorn | 2 workers, bind `0.0.0.0:8000`, `--timeout 60`. [atual] API JSON em `/api/v1` [atual: `sessao`, `uso`; demais recursos nas fases 2–8]. |
-| **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Fontes Figtree e JetBrains Mono self-hosted (OFL). Ícones SVG próprios. React Router `basename="/area"` com URLs reais (sem `localStorage` de rota). ADR-0001. |
-| **Páginas Jinja2** | `/` (`entrada`), `/auth/*`, `stub_login` (só testes), `erro`, `/verificar/{token}` | [atual] Só as páginas fora da SPA. `/` é a landing de entrada (tela "Login" do mockup da agência, sem campos: botão para `/auth/login`, cadastro e recuperação no IdP), com Figtree e tokens da spec em `entrada.css`, sem JS. `boot.js` removido. Demais páginas no visual antigo (Neo Sans) até P-24. |
+| **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Visual dos mockups da agência (ADR-0017): fontes Sora e JetBrains Mono self-hosted (OFL), cards de vidro, trilho em pílula. Ícones SVG próprios. React Router `basename="/area"` com URLs reais (sem `localStorage` de rota). ADR-0001. |
+| **Páginas Jinja2** | `/` (`entrada`), `/auth/*`, `stub_login` (só testes), `erro`, `/verificar/{token}` | [atual] Só as páginas fora da SPA. `/` é a landing de entrada (tela "Login" do mockup da agência, sem campos: botão para `/auth/login`, cadastro e recuperação no IdP), com Sora e a paleta do mockup em `entrada.css`, sem JS. `boot.js` removido. Demais páginas no visual antigo (Neo Sans) até P-24. |
 | **Autenticação** | OIDC Authorization Code + PKCE S256, client **confidencial** (`client_secret_basic`) | [atual] `app/oidc.py` com `httpx` + `pyjwt` (RS256 fixo, `iss`/`aud`/`nonce`/`exp`/`auth_time` obrigatórios). **Sem refresh token**: sessão própria; expirou → SSO silencioso no IdP. [atual] Escopo `carteirinha` (tipo, situação, CRM, UF, filiação); sem tipo ou situação o login é recusado (ADR-0016). O client do IdP precisa permitir o escopo (P-09). |
 | **Back-channel IdP** | `http://login_associado:8000` na `rede_publica`, header `Host: login.apm.org.br` | [atual] Evita hairpin via Cloudflare e a zona `oauth_token` (3 r/s) do edge. `iss` continua `https://login.apm.org.br`. |
-| **Sessão** | Cookie `SessionMiddleware`, `same_site=lax`, Secure fora de `development` | [atual] **cifrado e autenticado** (`app/sessao.py`, Fernet/MultiFernet; `SESSION_ENC_KEYS` obrigatória em produção), nome `__Host-area` (`area_sessao` só em development) — ADR-0011. Conteúdo: `sub, cid, nome, email, cpf_mask, auth_at, idp_at, amr, idt, csrf, tipo, status` (`idp_at` = `auth_time` do IdP, base do step-up). **CPF completo, access e refresh token nunca.** |
+| **Sessão** | Cookie `SessionMiddleware`, `same_site=lax`, Secure fora de `development` | [atual] **cifrado e autenticado** (`app/sessao.py`, Fernet/MultiFernet; `SESSION_ENC_KEYS` obrigatória em produção), nome `__Host-area` (`area_sessao` só em development) — ADR-0011. Conteúdo: `sub, cid, nome, email, cpf_mask, auth_at, idp_at, amr, idt, csrf, tipo, status` (`idp_at` = `auth_time` do IdP, base do step-up). **CPF completo, access e refresh token nunca.** O CSRF nasce no login (`store_identity`) e `/static/` não lê nem reemite o cookie (corrida de 2026-10-20). |
 | **CSRF** | [atual] Form field `csrf` (`/auth/*`); na API, `X-CSRF-Token` + `Sec-Fetch-Site: same-origin` (ou `Origin` = `PUBLIC_BASE_URL`) + `Content-Type` JSON/multipart | `app/csrf.py` (`exigir_csrf`). Token entregue em `GET /api/v1/sessao`. Recusa vai para `evento_log` (`csrf_recusado`). |
 | **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials` com `ferramentas:ler ferramentas:escrever`, REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`, implementado no hub na Fase 2b (`SistemasTiAPM/mcp_hub` `8bb3c43`; provisão P-02, P-05, P-29). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Token do hub só em memória de processo. Timeouts `HUB_TIMEOUT` (leitura) e `HUB_TIMEOUT_ESCRITA` (30 s). `HUB_MODE=real\|stub` (stub proibido em produção). Smoke: `scripts/check_hub.py`. ADR-0002. |
 | **Site WordPress** | MySQL `portal_apm` (Locaweb), usuário somente leitura próprio | [alvo Fase 5] `app/integracoes/portal_wp.py`, **só no serviço de jobs**; o processo web nunca conecta na Locaweb. Cache em `noticia_cache`/`evento_cache`. ADR-0006, P-07. |
@@ -71,7 +71,7 @@ app/
                    # email_verificacao (código HMAC)
   integracoes/     # hub.py (cliente mcp_hub), hub_stub.py, email.py (SMTP)
   templates/       # entrada (landing de /), base, erro, stub_login (com persona; só testes), verificar
-  static/          # entrada.css (+ Figtree em fonts/), style.css, fonts.css (Neo Sans), logo, favicons; spa/ = build (gitignored)
+  static/          # entrada.css (+ Sora em fonts/), style.css, fonts.css (Neo Sans), logo, favicons; spa/ = build (gitignored)
 frontend/          # Vite + React + TS: src/{styles,api,shell,components,pages,state,lib,test}, e2e/ (Playwright)
 scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py, check_hub.py
 sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado, 006 associado_perfil,
@@ -146,10 +146,11 @@ JSON, nunca 303.
 12. **Separação por módulo.** Rota não fala HTTP com IdP, hub ou portal nem escreve SQL: delega a
     `oidc.py`, `integracoes/`, `dominio/`, `audit.py`, `uso.py`. Chamadas bloqueantes nas rotas
     vão por `run_in_threadpool`.
-13. **A spec vence em UI; a Sentinela vence em segurança.** Layout, cor, texto e comportamento
-    seguem `docs/SPEC-minha-apm.md`. Se a spec pedir algo inseguro (CDN, inline, dado em
-    `localStorage`, imagem de host não listado), vale a regra de segurança e a divergência é
-    registrada em `docs/PENDENCIAS.md`.
+13. **O mockup vence no visual, a spec no comportamento, a Sentinela em segurança.** Cor,
+    tipografia, forma e movimento seguem os mockups da agência (ADR-0017, `tokens.css`); estrutura,
+    texto e comportamento seguem `docs/SPEC-minha-apm.md`. Se um dos dois pedir algo inseguro (CDN,
+    inline, JS de enfeite, dado em `localStorage`, imagem de host não listado) ou mostrar número sem
+    fonte, vale a regra de segurança/dados e a divergência é registrada em `docs/PENDENCIAS.md`.
 14. **UPDATE só por GRANT de tabela; DELETE nunca.** Tabela mutável recebe `GRANT UPDATE` na própria
     migração, com comentário de justificativa (molde `apm-parceiros/sql/008`). Desfazer = coluna de
     estado (`status`, `desativado_em`, `removida_em`). `scripts/db_check.py` falha se houver UPDATE
@@ -216,4 +217,4 @@ Invariantes: código pronto para produção (erros, bordas, segurança, desempen
 
 ---
 *Criado em 2026-10-01. Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
-regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Revisado em 2026-10-19 (Fase 2b: hub implementado, regra 21 com o endereço e a escrita incerta). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*
+regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Revisado em 2026-10-19 (Fase 2b: hub implementado, regra 21 com o endereço e a escrita incerta). Revisado em 2026-10-20 (landing de entrada; visual dos mockups da agência, ADR-0017, regra 13). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*

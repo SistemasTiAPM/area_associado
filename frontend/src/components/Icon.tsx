@@ -26,6 +26,10 @@ const CAMINHOS = {
   escudo: ['M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z'],
   voltar: ['M15 6l-6 6 6 6'],
   externo: ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'],
+  seta: ['M5 12h14', 'M13 6l6 6-6 6'],
+  loja: ['M3 9l2-5h14l2 5', 'M4 9v11h16V9', 'M9 20v-6h6v6'],
+  local: ['M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z', 'M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'],
+  estetoscopio: ['M6 3v6a4 4 0 0 0 8 0V3', 'M10 13v3a5 5 0 0 0 10 0v-2', 'M20 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type NomeIcone = keyof typeof CAMINHOS;

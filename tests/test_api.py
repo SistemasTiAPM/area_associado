@@ -74,6 +74,23 @@ def _cabecalhos(csrf: str, **extra: str) -> dict[str, str]:
     return {"X-CSRF-Token": csrf, "Sec-Fetch-Site": "same-origin", **extra}
 
 
+def test_csrf_nasce_no_login_e_static_nao_reemite_cookie(ctx):
+    """Corrida de 2026-10-20: a resposta de uma fonte baixada em paralelo regravava o
+    cookie com a sessão de antes de /api/v1/sessao, sem o CSRF, e o PUT seguinte dava 403."""
+    from app.config import get_settings
+
+    c = ctx["c"]
+    nome = get_settings().session_cookie_name
+    entrar(c)
+    apos_login = c.cookies.get(nome)
+    csrf = c.get("/api/v1/sessao").json()["csrf"]
+    c.cookies.clear()
+    c.cookies.set(nome, apos_login)  # cookie "atrasado", anterior à leitura da sessão
+    assert c.get("/api/v1/sessao").json()["csrf"] == csrf
+    r = c.get("/static/style.css")
+    assert r.status_code == 200 and "set-cookie" not in r.headers
+
+
 # ------------------------------------------------------------------ sem sessão
 def test_api_sem_sessao_responde_401_json_sem_redirecionar(ctx):
     r = ctx["c"].get("/api/v1/sessao", follow_redirects=False)
@@ -280,7 +297,7 @@ def test_entrada_serve_css_e_fontes_locais(ctx):
     c = ctx["c"]
     css = c.get("/static/entrada.css")
     assert css.status_code == 200 and "fonts.googleapis" not in css.text
-    assert c.get("/static/fonts/figtree-latin-400-normal.woff2").status_code == 200
+    assert c.get("/static/fonts/sora-latin-400-normal.woff2").status_code == 200
 
 
 def test_sessao_informa_dados_de_demonstracao(ctx, monkeypatch):

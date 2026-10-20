@@ -75,33 +75,42 @@ function SecaoFoto({ perfil, aoMudar }: { perfil: Perfil; aoMudar: (versao: stri
   };
 
   return (
-    <section className="cartao secao-perfil" aria-labelledby="titulo-foto">
-      <h2 className="secao__titulo" id="titulo-foto">
-        Foto
-      </h2>
-      <div className="foto-perfil">
-        <span className="avatar avatar--96">
-          <ConteudoAvatar iniciais={sessao.associado.iniciais} fotoVersao={perfil.foto_versao} tamanho={96} />
-        </span>
-        <div className="botoes">
-          <input
-            ref={entrada}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            hidden
-            onChange={(e) => void aoEscolher(e)}
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-          <button type="button" className="botao botao--primario" disabled={ocupado} onClick={() => entrada.current?.click()}>
-            {perfil.tem_foto ? 'Trocar foto' : 'Enviar foto'}
-          </button>
-          {perfil.tem_foto ? (
-            <button type="button" className="botao botao--secundario" disabled={ocupado} onClick={() => void aoRemover()}>
-              Remover foto
-            </button>
-          ) : null}
+    <section className="cartao secao-perfil identidade" aria-labelledby="titulo-identidade">
+      <span className="avatar avatar--112">
+        <ConteudoAvatar iniciais={sessao.associado.iniciais} fotoVersao={perfil.foto_versao} tamanho={112} />
+      </span>
+      <div className="identidade__textos">
+        <h2 className="identidade__nome" id="titulo-identidade">
+          {perfil.nome ?? sessao.associado.nome}
+        </h2>
+        {perfil.crm ? (
+          <p className="identidade__crm">{`CRM ${perfil.crm}${perfil.crm_uf ? `-${perfil.crm_uf}` : ''}`}</p>
+        ) : null}
+      </div>
+      {perfil.tipo_associado || perfil.status_associativo ? (
+        <div className="identidade__tags">
+          {perfil.tipo_associado ? <span className="tag tag--ok">{perfil.tipo_associado}</span> : null}
+          {perfil.status_associativo ? <span className="tag tag--info">{perfil.status_associativo}</span> : null}
         </div>
+      ) : null}
+      <div className="botoes identidade__botoes">
+        <input
+          ref={entrada}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          onChange={(e) => void aoEscolher(e)}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <button type="button" className="botao botao--secundario" disabled={ocupado} onClick={() => entrada.current?.click()}>
+          {perfil.tem_foto ? 'Trocar foto' : 'Enviar foto'}
+        </button>
+        {perfil.tem_foto ? (
+          <button type="button" className="botao botao--secundario" disabled={ocupado} onClick={() => void aoRemover()}>
+            Remover foto
+          </button>
+        ) : null}
       </div>
       <p className="secao__subtitulo">JPG, PNG ou WebP de até 5 MB. A foto é recortada em quadrado e vai para o seu cadastro na APM.</p>
     </section>
@@ -118,8 +127,6 @@ function SecaoCadastro({ perfil }: { perfil: Perfil }) {
         Dados do cadastro
       </h2>
       <dl className="dados-perfil">
-        <dt>Nome</dt>
-        <dd>{perfil.nome ?? '—'}</dd>
         <dt>CRM</dt>
         <dd>{crm}</dd>
         <dt>Tipo de associado</dt>
@@ -463,10 +470,14 @@ export function PaginaPerfil() {
         </p>
       ) : null}
       <div className="grade-perfil">
-        <SecaoFoto perfil={perfil} aoMudar={(versao) => atualizar({ ...perfil, tem_foto: versao !== null, foto_versao: versao })} />
-        <SecaoCadastro perfil={perfil} />
-        <SecaoContato key={perfil.atualizado_em ?? 'contato'} perfil={perfil} aoAtualizar={atualizar} />
-        <SecaoEmail perfil={perfil} aoAtualizar={atualizar} />
+        <div className="grade-perfil__coluna">
+          <SecaoFoto perfil={perfil} aoMudar={(versao) => atualizar({ ...perfil, tem_foto: versao !== null, foto_versao: versao })} />
+          <SecaoCadastro perfil={perfil} />
+        </div>
+        <div className="grade-perfil__coluna">
+          <SecaoContato key={perfil.atualizado_em ?? 'contato'} perfil={perfil} aoAtualizar={atualizar} />
+          <SecaoEmail perfil={perfil} aoAtualizar={atualizar} />
+        </div>
       </div>
     </>
   );

@@ -1,14 +1,12 @@
 // Fontes self-hosted (P-14): só os subsets latin e latin-ext, font-display swap.
-import '@fontsource/figtree/latin-400.css';
-import '@fontsource/figtree/latin-ext-400.css';
-import '@fontsource/figtree/latin-500.css';
-import '@fontsource/figtree/latin-ext-500.css';
-import '@fontsource/figtree/latin-600.css';
-import '@fontsource/figtree/latin-ext-600.css';
-import '@fontsource/figtree/latin-700.css';
-import '@fontsource/figtree/latin-ext-700.css';
-import '@fontsource/figtree/latin-800.css';
-import '@fontsource/figtree/latin-ext-800.css';
+import '@fontsource/sora/latin-400.css';
+import '@fontsource/sora/latin-ext-400.css';
+import '@fontsource/sora/latin-500.css';
+import '@fontsource/sora/latin-ext-500.css';
+import '@fontsource/sora/latin-600.css';
+import '@fontsource/sora/latin-ext-600.css';
+import '@fontsource/sora/latin-700.css';
+import '@fontsource/sora/latin-ext-700.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import './styles/tokens.css';
 import './styles/base.css';

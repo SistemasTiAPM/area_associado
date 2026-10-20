@@ -23,7 +23,8 @@ export function AppShell() {
   const primeiraRenderizacao = useRef(true);
 
   const rota = rotaDoCaminho(pathname);
-  const titulo = rota && rotaVisivel(rota, sessao) ? rota.titulo : TITULO_NAO_ENCONTRADA;
+  const visivel = rota !== undefined && rotaVisivel(rota, sessao);
+  const titulo = visivel ? rota.titulo : TITULO_NAO_ENCONTRADA;
   const fecharDrawer = useCallback(() => setDrawerAberto(false), []);
 
   useEffect(() => {
@@ -63,6 +64,8 @@ export function AppShell() {
           <Cabecalho
             ref={refTitulo}
             titulo={titulo}
+            chamada={visivel ? rota.chamada : undefined}
+            inicio={visivel && rota.id === 'home'}
             drawerAberto={drawerAberto}
             aoAbrirMenu={() => setDrawerAberto(true)}
           />

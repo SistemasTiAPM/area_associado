@@ -30,6 +30,61 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-20 — Área logada no visual dos mockups da agência (ADR-0017) e corrida do cookie de sessão
+
+Pedido do usuário: a área logada deve seguir os mockups da agência. Decisões: o mockup passa a ser a
+referência visual (ADR-0017; CLAUDE.md, regra 13); opção A, ou seja, só o visual das telas que já
+existem, sem telas novas e sem dados inventados; menu com ícone + nome.
+
+**Entregue — 🎨 Vitrine**
+- **Fonte:** `@fontsource/sora` 5.3.0 no lugar de `@fontsource/figtree` (SPA e landing; OFL em
+  `app/static/fonts/OFL-sora.txt`).
+- **`tokens.css`:** paleta do mockup com variantes `-texto` medidas para AA (P-22), vidro,
+  gradientes, raios. **`base.css`:** fundo com campos de cor estáticos, `.vidro`, botões em
+  pílula, tags. **`shell.css`:** trilho de vidro (264 px) com ícone + nome, ativo em gradiente,
+  "Meu perfil" com avatar no rodapé; cabeçalho em degradê com máscara (sobretítulo, h1 da rota,
+  chamada editorial por rota em `rotas.ts`, busca de vidro, chip do perfil); drawer, nav inferior
+  em pílula flutuante, FAB e toast de vidro. **`motion.css`:** 520 ms com intervalo de 90 ms.
+- **Início:** hero navy com "Olá, {nome}", tipo · situação da sessão e atalhos para Carteirinha e
+  Perfil; nada de valor, agenda ou recomendação sem fonte. **Carteirinha:** cartão em gradiente,
+  painel "Sempre com você" (só ações que existem) e 3 cards de uso com texto neutro.
+  **Perfil:** duas colunas, card de identidade (foto, nome, CRM, tipo e situação, troca de foto) e
+  as seções existentes em vidro.
+- Sem sino de notificações, count-up, filtro SVG de refração nem fundo sorteado por JS (ADR-0017).
+- Landing `/` alinhada (Sora, paleta, campos de cor).
+
+**Entregue — 🛡️ Sentinela (defeito encontrado no e2e)**
+- **Corrida do cookie de sessão:** o middleware (`app/sessao.py`) reemitia o cookie em toda
+  resposta, inclusive em `/static/`, a partir da sessão lida no começo da requisição; e o CSRF só
+  nascia na primeira leitura de `/api/v1/sessao`. Uma fonte baixada em paralelo podia sobrescrever
+  o cookie sem o token, e o PUT seguinte dava 403 ("Sua sessão foi atualizada"), assim como o Sair
+  ("Sessão expirada"). Em tese, também podia recriar uma sessão logo depois do logout. O defeito
+  existia em produção; a fonte nova o tornou mais frequente.
+- Correção: `/static/` não lê nem reemite o cookie (`_PREFIXO_SEM_SESSAO`), e o CSRF nasce no login
+  (`store_identity`). Testes novos reproduzem a corrida sem depender de tempo (falham sem a
+  correção): `test_csrf_nasce_no_login_e_static_nao_reemite_cookie` e
+  `test_static_nao_le_nem_reemite_o_cookie`.
+- e2e: o teste de axe passa a medir depois do fim das animações (antes, media o texto ainda
+  semitransparente); a largura do trilho passa de 248 para 264.
+
+**Pendências:** P-22 atualizada (pares da paleta nova); P-38 ampliada (fotos dos cards); novas
+P-39 (mockups versionados em `docs/mockups/`) e P-40 (`react-router` 6 com 2 avisos moderados,
+anteriores a esta entrega).
+
+**Evidências (2026-10-20)**
+
+| Verificação | Resultado |
+|---|---|
+| `npm run check` (typecheck, ESLint com regras de CSP, Vitest) | 46 testes passaram, sem alteração nos testes de unidade |
+| pytest na imagem, sem banco | 138 passaram (11 de MySQL pulados) |
+| pytest com MySQL 8.4 descartável (`sql/000`–`007`, TLS 1.3) | 149 passaram |
+| Playwright e2e na imagem `read_only`, 1440 e 390 px, depois da correção da sessão | 9 rodadas: 7 com 20/20; as 2 primeiras após o rebuild com 1 falha cada, mais lentas (2,1–2,3 min contra 1,3) e sem causa identificada (o relatório foi limpo pela rodada seguinte) |
+| `evento_log` dessas 9 rodadas | 18 `csrf_recusado`, todos em `/api/v1/uso` por token: exatamente os 2 propositais por rodada; nenhuma recusa indevida, nenhum outro erro |
+| axe WCAG 2.1 AA (Início, Benefícios, Carteirinha, Perfil) e violações de CSP | 0 / 0 |
+| Capturas 1440 e 390 px (Início, Carteirinha, Perfil, "em construção") | aprovadas pelo usuário para publicação, sem as imagens do pacote de mockups (P-38) |
+
+---
+
 ## 2026-10-20 — Página de entrada da Minha APM (tela "Login" do mockup)
 
 Pedido do usuário: dos mockups da agência (`*.dc.html`), só a tela de login entra agora. Decisões

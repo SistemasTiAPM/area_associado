@@ -28,6 +28,7 @@ Pendências referenciadas (P-xx) estão no plano de implementação; as regras c
 | [ADR-0014](0014-chave-de-integracao-contact-id-nunca-cpf.md) | Chave de integração é `contact_id`, nunca CPF | Aceita | 2026-10-16 |
 | [ADR-0015](0015-troca-de-email-com-codigo-e-reautenticacao.md) | Troca de e-mail com código e reautenticação | Aceita | 2026-10-17 |
 | [ADR-0016](0016-persona-incompleta-recusa-login.md) | Cadastro sem tipo ou situação recusa o login | Aceita | 2026-10-17 |
+| [ADR-0017](0017-mockup-da-agencia-como-referencia-visual.md) | Mockups da agência como referência visual | Aceita | 2026-10-20 |
 
 ## Mapa de dependências
 

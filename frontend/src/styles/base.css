@@ -1,4 +1,5 @@
-/* Base: reset enxuto, tipografia, foco visível e utilitários de acessibilidade. */
+/* Base: reset enxuto, tipografia, fundo, superfície de vidro, botões, foco
+   visível e utilitários de acessibilidade (ADR-0017). */
 *,
 *::before,
 *::after {
@@ -10,15 +11,20 @@ html {
   text-size-adjust: 100%;
 }
 
+/* Campos de cor do mockup, estáticos (o mockup sorteava a composição por JS). */
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--gray-50);
+  background-color: var(--gray-50);
+  background-image: radial-gradient(70vmax 50vmax at 88% 12%, var(--campo-lavanda), transparent 70%),
+    radial-gradient(60vmax 45vmax at 6% 62%, var(--campo-pessego), transparent 70%),
+    radial-gradient(60vmax 40vmax at 60% 104%, var(--campo-menta), transparent 70%);
+  background-attachment: fixed;
   color: var(--ink-900);
   font-family: var(--fonte-base);
   font-size: var(--fs-base);
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -83,10 +89,10 @@ svg {
   top: -60px;
   z-index: 60;
   padding: 10px 14px;
-  border-radius: var(--raio-botao);
-  background: var(--navy-800);
+  border-radius: var(--raio-pill);
+  background: var(--navy-900);
   color: var(--branco);
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -98,21 +104,45 @@ svg {
   flex: none;
 }
 
-/* ---- Botões base (spec: PrimaryButton / SecondaryButton / TextLink) ---- */
+/* ---- Vidro: superfície padrão de card e controle (mockup "liquid glass").
+   Sem o filtro SVG de refração do mockup (exigia JS e só roda no Chromium). */
+.vidro {
+  background: var(--vidro-fundo);
+  -webkit-backdrop-filter: var(--vidro-desfoque);
+  backdrop-filter: var(--vidro-desfoque);
+  box-shadow: var(--vidro-sombra);
+}
+
+/* Variante sobre fundos navy (selos, pílulas e botões claros em heros). */
+.vidro--escuro {
+  background: var(--vidro-escuro-fundo);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  backdrop-filter: blur(8px) saturate(150%);
+  box-shadow: var(--vidro-escuro-sombra);
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .vidro {
+    background: var(--vidro-fundo-forte);
+  }
+}
+
+/* ---- Botões (mockup: pílulas; primário em gradiente navy) ---- */
 .botao {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 9px 16px;
+  min-height: 42px;
+  padding: 10px 20px;
   border: 0;
   border-radius: var(--raio-botao);
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   text-decoration: none;
-  transition: background var(--dur-curta) var(--easing), transform var(--dur-curta) var(--easing);
+  transition: background var(--dur-curta) var(--easing), box-shadow var(--dur-curta) var(--easing),
+    transform var(--dur-curta) var(--easing);
 }
 
 .botao:active {
@@ -120,17 +150,47 @@ svg {
 }
 
 .botao--primario {
-  background: var(--green-600-texto);
+  background: var(--grad-botao);
   color: var(--branco);
+  box-shadow: var(--sombra-botao);
 }
 
 .botao--primario:hover {
-  background: var(--green-600-hover);
+  background: var(--navy-800);
 }
 
 .botao--secundario {
-  background: var(--gray-100);
-  color: var(--navy-800);
+  background: var(--vidro-fundo-forte);
+  color: var(--navy-900);
+  box-shadow: inset 0 0 0 1px var(--gray-200), 0 6px 18px rgba(0, 30, 50, 0.06);
+}
+
+.botao--secundario:hover:not(:disabled) {
+  background: var(--branco);
+  box-shadow: inset 0 0 0 1px var(--green-600);
+}
+
+/* Sobre fundo navy (heros): botão branco e botão de vidro. */
+.botao--claro {
+  background: var(--branco);
+  color: var(--navy-900);
+}
+
+.botao--claro:hover {
+  background: var(--mint-100);
+}
+
+.botao--vidro {
+  color: var(--branco);
+}
+
+.botao--vidro:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.botao:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .link-texto {
@@ -142,10 +202,38 @@ svg {
   background: none;
   color: var(--green-700);
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 
 .link-texto:hover {
   text-decoration: underline;
+}
+
+/* Tags de status do mockup (`tag(kind)`). */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 6px 11px;
+  border-radius: var(--raio-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tag--ok {
+  background: var(--mint-100);
+  color: var(--green-700);
+}
+
+.tag--info {
+  background: var(--azul-100);
+  color: var(--navy-900);
+}
+
+.tag--novo {
+  background: var(--amber-100);
+  color: var(--amber-texto);
 }

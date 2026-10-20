@@ -3,7 +3,7 @@ import { urlFoto } from '../api/perfil';
 interface Props {
   iniciais: string;
   fotoVersao: string | null;
-  tamanho: 40 | 96;
+  tamanho: 32 | 40 | 112;
 }
 
 /**
