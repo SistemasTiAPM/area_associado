@@ -30,6 +30,34 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-20 — Entrada com login silencioso; Sair volta para a página de entrada
+
+Pedido do usuário, com as regras: primeira visita sem login → página de entrada; depois do Sair →
+página de entrada; já logado → entra direto na área. A entrega anterior ("Sair leva direto ao Login
+APM") veio de uma leitura errada de "página de login" (era esta página de entrada) e foi
+substituída: a marca `pos_logout` saiu.
+
+**Entregue (🛡️ Sentinela + ⚙️ Maestro, só na área; IdP sem mudança)**
+- `/` sem sessão: tenta o **login silencioso** (`/auth/login?next=/area&silencioso=1` →
+  `prompt=none` no IdP, que já suporta: `login_associado/app/oauth_routes.py:313`). Com sessão no
+  Login APM, volta com code e entra em `/area`. Sem sessão, o IdP devolve `login_required`; o
+  callback grava a marca `sso_tentado` e volta para `/`, que mostra a página de entrada.
+- A marca `sso_tentado` (10 min) evita laço com o IdP. O **Sair também a grava**: o IdP acabou de
+  encerrar a sessão, então a volta para `/` mostra a entrada sem um desvio inútil.
+- No pedido silencioso, só erros do IdP (`idp_*`) viram página de entrada; erros de validação
+  (`state`, `iss`, token, persona) seguem com auditoria e página de erro. Botão "Entrar com o
+  Login APM" continua interativo (sem `prompt`). `login_ok` registra `silencioso` em `detalhes`.
+- Custo aceito: quem chega sem sessão passa por uma ida e volta ao IdP antes da página de entrada.
+
+**Evidências (2026-10-20)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest (5 testes novos de login silencioso, sem rede; Sair volta à entrada) | 143 passaram (11 de MySQL pulados) |
+| Playwright e2e, 1440 e 390 px (Sair termina na página de entrada) | 20 de 20 |
+
+---
+
 ## 2026-10-20 — Sair leva direto ao Login APM
 
 Pedido do usuário: depois de Sair, voltar ao formulário do Login APM, e não à página de entrada.

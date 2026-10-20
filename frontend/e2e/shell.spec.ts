@@ -181,8 +181,9 @@ test('Central APM abre wa.me em nova aba; Sair encerra a sessão', async ({ page
   const abrirSair = page.getByRole('button', { name: 'Abrir menu' });
   if (await abrirSair.isVisible()) await abrirSair.click();
   await page.getByRole('button', { name: 'Sair' }).filter({ visible: true }).click();
-  // Depois do Sair, direto para o login (no stub, o formulário de construção).
-  await expect(page).toHaveURL(/\/auth\/login\?next=(%2F|\/)area$/);
+  // Depois do Sair, a página de entrada (no OIDC, a raiz não tenta o login silencioso logo após sair).
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: /Entrar com o Login APM/ })).toBeVisible();
   const status = await page.evaluate(async () => (await fetch('/api/v1/sessao')).status);
   expect(status).toBe(401);
   await page.goto('/area/perfil');

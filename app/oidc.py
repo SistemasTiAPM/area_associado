@@ -114,7 +114,9 @@ def pending_is_valid(pending: object) -> bool:
     )
 
 
-def authorize_url(pending: dict, *, reauth: bool = False, settings: Settings | None = None) -> str:
+def authorize_url(
+    pending: dict, *, reauth: bool = False, silencioso: bool = False, settings: Settings | None = None
+) -> str:
     s = settings or get_settings()
     params = {
         "response_type": "code",
@@ -128,6 +130,9 @@ def authorize_url(pending: dict, *, reauth: bool = False, settings: Settings | N
     }
     if reauth:
         params["prompt"] = "login"
+    elif silencioso:
+        # Sem interação: com sessão no IdP volta com code; sem, com error=login_required.
+        params["prompt"] = "none"
     return f"{s.effective_issuer}/oauth/authorize?{urlencode(params)}"
 
 

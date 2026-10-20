@@ -53,9 +53,9 @@ from .oidc import (
 from .sessao import SessaoCifradaMiddleware, construir_cifrador
 from .templating import templates
 from .session_guard import (
-    POS_LOGOUT_TTL,
     SESSION_PENDING,
-    SESSION_POS_LOGOUT,
+    SESSION_SSO_TENTADO,
+    SSO_TENTADO_TTL,
     LoginRequired,
     current_associado,
     login_redirect,
@@ -243,21 +243,24 @@ async def _http(request: Request, exc: StarletteHTTPException) -> Response:
 # --------------------------------------------------------------------------- #
 @app.get("/")
 async def home(request: Request):
-    """Página de entrada (landing). Não coleta credenciais: o botão leva a
-    /auth/login, que redireciona ao Login APM. Com sessão aqui, direto para a área.
-    Logo depois do Sair (marca de uso único), segue direto para o Login APM."""
+    """Entrada da Minha APM. Com sessão aqui: direto para a área. Sem sessão: um
+    login silencioso no IdP (prompt=none) entra direto quem já está logado no Login
+    APM; quem não está (ou acabou de sair) vê a página de entrada, sem formulário."""
     if current_associado(request) is not None:
         return RedirectResponse("/area", status_code=HTTP_303_SEE_OTHER)
-    saiu_em = request.session.pop(SESSION_POS_LOGOUT, None)
-    if isinstance(saiu_em, int) and 0 <= time.time() - saiu_em <= POS_LOGOUT_TTL:
-        return RedirectResponse("/auth/login?next=/area", status_code=HTTP_303_SEE_OTHER,
+    tentado_em = request.session.get(SESSION_SSO_TENTADO)
+    tentou_ha_pouco = isinstance(tentado_em, int) and 0 <= time.time() - tentado_em <= SSO_TENTADO_TTL
+    if settings.auth_mode == "oidc" and not tentou_ha_pouco:
+        return RedirectResponse("/auth/login?next=/area&silencioso=1", status_code=HTTP_303_SEE_OTHER,
                                 headers={"Cache-Control": "no-store"})
     # no-store: a resposta depende do cookie de sessão e passa pelo Cloudflare.
     return templates.TemplateResponse(request, "entrada.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/auth/login")
-async def auth_login(request: Request, next: str | None = None, reauth: str | None = None):
+async def auth_login(
+    request: Request, next: str | None = None, reauth: str | None = None, silencioso: str | None = None
+):
     destino = safe_next(next)
     if settings.auth_mode == "stub":
         # reauth=1 (step-up) exige digitar o token de novo, como o prompt=login do IdP.
@@ -269,9 +272,11 @@ async def auth_login(request: Request, next: str | None = None, reauth: str | No
     if current_associado(request) is not None and reauth != "1":
         return RedirectResponse(destino, status_code=HTTP_303_SEE_OTHER)
     pending = build_pending(destino)
+    if silencioso == "1" and reauth != "1":
+        pending["silencioso"] = True
     request.session[SESSION_PENDING] = pending
-    return RedirectResponse(authorize_url(pending, reauth=reauth == "1"), status_code=302,
-                            headers={"Cache-Control": "no-store"})
+    url = authorize_url(pending, reauth=reauth == "1", silencioso=pending.get("silencioso") is True)
+    return RedirectResponse(url, status_code=302, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/auth/login")
@@ -330,6 +335,11 @@ async def auth_callback(request: Request, db: Session = Depends(get_session)):
     try:
         claims = await run_in_threadpool(login_from_callback, params, pending)
     except OidcError as exc:
+        if pending.get("silencioso") is True and exc.code.startswith("idp_"):
+            # Login silencioso sem sessão no IdP (login_required e afins): é o caso
+            # comum de quem ainda não entrou; mostra a página de entrada, sem erro.
+            request.session[SESSION_SSO_TENTADO] = int(time.time())
+            return RedirectResponse("/", status_code=HTTP_303_SEE_OTHER, headers={"Cache-Control": "no-store"})
         if exc.code == "idp_login_required":
             return login_redirect(pending["next"])
         severidade = "erro" if exc.http_status >= 500 else "aviso"
@@ -339,7 +349,8 @@ async def auth_callback(request: Request, db: Session = Depends(get_session)):
 
     store_identity(request, claims)
     audit.registrar(db, request, categoria="seguranca", tipo="login_ok", sub=claims.sub,
-                    contact_id=claims.contact_id, status_http=303, detalhes={"amr": claims.amr})
+                    contact_id=claims.contact_id, status_http=303,
+                    detalhes={"amr": claims.amr, "silencioso": pending.get("silencioso") is True})
     await run_in_threadpool(registrar_login, claims, origem="userinfo")
     return RedirectResponse(pending["next"], status_code=HTTP_303_SEE_OTHER)
 
@@ -352,13 +363,13 @@ async def auth_logout(request: Request, csrf: str = Form(""), db: Session = Depe
     associado = current_associado(request)
     if associado is None:
         request.session.clear()
-        request.session[SESSION_POS_LOGOUT] = int(time.time())
+        request.session[SESSION_SSO_TENTADO] = int(time.time())
         return RedirectResponse("/", status_code=HTTP_303_SEE_OTHER)
     if not csrf_ok(request, csrf):
         return _erro(request, "Sessão expirada. Recarregue a página e tente novamente.", 400)
     idt = request.session.get("idt")
     request.session.clear()
-    request.session[SESSION_POS_LOGOUT] = int(time.time())
+    request.session[SESSION_SSO_TENTADO] = int(time.time())
     audit.registrar(db, request, categoria="seguranca", tipo="logout", sub=associado.sub,
                     contact_id=associado.contact_id, status_http=303)
     if settings.auth_mode == "oidc" and isinstance(idt, str) and idt:
