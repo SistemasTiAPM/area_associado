@@ -325,3 +325,37 @@ def test_logout_limpa_cookie_e_volta_para_o_inicio(ctx):
     # Depois do Sair, a volta para `/` segue para o Login APM.
     r = c.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/area"
+
+
+def test_verificacao_publica_no_visual_novo_sem_dado_extra(ctx, monkeypatch):
+    """Três estados da página pública; só nome e situação, sem inline e sem script (ADR-0013/0014)."""
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from sqlalchemy.exc import OperationalError
+
+    from app.dominio import carteirinha
+
+    c = ctx["c"]
+    achado = SimpleNamespace(nome="TELMA NOGUEIRA", situacao="Ativo", contact_id="6b1f3c1e-4f3a-5d2b-9c7e-a5e0c0de57b0",
+                             verificado_em=datetime(2026, 10, 20, 18, 55))
+    monkeypatch.setattr(carteirinha, "resolver", lambda token: achado)
+    r = c.get("/verificar/AAAAAAAAAAAAAAAAAAAA")
+    assert r.status_code == 200 and r.headers["x-robots-tag"] == "noindex, nofollow"
+    html = r.text
+    assert '<h1 class="verificacao__nome" id="verificacao-nome">TELMA NOGUEIRA</h1>' in html
+    assert "verificacao__situacao--ativo" in html and "20/10/2026 às 15:55" in html
+    assert "/static/entrada.css?v=" in html
+    for proibido in (" style=", "<script", "<form", "CRM", "6b1f3c1e"):
+        assert proibido not in html.split("<main", 1)[-1], proibido
+
+    monkeypatch.setattr(carteirinha, "resolver", lambda token: None)
+    r = c.get("/verificar/AAAAAAAAAAAAAAAAAAAA")
+    assert r.status_code == 404 and "Carteirinha não encontrada" in r.text
+
+    def fora(token):
+        raise OperationalError("select", {}, Exception("down"))
+
+    monkeypatch.setattr(carteirinha, "resolver", fora)
+    r = c.get("/verificar/AAAAAAAAAAAAAAAAAAAA")
+    assert r.status_code == 503 and "Verificação indisponível" in r.text

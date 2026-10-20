@@ -30,6 +30,25 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-20 — Verificação pública da carteirinha no visual novo
+
+Pedido do usuário: `/verificar/{token}` ainda estava no layout antigo. A página passa a usar o
+visual dos mockups (ADR-0017), com o mesmo `entrada.css` (Sora, paleta, hero navy): à direita,
+o resultado no formato da carteirinha digital (gradiente 135°, selo "Verificado", nome, situação
+em pílula e "verificado em"); estados "não encontrada" (404) e "indisponível" (503) no mesmo
+layout. Continua expondo **só nome, situação e data** (ADR-0014), `noindex`, `no-store`, sem JS
+nem estilo inline; `app/publico.py` não mudou. P-24 restrita a stub e erro.
+
+**Evidências (2026-10-20)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest (`test_verificacao_publica_no_visual_novo_sem_dado_extra`: 200/404/503, sem inline, script, CRM ou contact_id) | 139 passaram (11 de MySQL pulados) |
+| Playwright e2e, 1440 e 390 px (verificação pública com banco real, 0 violações de CSP) | 20 de 20 |
+| Capturas 1440 e 390 px (verificado e não encontrada) | conferidas |
+
+---
+
 ## 2026-10-20 — `/` volta a levar direto ao Login APM; página de entrada guardada sem rota
 
 Pedido do usuário: quem não tem sessão identificada vai direto ao formulário do Login APM, sem
@@ -49,6 +68,8 @@ A página de entrada (`entrada.html`, `entrada.css`, fontes Sora em `app/static/
 |---|---|
 | pytest (raiz → Login APM; Sair → `/` → Login APM) | 138 passaram (11 de MySQL pulados) |
 | Playwright e2e, 1440 e 390 px | 20 de 20 |
+| Produção, sem sessão: `minha.apm.org.br` → `login.apm.org.br` ("Entrar — Área do Associado APM") | 3 redirecionamentos, 200 |
+| Validação do usuário em produção (entrada, SSO, Sair e visual da área) | testado e aprovado em 2026-10-20 |
 
 ---
 

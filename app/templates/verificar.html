@@ -1,22 +1,77 @@
-{% extends "base.html" %}
-{% block title %}Verificação de associado — APM{% endblock %}
-{% block brand_title %}Verificação de<br>carteirinha APM.{% endblock %}
-{% block brand_lead %}Confirme se uma pessoa é associada à Associação Paulista de Medicina.{% endblock %}
-{% block content %}
-<div class="form-card">
-  {% if indisponivel %}
-    <h1 class="form-card__title">Verificação indisponível</h1>
-    <p class="form-card__sub">Não foi possível verificar agora. Tente novamente em instantes.</p>
-  {% elif encontrado %}
-    <h1 class="form-card__title">{{ nome }}</h1>
-    <dl class="dados">
-      <dt>Situação na APM</dt><dd>{{ situacao }}</dd>
-      {% if quando %}<dt>Verificado em</dt><dd>{{ quando }}</dd>{% endif %}
-    </dl>
-    <p class="hint">Esta página mostra apenas nome e situação associativa, conforme a política de privacidade da APM.</p>
-  {% else %}
-    <h1 class="form-card__title">Carteirinha não encontrada</h1>
-    <p class="form-card__sub">O código de verificação não corresponde a nenhum associado. Confira o QR code com o portador.</p>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#004165">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png?v={{ static_v }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/favicon-192.png?v={{ static_v }}">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v={{ static_v }}">
+  <title>Verificação de associado — APM</title>
+  <link rel="stylesheet" href="/static/entrada.css?v={{ static_v }}">
+</head>
+<body class="entrada">
+  {% if auth_mode == 'stub' %}
+  <div class="entrada__stub" role="status">
+    Ambiente de construção ({{ app_env }}): login sem o Login APM (AUTH_MODE=stub).
+  </div>
   {% endif %}
-</div>
-{% endblock %}
+  {# Verificação pública da carteirinha (spec; ADR-0014): só nome, situação e "verificado em".
+     Visual dos mockups (ADR-0017). Sem JS e sem estilo inline (ADR-0013). #}
+  <div class="entrada__grade">
+    <section class="entrada__hero" aria-label="Verificação de carteirinha APM">
+      <div class="entrada__hero-conteudo">
+        <span class="entrada__selo">MINHA APM</span>
+        <p class="entrada__hero-titulo">Verificação de carteirinha APM.</p>
+        <p class="entrada__hero-texto">Confirme se uma pessoa é associada à Associação Paulista de Medicina.</p>
+      </div>
+    </section>
+
+    <main class="entrada__painel">
+      <img class="entrada__logo" src="/static/logo-apm.png?v={{ static_v }}" width="1587" height="416"
+           alt="Associação Paulista de Medicina — 95 anos">
+      {% if indisponivel %}
+      <div class="verificacao__aviso">
+        <p class="verificacao__rotulo">Resultado da verificação</p>
+        <h1 class="entrada__titulo">Verificação indisponível</h1>
+        <p class="entrada__texto">Não foi possível verificar agora. Tente novamente em instantes.</p>
+      </div>
+      {% elif encontrado %}
+      <article class="verificacao__cartao" aria-labelledby="verificacao-nome">
+        <div class="verificacao__topo">
+          <span class="verificacao__sigla" aria-hidden="true">APM</span>
+          <span class="verificacao__selo">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            Verificado
+          </span>
+        </div>
+        <div class="verificacao__corpo">
+          <p class="verificacao__rotulo verificacao__rotulo--claro">Associado(a) da APM</p>
+          <h1 class="verificacao__nome" id="verificacao-nome">{{ nome }}</h1>
+          <dl class="verificacao__dados">
+            <div>
+              <dt>Situação na APM</dt>
+              <dd><span class="verificacao__situacao{% if situacao == 'Ativo' %} verificacao__situacao--ativo{% endif %}">{{ situacao }}</span></dd>
+            </div>
+            {% if quando %}
+            <div>
+              <dt>Verificado em</dt>
+              <dd>{{ quando }}</dd>
+            </div>
+            {% endif %}
+          </dl>
+        </div>
+      </article>
+      <p class="entrada__nota">Esta página mostra apenas nome e situação associativa, conforme a política de privacidade da APM.</p>
+      {% else %}
+      <div class="verificacao__aviso">
+        <p class="verificacao__rotulo">Resultado da verificação</p>
+        <h1 class="entrada__titulo">Carteirinha não encontrada</h1>
+        <p class="entrada__texto">O código de verificação não corresponde a nenhum associado. Confira o QR code com o portador.</p>
+      </div>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>

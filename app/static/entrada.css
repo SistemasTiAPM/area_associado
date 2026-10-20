@@ -1,5 +1,7 @@
 /* ==========================================================================
-   Minha APM — página de entrada (GET /, app/templates/entrada.html).
+   Minha APM — páginas públicas Jinja no visual dos mockups (ADR-0017):
+   verificação da carteirinha (GET /verificar/{token}, verificar.html) e a
+   página de entrada (entrada.html, guardada sem rota desde 2026-10-20).
    Tela "Login" do mockup da agência (ADR-0017): layout, cores e fonte.
    Sem estilo inline nem JS (ADR-0013).
 
@@ -322,6 +324,160 @@ body.entrada {
   color: var(--ink-400-texto);
 }
 
+/* ------------------------------------------------- Verificação pública */
+.verificacao__rotulo {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-400-texto);
+}
+
+.verificacao__rotulo--claro {
+  color: var(--mint-400);
+}
+
+.verificacao__aviso {
+  display: grid;
+  gap: 8px;
+  max-width: 460px;
+}
+
+/* Resultado no formato da carteirinha digital (gradiente 135° do mockup). */
+.verificacao__cartao {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 28px;
+  max-width: 460px;
+  padding: 28px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: linear-gradient(135deg, var(--navy-950) 0%, var(--navy-900) 45%, var(--hero-fim) 100%);
+  box-shadow: var(--sombra-hero-navy);
+  color: var(--branco);
+}
+
+.verificacao__cartao::before,
+.verificacao__cartao::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.verificacao__cartao::before {
+  right: -70px;
+  bottom: -90px;
+  width: 240px;
+  height: 240px;
+  background: rgba(143, 227, 212, 0.22);
+}
+.verificacao__cartao::after {
+  top: -60px;
+  left: -40px;
+  width: 190px;
+  height: 190px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.verificacao__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.verificacao__sigla {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--branco);
+  color: var(--navy-900);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.verificacao__selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--raio-pill);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px rgba(0, 0, 0, 0.14);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  backdrop-filter: blur(8px) saturate(150%);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.verificacao__selo svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.verificacao__corpo {
+  display: grid;
+  gap: 6px;
+}
+
+.verificacao__nome {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.verificacao__dados {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+}
+.verificacao__dados > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+.verificacao__dados dt {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+}
+.verificacao__dados dd {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* Situação: o texto sempre aparece; a cor só reforça. */
+.verificacao__situacao {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: var(--raio-pill);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--branco);
+}
+.verificacao__situacao--ativo {
+  background: var(--mint-100);
+  color: var(--green-600-texto);
+}
+
 /* ------------------------------------------------------------- Movimento */
 @keyframes entrada-sobe {
   from { opacity: 0; transform: translateY(14px); }
@@ -350,4 +506,7 @@ body.entrada {
   .entrada__logo { width: 200px; }
   .entrada__titulo { font-size: 26px; }
   .entrada__acoes, .entrada__texto, .entrada__nota { max-width: none; }
+  .verificacao__cartao, .verificacao__aviso { max-width: none; }
+  .verificacao__cartao { padding: 22px; }
+  .verificacao__nome { font-size: 21px; }
 }
