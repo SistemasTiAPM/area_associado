@@ -241,12 +241,12 @@ async def _http(request: Request, exc: StarletteHTTPException) -> Response:
 # --------------------------------------------------------------------------- #
 @app.get("/")
 async def home(request: Request):
-    """Sem página própria: a entrada da Minha APM é o Login APM (SSO silencioso
-    se já houver sessão no IdP). Com sessão aqui, direto para a área."""
+    """Página de entrada (landing). Não coleta credenciais: o botão leva a
+    /auth/login, que redireciona ao Login APM. Com sessão aqui, direto para a área."""
     if current_associado(request) is not None:
         return RedirectResponse("/area", status_code=HTTP_303_SEE_OTHER)
-    return RedirectResponse("/auth/login?next=/area", status_code=HTTP_303_SEE_OTHER,
-                            headers={"Cache-Control": "no-store"})
+    # no-store: a resposta depende do cookie de sessão e passa pelo Cloudflare.
+    return templates.TemplateResponse(request, "entrada.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/auth/login")

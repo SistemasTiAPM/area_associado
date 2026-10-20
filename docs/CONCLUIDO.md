@@ -30,6 +30,42 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-20 — Página de entrada da Minha APM (tela "Login" do mockup)
+
+Pedido do usuário: dos mockups da agência (`*.dc.html`), só a tela de login entra agora. Decisões
+do usuário: a tela vira a **landing de `/` na área**, sem campos, porque a área é RP e não coleta
+credenciais (regras 5 e 6). Fica a regra do Login APM (CPF + senha, sem "Manter conectado"). Sem
+as imagens do mockup, usamos o logo existente e um hero em gradiente.
+
+**Entregue**
+- **`GET /`** (`app/main.py`): sem sessão, renderiza `entrada.html` com `Cache-Control: no-store`;
+  com sessão, mantém o `303 → /area`. OIDC, `/auth/*` e sessão não mudaram. A raiz deixa de fazer
+  SSO silencioso direto (um clique a mais). Pós-logout cai na landing.
+- **`app/templates/entrada.html`** + **`app/static/entrada.css`**: layout do mockup (hero navy à
+  esquerda, painel à direita, coluna única abaixo de 900 px). Botão "Entrar com o Login APM"
+  (`/auth/login?next=/area`), "Primeiro acesso" (`{issuer}/cadastro`) e "Esqueci a senha"
+  (`{issuer}/recuperar-senha`). Sem JS, sem estilo inline, sem `<form>`/`<input>`. A animação de
+  entrada fica desligada em `prefers-reduced-motion`.
+- **Adaptações do mockup:** Sora (Google Fonts) virou Figtree self-hosted
+  (`app/static/fonts/figtree-*.woff2`, OFL em `OFL-figtree.txt`). Paleta do mockup virou tokens
+  da spec (cópia comentada de `frontend/src/styles/tokens.css`). Filtro SVG `#lg-refract` e fundo
+  sorteado por JS viraram CSS estático. Stats reduzidos a "95 anos" (LA-14; o resto em P-38).
+  A nota de privacidade foi reescrita sem prometer um ajuste no Perfil que não existe.
+- `app/templating.py`: `entrada.css` no `static_v`. Vhost e Dockerfile sem mudança (`location /`
+  já tem `limit_req`).
+- Docs: CLAUDE.md (endpoints, páginas Jinja, estrutura), ACESSO-CONSTRUCAO (entrada), P-24 restrito
+  a stub/erro/verificar, P-38 nova.
+
+**Evidências (2026-10-20)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest na imagem (`test_raiz_mostra_a_entrada_ou_vai_para_a_area`, `test_entrada_serve_css_e_fontes_locais`, logout, CSP) | 136 passaram (11 de MySQL pulados) |
+| `scripts/csp_check.py` contra container local | `/` 200 `csp=ok`; resultado conforme |
+| Playwright 1440 e 390 px | 0 violações de CSP, 0 erros de console, axe WCAG 2.1 AA sem violações, Figtree carregada, foco visível no 1º Tab; clique no botão leva a `/auth/login` |
+
+---
+
 ## 2026-10-20 — Entrada pelo Login APM, sem tela de login própria
 
 Pedido do usuário: a tela de login da área foi remodelada no Login APM, então a área deixa de

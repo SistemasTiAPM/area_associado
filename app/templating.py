@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from .config import get_settings
 
 BASE_DIR = Path(__file__).resolve().parent
-_VERSIONED_STATIC = ("style.css", "fonts.css")
+_VERSIONED_STATIC = ("style.css", "fonts.css", "entrada.css")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 

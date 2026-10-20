@@ -255,14 +255,32 @@ def test_spa_ausente_responde_503(ctx, tmp_path, monkeypatch):
     assert r.status_code == 503 and r.headers["X-Request-Id"] in r.text
 
 
-def test_raiz_vai_para_o_login_ou_para_a_area(ctx):
+def test_raiz_mostra_a_entrada_ou_vai_para_a_area(ctx):
+    from app.config import get_settings
+
     c = ctx["c"]
     r = c.get("/", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/area"
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
     assert r.headers["cache-control"] == "no-store"
+    assert "unsafe-inline" not in r.headers["content-security-policy"]
+    html = r.text
+    issuer = get_settings().effective_issuer
+    assert 'href="/auth/login?next=/area"' in html
+    assert f'href="{issuer}/cadastro"' in html and f'href="{issuer}/recuperar-senha"' in html
+    assert "95" in html and "anos de história" in html
+    # RP não coleta credenciais (regras 5 e 6) e a página não tem inline (ADR-0013).
+    for proibido in ("<input", "<form", "<script", " style=", "+40", "regionais"):
+        assert proibido not in html, proibido
     entrar(c)
     r = c.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/area"
+
+
+def test_entrada_serve_css_e_fontes_locais(ctx):
+    c = ctx["c"]
+    css = c.get("/static/entrada.css")
+    assert css.status_code == 200 and "fonts.googleapis" not in css.text
+    assert c.get("/static/fonts/figtree-latin-400-normal.woff2").status_code == 200
 
 
 def test_sessao_informa_dados_de_demonstracao(ctx, monkeypatch):

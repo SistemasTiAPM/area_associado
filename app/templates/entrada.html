@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#063553">
+  <meta name="description" content="Minha APM: a área do associado da Associação Paulista de Medicina.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png?v={{ static_v }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/favicon-192.png?v={{ static_v }}">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v={{ static_v }}">
+  <title>Entrar na Minha APM</title>
+  <link rel="stylesheet" href="/static/entrada.css?v={{ static_v }}">
+</head>
+<body class="entrada">
+  {% if auth_mode == 'stub' %}
+  <div class="entrada__stub" role="status">
+    Ambiente de construção ({{ app_env }}): login sem o Login APM (AUTH_MODE=stub).
+  </div>
+  {% endif %}
+  {# Tela "Login" do mockup da agência adaptada a Relying Party: a Minha APM não coleta
+     credenciais (CLAUDE.md, regras 5 e 6). O botão inicia o OIDC em /auth/login; cadastro e
+     recuperação de senha são do Login APM. Sem JS e sem estilo inline (ADR-0013). #}
+  <div class="entrada__grade">
+    <section class="entrada__hero" aria-label="Minha APM">
+      <div class="entrada__hero-conteudo">
+        <span class="entrada__selo">MINHA APM</span>
+        <p class="entrada__hero-titulo">A experiência digital de ser associado.</p>
+        <p class="entrada__hero-texto">Benefícios, ciência, defesa profissional, eventos e relacionamento em um único lugar.</p>
+        {# LA-14: só números com fonte. "+40 benefícios" e "60 regionais" aguardam a Comunicação (P-38). #}
+        <p class="entrada__stat"><strong>95</strong><span>anos de história</span></p>
+      </div>
+    </section>
+
+    <main class="entrada__painel">
+      <img class="entrada__logo" src="/static/logo-apm.png?v={{ static_v }}" width="1587" height="416"
+           alt="Associação Paulista de Medicina — 95 anos">
+      <div class="entrada__cabecalho">
+        <h1 class="entrada__titulo">Entrar na Minha APM</h1>
+        <p class="entrada__texto">Use a sua conta do Login APM, a mesma do site e do aplicativo da APM, com CPF e senha.
+          Se for seu primeiro acesso, você cria a senha em poucos passos.</p>
+      </div>
+      <div class="entrada__acoes">
+        <a class="entrada__botao entrada__botao--primario" href="/auth/login?next=/area">
+          Entrar com o Login APM
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="entrada__botao entrada__botao--secundario" href="{{ issuer }}/cadastro">Primeiro acesso</a>
+        <a class="entrada__link" href="{{ issuer }}/recuperar-senha">Esqueci a senha</a>
+      </div>
+      <p class="entrada__nota">A Minha APM registra de forma agregada como as telas são usadas, para melhorar o serviço.
+        Seu CPF nunca é guardado aqui.</p>
+    </main>
+  </div>
+</body>
+</html>

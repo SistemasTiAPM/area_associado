@@ -1,0 +1,348 @@
+/* ==========================================================================
+   Minha APM — página de entrada (GET /, app/templates/entrada.html).
+   Layout da tela "Login" do mockup da agência; cores e fonte da spec
+   (docs/SPEC-minha-apm.md). Sem estilo inline nem JS (ADR-0013).
+
+   Figtree (SIL OFL 1.1, app/static/fonts/OFL-figtree.txt) copiada de
+   @fontsource/figtree: esta página é Jinja, não passa pelo build da SPA.
+   ========================================================================== */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-ext-400-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-ext-500-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-ext-600-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-ext-700-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-400-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-500-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-600-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/static/fonts/figtree-latin-700-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Cópia dos tokens usados aqui. Fonte da verdade: frontend/src/styles/tokens.css.
+   Mudou lá, muda aqui. */
+:root {
+  --navy-900: #063553;
+  --navy-700: #0a4561;
+  --hero-fim: #115b58;
+  --green-600: #0e8f78;
+  --green-600-hover: #0b7a66;
+  --green-600-texto: #0c8370;
+  --mint-400: #5fd1b5;
+  --mint-100: #e2f1ec;
+  --ink-900: #13233a;
+  --ink-700: #3d4a5a;
+  --ink-400-texto: #5f6e82;
+  --gray-50: #edf1f4;
+  --gray-200: #e6eaef;
+  --branco: #ffffff;
+  --foco: #0a6bb2;
+  --foco-sobre-escuro: #9fd3ff;
+  --aviso-bg: #fff6e6;
+  --aviso-fg: #7a5400;
+  --aviso-borda: #f0dcae;
+  --raio-pill: 999px;
+  --sombra-hero-navy: 0 14px 30px -18px rgba(6, 53, 83, 0.7);
+  --sombra-flutuante: 0 10px 24px -10px rgba(19, 35, 58, 0.45);
+  --fonte-base: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body.entrada {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--fonte-base);
+  font-size: 15px;
+  color: var(--ink-900);
+  -webkit-font-smoothing: antialiased;
+  /* Campo de cor estático (o mockup sorteava por JS). */
+  background:
+    radial-gradient(60vmax 42vmax at 92% 8%, rgba(95, 209, 181, 0.22), transparent 70%),
+    radial-gradient(55vmax 40vmax at 8% 96%, rgba(10, 69, 97, 0.14), transparent 70%),
+    var(--gray-50);
+}
+
+.entrada__stub {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 13px;
+  background: var(--aviso-bg);
+  color: var(--aviso-fg);
+  border-bottom: 1px solid var(--aviso-borda);
+}
+
+.entrada__grade {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+}
+
+/* ---------------------------------------------------------------- Hero */
+.entrada__hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  margin: 16px 0 16px 16px;
+  border-radius: 32px;
+  color: var(--branco);
+  background: linear-gradient(118deg, var(--navy-900) 0%, var(--navy-700) 58%, var(--hero-fim) 100%);
+  box-shadow: var(--sombra-hero-navy);
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Formas decorativas no lugar da foto do mockup (P-38). */
+.entrada__hero::before,
+.entrada__hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.entrada__hero::before {
+  width: 520px;
+  height: 520px;
+  right: -160px;
+  top: -180px;
+  background: radial-gradient(circle, rgba(95, 209, 181, 0.32), transparent 68%);
+}
+.entrada__hero::after {
+  width: 360px;
+  height: 360px;
+  right: 8%;
+  bottom: -150px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.entrada__hero-conteudo {
+  display: grid;
+  gap: 16px;
+  padding: 44px;
+  max-width: 600px;
+}
+
+.entrada__selo {
+  width: fit-content;
+  padding: 7px 14px;
+  border-radius: var(--raio-pill);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px rgba(0, 0, 0, 0.14);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  backdrop-filter: blur(8px) saturate(150%);
+}
+
+.entrada__hero-titulo {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  max-width: 520px;
+  text-wrap: pretty;
+}
+
+.entrada__hero-texto {
+  margin: 0;
+  max-width: 480px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.entrada__stat {
+  margin: 8px 0 0;
+  width: fit-content;
+  display: grid;
+  gap: 2px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px rgba(0, 0, 0, 0.14);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  backdrop-filter: blur(8px) saturate(150%);
+}
+.entrada__stat strong { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
+.entrada__stat span { font-size: 12px; color: rgba(255, 255, 255, 0.82); }
+
+/* --------------------------------------------------------------- Painel */
+.entrada__painel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+  padding: 64px 8vw;
+}
+
+.entrada__logo { width: 260px; max-width: 100%; height: auto; }
+
+.entrada__cabecalho { display: grid; gap: 8px; margin-top: 12px; }
+
+.entrada__titulo {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--navy-900);
+}
+
+.entrada__texto {
+  margin: 0;
+  max-width: 460px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-700);
+}
+
+.entrada__acoes { display: grid; gap: 12px; max-width: 460px; }
+
+.entrada__botao {
+  height: 54px;
+  border-radius: var(--raio-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.entrada__botao svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.entrada__botao--primario {
+  color: var(--branco);
+  background: linear-gradient(135deg, var(--navy-900), var(--navy-700));
+  box-shadow: 0 12px 28px rgba(6, 53, 83, 0.25);
+}
+.entrada__botao--primario:hover { background: var(--navy-900); transform: translateY(-1px); }
+
+.entrada__botao--secundario {
+  color: var(--navy-900);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 1px var(--gray-200), 0 6px 18px rgba(19, 35, 58, 0.06);
+}
+.entrada__botao--secundario:hover { background: var(--branco); box-shadow: inset 0 0 0 1px var(--green-600); }
+
+.entrada__link {
+  justify-self: center;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--green-600-texto);
+  text-underline-offset: 3px;
+}
+.entrada__link:hover { color: var(--navy-900); }
+
+.entrada__botao:focus-visible,
+.entrada__link:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: 3px;
+}
+
+.entrada__nota {
+  margin: 0;
+  max-width: 460px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-400-texto);
+}
+
+/* ------------------------------------------------------------- Movimento */
+@keyframes entrada-sobe {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.entrada__hero-conteudo > *,
+.entrada__painel > * { animation: entrada-sobe 0.42s cubic-bezier(.2, .8, .2, 1) both; }
+.entrada__hero-conteudo > :nth-child(2), .entrada__painel > :nth-child(2) { animation-delay: 60ms; }
+.entrada__hero-conteudo > :nth-child(3), .entrada__painel > :nth-child(3) { animation-delay: 120ms; }
+.entrada__hero-conteudo > :nth-child(4), .entrada__painel > :nth-child(4) { animation-delay: 180ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .entrada__hero-conteudo > *,
+  .entrada__painel > * { animation: none; }
+  .entrada__botao { transition: none; }
+  .entrada__botao--primario:hover { transform: none; }
+}
+
+/* ------------------------------------------------------------ Responsivo */
+@media (max-width: 900px) {
+  .entrada__grade { grid-template-columns: 1fr; min-height: 0; }
+  .entrada__hero { margin: 16px 16px 0; border-radius: 24px; min-height: 300px; }
+  .entrada__hero-conteudo { padding: 28px 24px; }
+  .entrada__hero-titulo { font-size: 30px; }
+  .entrada__painel { padding: 36px 16px 48px; gap: 22px; }
+  .entrada__logo { width: 200px; }
+  .entrada__titulo { font-size: 26px; }
+  .entrada__acoes, .entrada__texto, .entrada__nota { max-width: none; }
+}
