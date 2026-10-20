@@ -98,7 +98,7 @@ nome, situação e CRM são reais, contato/endereço/foto são de demonstração
 `docs/ACESSO-CONSTRUCAO.md`. A virada (`docs/CUTOVER.md`) = `APP_ENV=production` com hub e SMTP
 reais (P-02, P-05, P-27, P-29) e P-01 (certificado de origem).
 
-**Endpoints [atual]:** `GET /` (landing de entrada sem sessão, `no-store`; com sessão 303 → `/area`), `GET /auth/login[?next=&reauth=1]`, `POST /auth/login` (só stub),
+**Endpoints [atual]:** `GET /` (landing de entrada sem sessão, `no-store`; com sessão 303 → `/area`; logo após o Sair, marca de uso único `pos_logout` (5 min) leva a `/auth/login?next=/area`), `GET /auth/login[?next=&reauth=1]`, `POST /auth/login` (só stub),
 `GET /auth/callback`, `GET /area` e `GET /area/{caminho}` (SPA, exige sessão), `GET /api/v1/sessao`,
 `POST /api/v1/uso` (CSRF), `GET /api/v1/perfil`, `PUT /api/v1/perfil/contato`, `POST /api/v1/perfil/email`
 e `/perfil/email/confirmar`, `GET|POST|DELETE /api/v1/perfil/foto`, `GET /api/v1/carteirinha`,

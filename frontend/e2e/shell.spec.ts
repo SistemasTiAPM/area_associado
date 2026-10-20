@@ -181,7 +181,8 @@ test('Central APM abre wa.me em nova aba; Sair encerra a sessão', async ({ page
   const abrirSair = page.getByRole('button', { name: 'Abrir menu' });
   if (await abrirSair.isVisible()) await abrirSair.click();
   await page.getByRole('button', { name: 'Sair' }).filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/$/);
+  // Depois do Sair, direto para o login (no stub, o formulário de construção).
+  await expect(page).toHaveURL(/\/auth\/login\?next=(%2F|\/)area$/);
   const status = await page.evaluate(async () => (await fetch('/api/v1/sessao')).status);
   expect(status).toBe(401);
   await page.goto('/area/perfil');

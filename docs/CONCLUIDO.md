@@ -30,6 +30,24 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-20 — Sair leva direto ao Login APM
+
+Pedido do usuário: depois de Sair, voltar ao formulário do Login APM, e não à página de entrada.
+Decisão (opção A, só na área): o IdP só aceita o `post_logout_redirect_uri` registrado (`/`), então
+o logout grava na sessão uma marca de uso único (`pos_logout`, com horário). Quando o IdP devolve o
+associado para `/`, a raiz consome a marca e redireciona para `/auth/login?next=/area`; com a
+sessão do IdP encerrada, aparece o formulário. Sem marca, ou com a marca vencida (5 min), `/`
+mostra a página de entrada. Nenhuma mudança no IdP.
+
+**Evidências (2026-10-20)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest (`test_logout_…` com a volta ao login uma vez só; `test_marca_de_logout_vencida_mostra_a_entrada`) | 139 passaram (11 de MySQL pulados) |
+| Playwright e2e, 1440 e 390 px (Sair termina em `/auth/login?next=/area`) | 20 de 20 |
+
+---
+
 ## 2026-10-20 — Área logada no visual dos mockups da agência (ADR-0017) e corrida do cookie de sessão
 
 Pedido do usuário: a área logada deve seguir os mockups da agência. Decisões: o mockup passa a ser a

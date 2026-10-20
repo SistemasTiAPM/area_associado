@@ -53,7 +53,9 @@ from .oidc import (
 from .sessao import SessaoCifradaMiddleware, construir_cifrador
 from .templating import templates
 from .session_guard import (
+    POS_LOGOUT_TTL,
     SESSION_PENDING,
+    SESSION_POS_LOGOUT,
     LoginRequired,
     current_associado,
     login_redirect,
@@ -242,9 +244,14 @@ async def _http(request: Request, exc: StarletteHTTPException) -> Response:
 @app.get("/")
 async def home(request: Request):
     """Página de entrada (landing). Não coleta credenciais: o botão leva a
-    /auth/login, que redireciona ao Login APM. Com sessão aqui, direto para a área."""
+    /auth/login, que redireciona ao Login APM. Com sessão aqui, direto para a área.
+    Logo depois do Sair (marca de uso único), segue direto para o Login APM."""
     if current_associado(request) is not None:
         return RedirectResponse("/area", status_code=HTTP_303_SEE_OTHER)
+    saiu_em = request.session.pop(SESSION_POS_LOGOUT, None)
+    if isinstance(saiu_em, int) and 0 <= time.time() - saiu_em <= POS_LOGOUT_TTL:
+        return RedirectResponse("/auth/login?next=/area", status_code=HTTP_303_SEE_OTHER,
+                                headers={"Cache-Control": "no-store"})
     # no-store: a resposta depende do cookie de sessão e passa pelo Cloudflare.
     return templates.TemplateResponse(request, "entrada.html", headers={"Cache-Control": "no-store"})
 
@@ -345,11 +352,13 @@ async def auth_logout(request: Request, csrf: str = Form(""), db: Session = Depe
     associado = current_associado(request)
     if associado is None:
         request.session.clear()
+        request.session[SESSION_POS_LOGOUT] = int(time.time())
         return RedirectResponse("/", status_code=HTTP_303_SEE_OTHER)
     if not csrf_ok(request, csrf):
         return _erro(request, "Sessão expirada. Recarregue a página e tente novamente.", 400)
     idt = request.session.get("idt")
     request.session.clear()
+    request.session[SESSION_POS_LOGOUT] = int(time.time())
     audit.registrar(db, request, categoria="seguranca", tipo="logout", sub=associado.sub,
                     contact_id=associado.contact_id, status_http=303)
     if settings.auth_mode == "oidc" and isinstance(idt, str) and idt:

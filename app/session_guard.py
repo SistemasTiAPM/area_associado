@@ -23,6 +23,10 @@ from .oidc import AssociadoClaims
 
 SESSION_SUB = "sub"
 SESSION_PENDING = "oidc"
+# Marca de uso único gravada pelo logout: a volta do IdP para `/` segue direto
+# para o Login APM, em vez de mostrar a página de entrada.
+SESSION_POS_LOGOUT = "pos_logout"
+POS_LOGOUT_TTL = 300
 _NEXT_MAX = 512
 _DEFAULT_NEXT = "/area"
 

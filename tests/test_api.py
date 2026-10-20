@@ -331,5 +331,20 @@ def test_logout_limpa_cookie_e_volta_para_o_inicio(ctx):
     csrf_form = c.get("/api/v1/sessao").json()["csrf"]
     r = c.post("/auth/logout", data={"csrf": csrf_form}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/"
-    assert "Max-Age=0" in r.headers["set-cookie"]
     assert c.get("/api/v1/sessao").status_code == 401
+    # A volta para `/` logo depois do Sair segue para o Login APM, uma vez só.
+    r = c.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/area"
+    assert c.get("/", follow_redirects=False).status_code == 200
+
+
+def test_marca_de_logout_vencida_mostra_a_entrada(ctx, monkeypatch):
+    import app.main as principal
+
+    c = ctx["c"]
+    entrar(c)
+    csrf_form = c.get("/api/v1/sessao").json()["csrf"]
+    c.post("/auth/logout", data={"csrf": csrf_form}, follow_redirects=False)
+    agora = principal.time.time()
+    monkeypatch.setattr(principal.time, "time", lambda: agora + principal.POS_LOGOUT_TTL + 1)
+    assert c.get("/", follow_redirects=False).status_code == 200
