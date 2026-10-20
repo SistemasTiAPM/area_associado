@@ -13,9 +13,10 @@ resolvido, ele **sai daqui e entra em [CONCLUIDO.md](CONCLUIDO.md)** com data e 
 **Últimos commits:** área na `main` (`SistemasTiAPM/area_associado`, ver [CONCLUIDO.md](CONCLUIDO.md));
 hub `8bb3c43` na `main` de `SistemasTiAPM/mcp_hub`. Ambos no GitHub.
 
-**No ar desde 19/10: `https://minha.apm.org.br`**, público, em modo de construção (login com
-o token de construção, hub e e-mail simulados, `noindex`), para a agência acompanhar o
-progresso. Fases 1, 2a e 2b implantadas no código; RDS com `sql/001`–`007`.
+**No ar desde 19/10: `https://minha.apm.org.br`**, público, em modo de construção, para a
+agência acompanhar o progresso. **Desde 20/10 a entrada é pelo Login APM** (`AUTH_MODE=oidc`,
+login de construção desligado); hub e e-mail seguem simulados com a faixa "dados de
+demonstração". Fases 1, 2a e 2b implantadas; RDS com `sql/001`–`007`.
 
 | Fase | Situação | Depende de |
 |---|---|---|
@@ -30,10 +31,10 @@ progresso. Fases 1, 2a e 2b implantadas no código; RDS com `sql/001`–`007`.
 - **Operador (você):** replicar o `.env` atualizado no Secrets Manager (P-36); P-02, implantar o hub
   novo (aplicar `sql/004` e `005` do hub no RDS antes do código, credenciais, conta `area-associado`);
   P-01, certificado de origem; decidir o catch-all do porteiro (P-34).
-- **IdP / Sentinela:** P-35, trocar os URIs do client `area-associado` para `minha.apm.org.br` antes de `AUTH_MODE=oidc`.
 - **TI / infra:** P-27, credencial SMTP.
-- **CRM admin:** P-05, app registration e papel de escrita; P-29, flows em update de `contact`;
-  P-30, homologar a foto; P-06, entidade das solicitações.
+- **CRM admin:** P-37, contatos de teste no CRM para a agência entrar pelo Login APM; P-05, app
+  registration e papel de escrita; P-29, flows em update de `contact`; P-30, homologar a foto;
+  P-06, entidade das solicitações.
 - **Negócio:** P-31 (confirmar os campos do endereço), P-32 (formato de telefone), P-10 e P-22.
 
 **Para retomar:** Fase 3 (solicitações, plano neste repositório). Cada fase começa com plano e
@@ -53,14 +54,14 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 | P-06 | P0 | Definir a entidade do CRM que espelha as solicitações. Proposta: `task` *regarding* contact, `subject` `[Minha APM] <tipo> <uuid>`. Alternativa: entidade custom. Verificar flows que disparam em create e quem do atendimento trata a fila. | CRM / negócio | Fase 3 (o espelho; a fila local funciona sem ele) | aberta | 2026-10-16 |
 | P-07 | P0 | Locaweb `portal_apm`: criar usuário **novo somente leitura** com SELECT só em `pw_portal_{posts,postmeta,terms,term_taxonomy,term_relationships,yoast_indexable}`, verificar suporte a TLS (`have_ssl`), restringir origem ao IP da EC2. Depois de migrar o appapm (P-16), revogar `portal_apm@%`, marcado como vazado em `PENDENCIAS_AWS.md`. | infra / Planeta W | Fase 5 (até lá `WP_MODE=stub`) | aberta | 2026-10-16 |
 | P-34 | P1 | **Catch-all na 443 do porteiro.** Host proxied sem vhost cai no primeiro `server` em ordem alfabética, hoje `apm_parceiros.conf`: em 19/10 `minha.apm.org.br` abriu o Sistema de Parceiros até o vhost da área entrar. Proposta: `server { listen 443 ssl default_server; server_name _; return 444; }` num arquivo `_00_padrao.conf`, mantendo o default da porta 80 (health check do ALB, ver `totalpass.conf`). Mexe no porteiro de todos os projetos. | Estivador / operador | — (risco para qualquer DNS novo) | aberta | 2026-10-19 |
-| P-36 | P1 | Replicar o `.env` da área (alterado em 19/10: `PUBLIC_BASE_URL`, `SESSION_ENC_KEYS`, `CARTEIRINHA_HMAC_KEY`, `HUB_MODE`, `SMTP_MODE`) no Secrets Manager `prod/area-associado/env`; depois apagar `.env.bak-20261019-dominio`. Trocar `SESSION_ENC_KEYS` derruba todas as sessões; trocar `CARTEIRINHA_HMAC_KEY` invalida os QRs. | operador | recuperação do servidor | aberta | 2026-10-19 |
+| P-36 | P1 | Replicar o `.env` da área (alterado em 19/10 e 20/10: `PUBLIC_BASE_URL`, `SESSION_ENC_KEYS`, `CARTEIRINHA_HMAC_KEY`, `HUB_MODE`, `SMTP_MODE`, `AUTH_MODE=oidc`, `OIDC_SCOPES`, sem `DEV_STUB_TOKEN`) no Secrets Manager `prod/area-associado/env`; depois apagar `.env.bak-20261019-dominio` e `.env.bak-20261020-oidc`. Trocar `SESSION_ENC_KEYS` derruba todas as sessões; trocar `CARTEIRINHA_HMAC_KEY` invalida os QRs. | operador | recuperação do servidor | aberta | 2026-10-19 |
 | P-08 | P1 | Parecer sobre licença e multiplexação do F&O antes de exibir dados do ERP a associados (`totalpass/docs/RUNBOOK_ERP_FO.md:205-211`). | TI / jurídico | Fase 7 | aberta | 2026-10-16 |
 
 ## Segurança e identidade
 
 | ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
 |---|---|---|---|---|---|---|
-| P-35 | P0 | Client `area-associado` no IdP ainda registrado com `https://associado.apm.org.br/auth/callback`, post-logout `https://associado.apm.org.br/` e `audience` antigo (o escopo `carteirinha` já está liberado). Trocar com `scripts/update_client_uris` do `login_associado` (comando em [CUTOVER.md](CUTOVER.md) §3) e corrigir o `audience`. Sem isso, `AUTH_MODE=oidc` falha com `redirect_uri` inválido. | Sentinela / IdP | virada (`AUTH_MODE=oidc`) | aberta | 2026-10-19 |
+| P-37 | P0 | **Contatos de teste no CRM para a agência.** A área entra só pelo Login APM; quem não é associado precisa de um contato no Dataverse com tipo e situação associativa válidos (o escopo `carteirinha` recusa sem eles, ADR-0016) para fazer o cadastro normal no Login APM. Criar um contato por pessoa da agência (ou um compartilhado), marcado como teste, e remover na virada. Hoje existe um usuário de teste do IdP, usado na validação de 20/10. | CRM admin | acompanhamento pela agência | aberta | 2026-10-20 |
 | P-22 | P1 | Contraste AA: 7 pares de cor da spec falham em WCAG AA (ex.: branco sobre `#0e8f78` = 4,02; branco sobre `#1faa59` = 3,02). Na Fase 1 foram criadas variantes `-texto` com o menor escurecimento que passa (`frontend/src/styles/tokens.css`). Falta: validação visual com a agência/negócio e os pares das tags `novo` (3,33) e `ativo` (4,41), usados a partir da Fase 4. | Vitrine / negócio | Fase 4 (tags) | aberta | 2026-10-17 |
 
 ## Definições de negócio e conteúdo

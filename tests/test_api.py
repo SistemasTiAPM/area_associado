@@ -255,8 +255,29 @@ def test_spa_ausente_responde_503(ctx, tmp_path, monkeypatch):
     assert r.status_code == 503 and r.headers["X-Request-Id"] in r.text
 
 
+def test_raiz_vai_para_o_login_ou_para_a_area(ctx):
+    c = ctx["c"]
+    r = c.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/area"
+    assert r.headers["cache-control"] == "no-store"
+    entrar(c)
+    r = c.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/area"
+
+
+def test_sessao_informa_dados_de_demonstracao(ctx, monkeypatch):
+    from app.config import get_settings
+
+    c = ctx["c"]
+    entrar(c)
+    assert c.get("/api/v1/sessao").json()["dados_demonstracao"] is True  # hub stub nos testes
+    monkeypatch.setattr(get_settings(), "hub_mode", "real")
+    monkeypatch.setattr(get_settings(), "smtp_mode", "real")
+    assert c.get("/api/v1/sessao").json()["dados_demonstracao"] is False
+
+
 def test_csp_sem_inline_e_com_hosts_de_imagem(ctx):
-    csp = ctx["c"].get("/").headers["content-security-policy"]
+    csp = ctx["c"].get("/auth/login").headers["content-security-policy"]
     assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
     assert "style-src 'self';" in csp and "img-src 'self' data: https://www.apm.org.br;" in csp
     assert "frame-ancestors 'none'" in csp and "form-action 'self' https://login.apm.org.br" in csp

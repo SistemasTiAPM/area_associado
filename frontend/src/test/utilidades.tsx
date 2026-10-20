@@ -14,6 +14,7 @@ export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flag
     csrf: 'token-csrf-teste',
     rota_inicial: '/area',
     stub: false,
+    dados_demonstracao: false,
     solicitacoes_aguardando: 0,
     expira_em: '2026-10-17T12:00:00Z',
     ...parcial,

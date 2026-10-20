@@ -79,6 +79,18 @@ describe('shell da Minha APM', () => {
     expect(await screen.findByText(/Ambiente de construção/)).toBeInTheDocument();
   });
 
+  it('faixa de dados de demonstração aparece com hub ou e-mail simulados', async () => {
+    montarApp('/', fabricarSessao({ dados_demonstracao: true }));
+    expect(await screen.findByText(/são de demonstração e não vão para o seu cadastro/)).toBeInTheDocument();
+    expect(screen.queryByText(/AUTH_MODE=stub/)).toBeNull();
+  });
+
+  it('sem stub nem demonstração, nenhuma faixa', async () => {
+    montarApp('/', fabricarSessao());
+    await screen.findByRole('heading', { level: 1 });
+    expect(document.querySelector('.faixa-stub')).toBeNull();
+  });
+
   it('drawer: abre pelo hambúrguer, fecha com Esc e devolve o foco', async () => {
     const usuario = userEvent.setup();
     montarApp('/');

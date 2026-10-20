@@ -18,6 +18,8 @@ export interface Sessao {
     animations: boolean;
   };
   stub: boolean;
+  /** Hub do CRM ou e-mail simulados no servidor: nada do que o associado edita vai ao cadastro real. */
+  dados_demonstracao: boolean;
   solicitacoes_aguardando: number;
   expira_em: string;
 }

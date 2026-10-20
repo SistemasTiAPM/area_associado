@@ -70,6 +70,8 @@ def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]
             "animations": s.animations,
         },
         "stub": associado.is_stub,
+        # Hub do CRM ou e-mail simulados: contato, endereço e foto são de demonstração.
+        "dados_demonstracao": s.hub_mode == "stub" or s.smtp_mode == "stub",
         "solicitacoes_aguardando": 0,  # Fase 3 (solicitações)
         "expira_em": expira.isoformat().replace("+00:00", "Z"),
     }

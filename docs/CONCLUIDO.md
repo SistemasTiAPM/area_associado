@@ -14,17 +14,62 @@ data de conclusão e o ID original.
 | area_associado | `061d7dc` | Fase 2a — perfil, e-mail por código, foto, carteirinha, ADRs 0015–0016 |
 | mcp_hub | `365a531`..`8bb3c43` | Fase 2b — escrita cercada no CRM e as 4 ferramentas da Minha APM (7 commits) |
 | area_associado | `fe97d8f` + docs | Fase 2b na área — contrato, 409 do endereço, UF, `check_hub` |
-| area_associado | este commit | Domínio `minha.apm.org.br` e ambiente de construção público (Fases 1, 2a e 2b no ar) |
+| area_associado | `141326b` | Domínio `minha.apm.org.br` e ambiente de construção público (Fases 1, 2a e 2b no ar) |
+| area_associado | este commit | Entrada pelo Login APM (`AUTH_MODE=oidc`), fim do login de construção, faixa de dados de demonstração |
 
 **Estado verificado:** área com 144 testes de backend (MySQL real) e 44 de front; hub com 156
 testes, migrações 000–005 ensaiadas em MySQL 8.4 e ponta a ponta hub + área sem Dataverse.
 Nenhum CPF gravado; na trilha de escrita do hub, nenhum valor em claro.
 
-**No ar:** `https://minha.apm.org.br`, em modo de construção (login stub, hub e SMTP simulados).
+**No ar:** `https://minha.apm.org.br`, entrada pelo Login APM; hub e SMTP ainda simulados (faixa
+de demonstração para todo logado).
 
 **Ainda não feito:** implantação do hub novo (P-02); credencial e papel de
 escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-29); SMTP real
 (P-27). Próximo passo e responsáveis em [PENDENCIAS.md](PENDENCIAS.md), seção "Onde paramos".
+
+---
+
+## 2026-10-20 — Entrada pelo Login APM, sem tela de login própria
+
+Pedido do usuário: a tela de login da área foi remodelada no Login APM, então a área deixa de
+ter login próprio e integra com ele. Decisões: qualquer associado entra; a agência usa contatos
+de teste no CRM (P-37); `/` vai direto ao Login APM.
+
+**Entregue**
+- **IdP** (`login_associado`, `update_client_uris --apply` + UPDATE do `audience`): client
+  `area-associado` com `redirect_uri` `https://minha.apm.org.br/auth/callback`, post-logout
+  `https://minha.apm.org.br/` e `audience` `https://minha.apm.org.br`. Era o último lugar onde o
+  domínio antigo aparecia (o `audience` só entra no access token, que a área descarta).
+- **`.env`** (backup `.env.bak-20261020-oidc`): `AUTH_MODE=oidc`, `OIDC_SCOPES` com `carteirinha`,
+  **`DEV_STUB_TOKEN` removido** (o token compartilhado com a agência deixou de valer).
+- **`GET /`**: sem sessão → `303 /auth/login?next=/area` (→ Login APM, SSO silencioso se já
+  logado no IdP); com sessão → `/area`. `home.html` removido. Logout continua encerrando no IdP
+  (`/oauth/logout`), que devolve para `/` e, portanto, ao Login APM.
+- **Faixa de demonstração:** `GET /api/v1/sessao` ganhou `dados_demonstracao` (verdadeiro com
+  `HUB_MODE=stub` ou `SMTP_MODE=stub`); o shell mostra "Ambiente em construção: celular,
+  endereço e foto são de demonstração e não vão para o seu cadastro na APM." A faixa de
+  `AUTH_MODE=stub` continua só no modo stub (testes).
+- Docs: ACESSO-CONSTRUCAO reescrito (entrada pelo Login APM, contas de teste, o que é real e o
+  que é demonstração), CUTOVER (pré-requisitos 3, 4 e 6 feitos; passo único só com `APP_ENV`,
+  `HUB_MODE` e `SMTP_MODE`), CLAUDE.md e README.
+
+**Pendências resolvidas**
+- **P-35** URIs e `audience` do client no IdP.
+
+**Evidências (2026-10-20)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest (rota `/`, `dados_demonstracao`, CSP) | 135 passaram (11 de MySQL pulados) |
+| Build da imagem (`npm run check`) | 46 testes do front passaram (faixa de demonstração, sem faixa no modo normal) |
+| `check_oidc` no container | OK: issuer, back-channel, `redirect_uri` novo, escopos com `carteirinha`, JWKS |
+| Pela internet: `/` | 303 → `/auth/login?next=/area` → 302 → `login.apm.org.br/oauth/authorize` com `redirect_uri=https://minha.apm.org.br/auth/callback`, escopo `carteirinha`, PKCE S256; o IdP aceita (cai no formulário de login, sem erro) |
+| Login ponta a ponta (Playwright, usuário de teste do CRM) | `/` → formulário do Login APM ("Você está entrando em Área do Associado") → senha → `/area` com nome, tipo Efetivo, status Ativo; sessão sem CPF e `stub=false`; faixa de demonstração visível; carteirinha com dados do CRM (UF, status); perfil sem CPF; Sair → IdP → Login APM; `/api/v1/sessao` 401 depois; zero violações de CSP |
+| `evento_log` | `login_ok` com `amr=["pwd"]` e `logout`, só HMAC |
+
+Credenciais do usuário de teste não estão em arquivo nenhum. A verificação de "11 dígitos" na
+sessão apontou o número do WhatsApp da Central (`config.whatsapp`), não CPF.
 
 ---
 

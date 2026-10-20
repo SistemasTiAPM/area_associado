@@ -41,15 +41,16 @@ Vhost: `deploy/nginx_porteiro/area_associado.conf.example` →
 
 ## Fase de construção (até a virada)
 
-No ar em **https://minha.apm.org.br** (público, `noindex`): qualquer um vê a página inicial; só
-entra na área quem tem o token de construção. Hub do CRM e e-mail simulados.
+No ar em **https://minha.apm.org.br** (público, `noindex`): a entrada é pelo **Login APM**
+(`AUTH_MODE=oidc`); qualquer associado entra. Hub do CRM e e-mail simulados, com faixa de
+"dados de demonstração" para quem está logado.
 Regras e passo a passo: [docs/ACESSO-CONSTRUCAO.md](docs/ACESSO-CONSTRUCAO.md).
 
 ## Modos de autenticação
 
 - `AUTH_MODE=oidc` — produção. Login no `login.apm.org.br`, callback em `/auth/callback`.
-- `AUTH_MODE=stub` — construção de telas, só com `APP_ENV` ≠ `production` e `DEV_STUB_TOKEN`.
-  Em produção o container se recusa a subir. Virada: [docs/CUTOVER.md](docs/CUTOVER.md).
+- `AUTH_MODE=stub` — só para testes automatizados (e2e), com `APP_ENV` ≠ `production` e
+  `DEV_STUB_TOKEN`. Em produção o container se recusa a subir. Virada: [docs/CUTOVER.md](docs/CUTOVER.md).
 
 ## Testes
 

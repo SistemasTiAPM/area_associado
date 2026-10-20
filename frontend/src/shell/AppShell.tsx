@@ -50,6 +50,10 @@ export function AppShell() {
         <div className="faixa-stub" role="status">
           Ambiente de construção: login sem o Login APM (AUTH_MODE=stub). Dados ilustrativos.
         </div>
+      ) : sessao.dados_demonstracao ? (
+        <div className="faixa-stub" role="status">
+          Ambiente em construção: celular, endereço e foto são de demonstração e não vão para o seu cadastro na APM.
+        </div>
       ) : null}
       <div className="shell">
         <aside className="sidebar">

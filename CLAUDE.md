@@ -29,7 +29,7 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 | **Linguagem** | Python 3.12 (`python:3.12-slim`) | Mesma base do `login_associado` e do `mcp_hub`. [atual] |
 | **Backend** | FastAPI 0.115 + Gunicorn 23 / workers Uvicorn | 2 workers, bind `0.0.0.0:8000`, `--timeout 60`. [atual] API JSON em `/api/v1` [atual: `sessao`, `uso`; demais recursos nas fases 2–8]. |
 | **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Fontes Figtree e JetBrains Mono self-hosted (OFL). Ícones SVG próprios. React Router `basename="/area"` com URLs reais (sem `localStorage` de rota). ADR-0001. |
-| **Páginas Jinja2** | `/` (landing), `/auth/*`, `stub_login`, `erro`, `/verificar/{token}` | [atual] Só as páginas fora da SPA. `boot.js` removido. Visual antigo (Neo Sans) até P-24. |
+| **Páginas Jinja2** | `/auth/*`, `stub_login` (só testes), `erro`, `/verificar/{token}` | [atual] Só as páginas fora da SPA; `/` não tem página (redireciona ao Login APM ou a `/area`). `boot.js` removido. Visual antigo (Neo Sans) até P-24. |
 | **Autenticação** | OIDC Authorization Code + PKCE S256, client **confidencial** (`client_secret_basic`) | [atual] `app/oidc.py` com `httpx` + `pyjwt` (RS256 fixo, `iss`/`aud`/`nonce`/`exp`/`auth_time` obrigatórios). **Sem refresh token**: sessão própria; expirou → SSO silencioso no IdP. [atual] Escopo `carteirinha` (tipo, situação, CRM, UF, filiação); sem tipo ou situação o login é recusado (ADR-0016). O client do IdP precisa permitir o escopo (P-09). |
 | **Back-channel IdP** | `http://login_associado:8000` na `rede_publica`, header `Host: login.apm.org.br` | [atual] Evita hairpin via Cloudflare e a zona `oauth_token` (3 r/s) do edge. `iss` continua `https://login.apm.org.br`. |
 | **Sessão** | Cookie `SessionMiddleware`, `same_site=lax`, Secure fora de `development` | [atual] **cifrado e autenticado** (`app/sessao.py`, Fernet/MultiFernet; `SESSION_ENC_KEYS` obrigatória em produção), nome `__Host-area` (`area_sessao` só em development) — ADR-0011. Conteúdo: `sub, cid, nome, email, cpf_mask, auth_at, idp_at, amr, idt, csrf, tipo, status` (`idp_at` = `auth_time` do IdP, base do step-up). **CPF completo, access e refresh token nunca.** |
@@ -70,7 +70,7 @@ app/
   dominio/         # associado (acesso + pós-login), perfil (cache), foto (Pillow), carteirinha (token, QR),
                    # email_verificacao (código HMAC)
   integracoes/     # hub.py (cliente mcp_hub), hub_stub.py, email.py (SMTP)
-  templates/       # base, home, erro, stub_login (com persona), verificar
+  templates/       # base, erro, stub_login (com persona; só testes), verificar
   static/          # style.css, fonts.css (Neo Sans, páginas Jinja), logo, favicons; spa/ = build (gitignored)
 frontend/          # Vite + React + TS: src/{styles,api,shell,components,pages,state,lib,test}, e2e/ (Playwright)
 scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py, check_hub.py
@@ -91,12 +91,14 @@ scripts/           # + check_portal_wp.py
 ```
 
 **Fase de construção (01/10/2026 → virada):** desde 19/10 **pública em `https://minha.apm.org.br`**
-(a agência acompanha o progresso), com `noindex`, login stub (só quem tem o `DEV_STUB_TOKEN` entra)
-e hub/SMTP simulados — nenhum dado real atrás do login. Regras em `docs/ACESSO-CONSTRUCAO.md`.
-A virada (`docs/CUTOVER.md`) revoga essas regras. Bloqueiam a virada: P-35 (URIs do client no IdP),
-hub e SMTP reais (P-02, P-05, P-27, P-29) e P-01 (certificado de origem).
+(a agência acompanha o progresso), com `noindex`; desde 20/10 **entrada pelo Login APM**
+(`AUTH_MODE=oidc`, qualquer associado; agência com contatos de teste, P-37). Hub e SMTP simulados:
+nome, situação e CRM são reais, contato/endereço/foto são de demonstração e a sessão informa
+`dados_demonstracao` (faixa no shell). `AUTH_MODE=stub` existe só para testes. Regras em
+`docs/ACESSO-CONSTRUCAO.md`. A virada (`docs/CUTOVER.md`) = `APP_ENV=production` com hub e SMTP
+reais (P-02, P-05, P-27, P-29) e P-01 (certificado de origem).
 
-**Endpoints [atual]:** `GET /`, `GET /auth/login[?next=&reauth=1]`, `POST /auth/login` (só stub),
+**Endpoints [atual]:** `GET /` (303 → `/auth/login?next=/area` ou `/area`), `GET /auth/login[?next=&reauth=1]`, `POST /auth/login` (só stub),
 `GET /auth/callback`, `GET /area` e `GET /area/{caminho}` (SPA, exige sessão), `GET /api/v1/sessao`,
 `POST /api/v1/uso` (CSRF), `GET /api/v1/perfil`, `PUT /api/v1/perfil/contato`, `POST /api/v1/perfil/email`
 e `/perfil/email/confirmar`, `GET|POST|DELETE /api/v1/perfil/foto`, `GET /api/v1/carteirinha`,
