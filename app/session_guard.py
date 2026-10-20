@@ -23,10 +23,6 @@ from .oidc import AssociadoClaims
 
 SESSION_SUB = "sub"
 SESSION_PENDING = "oidc"
-# Login silencioso (prompt=none) feito há pouco, ou Sair recente: `/` mostra a
-# página de entrada em vez de tentar de novo (sem laço com o IdP).
-SESSION_SSO_TENTADO = "sso_tentado"
-SSO_TENTADO_TTL = 600
 _NEXT_MAX = 512
 _DEFAULT_NEXT = "/area"
 

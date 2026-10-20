@@ -272,22 +272,12 @@ def test_spa_ausente_responde_503(ctx, tmp_path, monkeypatch):
     assert r.status_code == 503 and r.headers["X-Request-Id"] in r.text
 
 
-def test_raiz_mostra_a_entrada_ou_vai_para_a_area(ctx):
-    from app.config import get_settings
-
+def test_raiz_vai_para_o_login_ou_para_a_area(ctx):
+    """Sem sessão, direto ao Login APM (formulário ou SSO); a página de entrada fica sem rota."""
     c = ctx["c"]
     r = c.get("/", follow_redirects=False)
-    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/area"
     assert r.headers["cache-control"] == "no-store"
-    assert "unsafe-inline" not in r.headers["content-security-policy"]
-    html = r.text
-    issuer = get_settings().effective_issuer
-    assert 'href="/auth/login?next=/area"' in html
-    assert f'href="{issuer}/cadastro"' in html and f'href="{issuer}/recuperar-senha"' in html
-    assert "95" in html and "anos de história" in html
-    # RP não coleta credenciais (regras 5 e 6) e a página não tem inline (ADR-0013).
-    for proibido in ("<input", "<form", "<script", " style=", "+40", "regionais"):
-        assert proibido not in html, proibido
     entrar(c)
     r = c.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/area"
@@ -332,93 +322,6 @@ def test_logout_limpa_cookie_e_volta_para_o_inicio(ctx):
     r = c.post("/auth/logout", data={"csrf": csrf_form}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/"
     assert c.get("/api/v1/sessao").status_code == 401
-    # Depois do Sair, a volta para `/` mostra a página de entrada.
-    assert c.get("/", follow_redirects=False).status_code == 200
-
-
-# ----------------------------------------------------- login silencioso (OIDC)
-@pytest.fixture
-def oidc(ctx, monkeypatch):
-    """Modo OIDC sem rede: o callback é simulado por `resposta_idp`."""
-    from urllib.parse import parse_qs, urlparse
-
-    from app import main
-    from app.oidc import OidcError
-
-    monkeypatch.setattr(main.settings, "auth_mode", "oidc")
-    estado: dict = {"resposta": None}
-
-    def callback_falso(params, pending, **_):
-        r = estado["resposta"]
-        if isinstance(r, OidcError):
-            raise r
-        return r
-
-    monkeypatch.setattr(main, "login_from_callback", callback_falso)
-
-    def ir_ao_idp(caminho: str) -> dict:
-        r = ctx["c"].get(caminho, follow_redirects=False)
-        assert r.status_code == 302 and r.headers["cache-control"] == "no-store"
-        return {k: v[0] for k, v in parse_qs(urlparse(r.headers["location"]).query).items()}
-
-    return {**ctx, "estado": estado, "OidcError": OidcError, "ir_ao_idp": ir_ao_idp, "main": main}
-
-
-def test_raiz_sem_sessao_tenta_login_silencioso_e_cai_na_entrada(oidc):
-    c = oidc["c"]
+    # Depois do Sair, a volta para `/` segue para o Login APM.
     r = c.get("/", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/area&silencioso=1"
-    q = oidc["ir_ao_idp"]("/auth/login?next=/area&silencioso=1")
-    assert q["prompt"] == "none"
-    # Sem sessão no IdP: login_required volta para `/`, sem página de erro.
-    oidc["estado"]["resposta"] = oidc["OidcError"]("idp_login_required")
-    r = c.get(f"/auth/callback?error=login_required&state={q['state']}", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/"
-    # A tentativa recente evita o laço: agora `/` mostra a entrada.
-    r = c.get("/", follow_redirects=False)
-    assert r.status_code == 200 and 'href="/auth/login?next=/area"' in r.text
-
-
-def test_login_interativo_nao_usa_prompt_none(oidc):
-    q = oidc["ir_ao_idp"]("/auth/login?next=/area")
-    assert "prompt" not in q
-    q = oidc["ir_ao_idp"]("/auth/login?next=/area&silencioso=1&reauth=1")
-    assert q["prompt"] == "login"
-
-
-def test_tentativa_silenciosa_vencida_tenta_de_novo(oidc, monkeypatch):
-    c, main = oidc["c"], oidc["main"]
-    q = oidc["ir_ao_idp"]("/auth/login?next=/area&silencioso=1")
-    oidc["estado"]["resposta"] = oidc["OidcError"]("idp_login_required")
-    c.get(f"/auth/callback?error=login_required&state={q['state']}", follow_redirects=False)
-    agora = main.time.time()
-    monkeypatch.setattr(main.time, "time", lambda: agora + main.SSO_TENTADO_TTL + 1)
-    r = c.get("/", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].endswith("silencioso=1")
-
-
-def test_silencioso_com_erro_de_validacao_continua_com_pagina_de_erro(oidc):
-    c = oidc["c"]
-    q = oidc["ir_ao_idp"]("/auth/login?next=/area&silencioso=1")
-    oidc["estado"]["resposta"] = oidc["OidcError"]("state_mismatch")
-    r = c.get(f"/auth/callback?code=x&state={q['state']}", follow_redirects=False)
-    assert r.status_code == 400
-
-
-def test_logout_oidc_marca_tentativa_e_volta_para_a_entrada(oidc):
-    """No Sair o IdP encerra a sessão: tentar o login silencioso de novo seria inútil."""
-    from app.oidc import AssociadoClaims
-
-    c = oidc["c"]
-    q = oidc["ir_ao_idp"]("/auth/login?next=/area&silencioso=1")
-    oidc["estado"]["resposta"] = AssociadoClaims(
-        sub="s" * 64, contact_id="6b1f3c1e-4f3a-5d2b-9c7e-a5e0c0de57b0", nome="TELMA", email=None,
-        cpf_mask="***.456.789-**", amr=["pwd"], auth_time=1, tipo="Efetivo", status="Ativo",
-        id_token="eyJ.x.y",
-    )
-    r = c.get(f"/auth/callback?code=x&state={q['state']}", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/area"
-    csrf = c.get("/api/v1/sessao").json()["csrf"]
-    r = c.post("/auth/logout", data={"csrf": csrf}, follow_redirects=False)
-    assert r.status_code == 303 and "/oauth/logout?" in r.headers["location"]
-    assert c.get("/", follow_redirects=False).status_code == 200
+    assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/area"

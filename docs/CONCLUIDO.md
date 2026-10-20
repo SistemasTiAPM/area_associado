@@ -30,6 +30,28 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-20 — `/` volta a levar direto ao Login APM; página de entrada guardada sem rota
+
+Pedido do usuário: quem não tem sessão identificada vai direto ao formulário do Login APM, sem
+página de entrada; depois do Sair, o formulário; quem já está logado entra direto. O
+redirecionamento normal ao IdP cobre os três casos (com sessão no IdP há SSO; sem ela, o
+formulário), então as duas entregas anteriores do dia ("Sair leva direto ao Login APM" e "Entrada
+com login silencioso") foram desfeitas: saem `pos_logout`, `sso_tentado`, `silencioso` e o
+`prompt=none`. `app/main.py` volta ao comportamento do commit `61e6287` (só a docstring muda).
+
+A página de entrada (`entrada.html`, `entrada.css`, fontes Sora em `app/static/fonts/`) fica
+**guardada sem rota**, por decisão do usuário. A correção da corrida do cookie de sessão
+(`sessao.py`, `session_guard.py`) continua valendo.
+
+**Evidências (2026-10-20)**
+
+| Verificação | Resultado |
+|---|---|
+| pytest (raiz → Login APM; Sair → `/` → Login APM) | 138 passaram (11 de MySQL pulados) |
+| Playwright e2e, 1440 e 390 px | 20 de 20 |
+
+---
+
 ## 2026-10-20 — Entrada com login silencioso; Sair volta para a página de entrada
 
 Pedido do usuário, com as regras: primeira visita sem login → página de entrada; depois do Sair →
