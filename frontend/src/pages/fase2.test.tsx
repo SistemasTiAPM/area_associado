@@ -10,7 +10,8 @@ function perfil(parcial: Partial<Perfil> = {}): Perfil {
     endereco: { logradouro: 'Rua A', numero: '10', complemento: null, bairro: 'Centro', cidade: 'São Paulo', uf: 'SP', cep: '01000-000' },
     num_contato: '80012345', crm: '123456', crm_uf: 'SP', tipo_associado: 'Efetivo', status_associativo: 'Ativo',
     data_filiacao: '2014-03-01', tem_foto: false, foto_versao: null, atualizado_em: '2026-10-17T10:00:00Z',
-    desatualizado: false, email_exige_reautenticacao: false, endereco_disponivel: true, ...parcial,
+    desatualizado: false, email_exige_reautenticacao: false, edicao_disponivel: true, endereco_disponivel: true,
+    ...parcial,
   };
 }
 
@@ -28,6 +29,29 @@ describe('Meu perfil (RF-PE)', () => {
     expect(screen.getByText('01/03/2014')).toBeInTheDocument();
     expect(screen.getByText(/Não conseguimos consultar seu cadastro agora/)).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Nome' })).toBeNull(); // nome não é editável
+  });
+
+  it('edição desligada: perfil só de leitura, sem formulário, foto nem troca de e-mail', async () => {
+    const chamadas: string[] = [];
+    montarApp('/perfil', fabricarSessao(), (url) => {
+      chamadas.push(url);
+      return url === '/api/v1/perfil'
+        ? respostaJson(perfil({ edicao_disponivel: false, endereco_disponivel: false, telefone: '(11) 3188-6200',
+          endereco: { logradouro: 'Rua A', numero: '10', complemento: 'ap 3', bairro: 'Centro', cidade: 'São Paulo',
+            uf: 'SP', cep: '01000-000' } }))
+        : undefined;
+    });
+    expect(await screen.findByText(/A alteração do cadastro ainda não está disponível por aqui/)).toBeInTheDocument();
+    expect(screen.getByText('(11) 91234-5678')).toBeInTheDocument();
+    expect(screen.getByText('(11) 3188-6200')).toBeInTheDocument();
+    expect(screen.getByText('Rua A, 10 — ap 3')).toBeInTheDocument();
+    expect(screen.getByText('Centro · São Paulo/SP · CEP 01000-000')).toBeInTheDocument();
+    expect(screen.getByText('telma@exemplo.org')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Celular')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Salvar alterações' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Alterar e-mail' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /foto/i })).toBeNull();
+    expect(chamadas.filter((u) => u.startsWith('/api/v1/perfil/'))).toEqual([]);
   });
 
   it('salva só os campos alterados, com CSRF, e mostra erro no campo', async () => {

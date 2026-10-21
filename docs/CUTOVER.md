@@ -16,7 +16,9 @@ não um deploy de código.
 4. `docker compose exec area-associado python -m scripts.check_oidc` → `OK`. Feito em 2026-10-20:
    a área já roda com `AUTH_MODE=oidc` em `APP_ENV=staging`.
 5. **Hub e SMTP reais**: `APP_ENV=production` não sobe com `HUB_MODE=stub` nem `SMTP_MODE=stub`.
-   Exige a provisão do mcp_hub (P-02, P-05, P-29) e a credencial SMTP (P-27).
+   Exige a provisão do mcp_hub (P-02, P-05) e a credencial SMTP (P-27). A escrita no CRM é um
+   passo à parte, depois da P-29 (abaixo): até lá `HUB_ESCRITA_HABILITADA=false` e o perfil fica
+   só de leitura.
 6. Round-trip validado em `APP_ENV=staging` + `AUTH_MODE=oidc`. Feito em 2026-10-20 com um
    usuário de teste do CRM (evidência em CONCLUIDO.md):
    `/auth/login` → tela do Login APM mostrando "Área do Associado" → `/area` com nome/e-mail/CPF
@@ -41,6 +43,21 @@ curl -sI https://minha.apm.org.br/db-health | head -1 # 403
 Depois: replicar o `.env` no Secrets Manager `prod/area-associado/env` e avisar a equipe e a
 agência de que a faixa de demonstração sumiu: a partir daí o que o associado edita vai para o
 CRM. [ACESSO-CONSTRUCAO.md](ACESSO-CONSTRUCAO.md) passa a ser histórico.
+
+## Ligar a edição do cadastro (depois da P-29)
+
+A conta `area-associado` no hub nasce só com `ferramentas:ler`. Pedir `escrever` antes de o hub
+concedê-lo derruba até as leituras (`invalid_scope`), então a ordem é:
+
+1. P-29 concluída (flows de `contact` mapeados) e P-05 com o papel de escrita.
+2. No hub: marcar `ferramentas:escrever` na conta `area-associado`.
+3. Na área: `HUB_ESCRITA_HABILITADA=true` no `.env`, `docker compose up -d`, e
+   `docker compose exec area-associado python -m scripts.check_hub <contact_id de teste>` deve
+   imprimir `token : ok (ferramentas:ler ferramentas:escrever)` e `edição : habilitada`.
+4. Replicar o `.env` no Secrets Manager.
+
+Desligar = o inverso (flag `false` primeiro, depois tirar o escopo no hub); a revogação no
+hub vale em até 30 s mesmo com token já emitido.
 
 ## Rollback
 

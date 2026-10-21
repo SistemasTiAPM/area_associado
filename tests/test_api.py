@@ -359,3 +359,76 @@ def test_verificacao_publica_no_visual_novo_sem_dado_extra(ctx, monkeypatch):
     monkeypatch.setattr(carteirinha, "resolver", fora)
     r = c.get("/verificar/AAAAAAAAAAAAAAAAAAAA")
     assert r.status_code == 503 and "Verificação indisponível" in r.text
+
+
+# ------------------------------------------------- edição do cadastro (hub)
+class _HubEspiao:
+    def __init__(self):
+        self.chamadas = []
+
+    def __getattr__(self, nome):
+        return lambda *a, **kw: self.chamadas.append(nome)
+
+
+@pytest.fixture
+def edicao(ctx, monkeypatch):
+    from app.api.v1 import perfil as rota_perfil
+    from app.integracoes import email as correio
+    from app.integracoes.hub import redefinir_hub
+    from app.limites import LimiteJanela
+
+    hub = _HubEspiao()
+    redefinir_hub(hub)
+    limites = []
+    monkeypatch.setattr(LimiteJanela, "permitir", lambda self, chave: limites.append(chave) or True)
+    enviados = []
+    monkeypatch.setattr(correio, "enviar", lambda *a, **kw: enviados.append(a))
+    monkeypatch.setattr(rota_perfil.email_verificacao, "iniciar",
+                        lambda *a: pytest.fail("código gerado com a edição desligada"))
+    yield {**ctx, "hub": hub, "limites": limites, "enviados": enviados}
+    redefinir_hub(None)
+
+
+_ESCRITAS = [
+    ("put", "/api/v1/perfil/contato", {"json": {"celular": "11977776666"}}),
+    ("post", "/api/v1/perfil/email", {"json": {"email": "nova@exemplo.org"}}),
+    ("post", "/api/v1/perfil/email/confirmar", {"json": {"email": "nova@exemplo.org", "codigo": "123456"}}),
+    ("post", "/api/v1/perfil/foto", {"files": {"foto": ("eu.jpg", b"\xff\xd8\xff" + b"0" * 64, "image/jpeg")}}),
+    ("delete", "/api/v1/perfil/foto", {"headers": {"Content-Type": "application/json"}}),
+]
+
+
+@pytest.mark.parametrize("metodo,rota,kw", _ESCRITAS)
+def test_edicao_desligada_responde_recurso_desligado_sem_hub_limite_ou_email(edicao, metodo, rota, kw):
+    c = edicao["c"]
+    entrar(c)
+    csrf = c.get("/api/v1/sessao").json()["csrf"]
+    kw = {**kw, "headers": {**_cabecalhos(csrf), **kw.get("headers", {})}}
+    r = getattr(c, metodo)(rota, **kw)
+    assert r.status_code == 404 and r.json()["erro"] == "recurso_desligado"
+    assert "Central de Relacionamento" in r.json()["mensagem"]
+    assert edicao["hub"].chamadas == [] and edicao["limites"] == [] and edicao["enviados"] == []
+
+
+@pytest.mark.parametrize("metodo,rota,kw", _ESCRITAS)
+def test_edicao_desligada_nao_dispensa_csrf(edicao, metodo, rota, kw):
+    c = edicao["c"]
+    entrar(c)
+    r = getattr(c, metodo)(rota, **kw, **({} if "headers" in kw else {"headers": {"X-CSRF-Token": "errado"}}))
+    assert r.status_code == 403 and r.json()["erro"] == "csrf_invalido"
+
+
+def test_perfil_informa_edicao_disponivel(ctx, monkeypatch):
+    from app.api.v1 import perfil as rota_perfil
+    from app.config import get_settings
+    from app.dominio import perfil as dominio
+
+    monkeypatch.setattr(rota_perfil.perfil, "obter", lambda cid: dominio.Perfil(contact_id=cid, nome="Telma"))
+    monkeypatch.setattr(dominio, "_endereco_disponivel", True)
+    c = ctx["c"]
+    entrar(c)
+    corpo = c.get("/api/v1/perfil").json()
+    assert corpo["edicao_disponivel"] is False and corpo["endereco_disponivel"] is False
+    monkeypatch.setattr(get_settings(), "hub_escrita_habilitada", True)
+    corpo = c.get("/api/v1/perfil").json()
+    assert corpo["edicao_disponivel"] is True and corpo["endereco_disponivel"] is True

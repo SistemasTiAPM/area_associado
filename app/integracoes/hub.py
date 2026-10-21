@@ -9,6 +9,9 @@ Regras (CLAUDE.md 4, 5, 16, 17):
 - token de serviço SÓ em memória de processo (nunca sessão, banco ou log);
 - timeout explícito, sem seguir redirecionamento, sem logar corpo do hub;
 - 401 → renova o token uma vez; demais falhas viram `HubError` tipado;
+- escopo do token conforme `HUB_ESCRITA_HABILITADA`: desligada, pede só
+  `ferramentas:ler` (o hub responde `invalid_scope` a quem pede escopo que a
+  conta não tem) e nenhuma escrita sai daqui, nem o pedido de token;
 - escrita com timeout próprio (`HUB_TIMEOUT_ESCRITA`), maior que o do hub
   (25 s), para a área não desistir antes de o hub saber o resultado;
 - defesa em profundidade da ADR-0014: chave `cpf` em qualquer linha devolvida
@@ -33,7 +36,8 @@ from ..config import get_settings
 
 logger = logging.getLogger("area_associado.hub")
 
-_ESCOPOS = "ferramentas:ler ferramentas:escrever"
+_ESCOPO_LER = "ferramentas:ler"
+_ESCOPO_ESCREVER = "ferramentas:escrever"
 _RE_FERRAMENTA = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 _RE_UF = re.compile(r"^[A-Z]{2}$")
 _CORPO_MAX = 2 * 1024 * 1024  # foto 512x512 em base64 cabe com folga
@@ -49,6 +53,17 @@ class HubError(Exception):
         self.status = status
         self.mensagem = mensagem
         self.detalhes = detalhes
+
+
+def escopos_do_token() -> str:
+    s = get_settings()
+    return f"{_ESCOPO_LER} {_ESCOPO_ESCREVER}" if s.hub_escrita_habilitada else _ESCOPO_LER
+
+
+def exigir_escrita_habilitada() -> None:
+    """Barreira antes de qualquer escrita no CRM (real ou simulado)."""
+    if not get_settings().hub_escrita_habilitada:
+        raise HubError("edicao_desligada", 404)
 
 
 @dataclass
@@ -141,6 +156,7 @@ class ClienteHubReal:
         self._host = s.hub_public_host
         self._client_id = s.hub_client_id
         self._segredo = s.hub_client_secret or ""
+        self._escopos = escopos_do_token()
         self._timeout = httpx.Timeout(s.hub_timeout, connect=min(5.0, s.hub_timeout))
         self._timeout_escrita = httpx.Timeout(s.hub_timeout_escrita, connect=min(5.0, s.hub_timeout))
         self._lock = threading.Lock()
@@ -159,7 +175,7 @@ class ClienteHubReal:
         try:
             with self._http() as cliente:
                 r = cliente.post(f"{self._base}/oauth/token",
-                                 data={"grant_type": "client_credentials", "scope": _ESCOPOS},
+                                 data={"grant_type": "client_credentials", "scope": self._escopos},
                                  headers={"Authorization": f"Basic {basic}", "Accept": "application/json"})
         except httpx.HTTPError as exc:
             logger.error("hub: token indisponível (%s)", type(exc).__name__)
@@ -181,6 +197,8 @@ class ClienteHubReal:
     def chamar(self, ferramenta: str, argumentos: dict[str, Any], *, escrita: bool = False) -> list[dict[str, Any]]:
         if not _RE_FERRAMENTA.match(ferramenta):
             raise ValueError("nome de ferramenta inválido")
+        if escrita:
+            exigir_escrita_habilitada()
         for tentativa in (1, 2):
             token = self._obter_token(renovar=tentativa == 2)
             try:

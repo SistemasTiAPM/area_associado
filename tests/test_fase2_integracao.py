@@ -30,6 +30,9 @@ def c(monkeypatch):
 
     monkeypatch.setattr(main.settings, "auth_mode", "stub")
     monkeypatch.setattr(main.settings, "dev_stub_token", TOKEN_STUB)
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "hub_escrita_habilitada", True)  # edição ligada: fluxo completo
     monkeypatch.setattr(rota_perfil, "_limite_contato", LimiteJanela(10, 3600))
     monkeypatch.setattr(rota_perfil, "_limite_foto", LimiteJanela(5, 3600))
     from app.dominio import perfil as dominio_perfil

@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     hub_timeout: float = Field(10.0, alias="HUB_TIMEOUT")
     # Escrita: acima do timeout das ferramentas de escrita do hub (25 s).
     hub_timeout_escrita: float = Field(30.0, alias="HUB_TIMEOUT_ESCRITA")
+    # Edição do cadastro (contato, e-mail, foto). Desligada = o token do hub
+    # pede só `ferramentas:ler` (a conta nasce sem `escrever` até a P-29) e as
+    # rotas de escrita respondem 404 `recurso_desligado` sem chamar o hub.
+    hub_escrita_habilitada: bool = Field(False, alias="HUB_ESCRITA_HABILITADA")
 
     # ------------------------------------------------------------------ #
     # E-mail (código de troca de e-mail e aviso ao endereço antigo).      #

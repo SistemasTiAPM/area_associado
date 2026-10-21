@@ -152,9 +152,10 @@ def test_qr_svg_sem_script_nem_estilo_inline():
 
 
 # --------------------------------------------------------------- hub real
-def _hub(monkeypatch, rotas):
+def _hub(monkeypatch, rotas, *, escrita: bool = True):
     monkeypatch.setenv("HUB_MODE", "real")
     monkeypatch.setenv("HUB_CLIENT_SECRET", "s" * 32)
+    monkeypatch.setenv("HUB_ESCRITA_HABILITADA", "true" if escrita else "false")
     from app.config import get_settings
     from app.integracoes.hub import ClienteHubReal
 
@@ -265,6 +266,62 @@ def test_hub_fora_do_ar(monkeypatch):
     with pytest.raises(HubError) as e:
         cliente.foto_obter("cid")
     assert e.value.codigo == "fonte_indisponivel"
+
+
+def _token_e_linhas(req, n):
+    if req.url.path == "/oauth/token":
+        return httpx.Response(200, json={"access_token": "t", "expires_in": 600})
+    return httpx.Response(200, json={"linhas": [{"nome": "Ana"}]})
+
+
+@pytest.mark.parametrize("escrita,escopo", [(False, "ferramentas:ler"), (True, "ferramentas:ler ferramentas:escrever")])
+def test_hub_escopo_do_token_conforme_flag(monkeypatch, escrita, escopo):
+    cliente, chamadas = _hub(monkeypatch, _token_e_linhas, escrita=escrita)
+    assert cliente.perfil_consultar("cid").nome == "Ana"
+    corpo = dict(httpx.QueryParams(chamadas[0].content.decode()))
+    assert corpo == {"grant_type": "client_credentials", "scope": escopo}
+
+
+def test_escrita_desligada_por_padrao(monkeypatch, settings):
+    assert settings.hub_escrita_habilitada is False
+
+
+def test_hub_escrita_desligada_nao_toca_a_rede(monkeypatch):
+    from app.integracoes.hub import HubError
+
+    cliente, chamadas = _hub(monkeypatch, _token_e_linhas, escrita=False)
+    for escrever in (lambda: cliente.contato_atualizar("cid", {"celular": "x"}),
+                     lambda: cliente.foto_atualizar("cid", None),
+                     lambda: cliente.chamar("associado.contato_atualizar", {"contact_id": "cid"}, escrita=True)):
+        with pytest.raises(HubError) as e:
+            escrever()
+        assert (e.value.codigo, e.value.status) == ("edicao_desligada", 404)
+    assert chamadas == []  # nem o token foi pedido
+
+
+def test_hub_stub_obedece_a_flag_de_escrita(monkeypatch):
+    from app.config import get_settings
+    from app.integracoes.hub import HubError
+    from app.integracoes.hub_stub import ClienteHubStub
+
+    stub = ClienteHubStub()
+    with pytest.raises(HubError, match="edicao_desligada"):
+        stub.contato_atualizar("cid", {"celular": "(11) 91234-5678"})
+    with pytest.raises(HubError, match="edicao_desligada"):
+        stub.foto_atualizar("cid", None)
+    assert stub.perfil_consultar("cid").celular  # leitura segue
+    monkeypatch.setenv("HUB_ESCRITA_HABILITADA", "true")
+    get_settings.cache_clear()
+    assert stub.contato_atualizar("cid", {"celular": "(11) 91234-5678"}) == ["celular"]
+
+
+def test_edicao_desligada_vira_recurso_desligado_na_api():
+    from app.api.v1.deps import erro_do_hub
+    from app.integracoes.hub import HubError
+
+    erro = erro_do_hub(HubError("edicao_desligada", 404))
+    assert (erro.status, erro.erro) == (404, "recurso_desligado") and "Central de Relacionamento" in erro.mensagem
+    assert erro_do_hub(HubError("nao_encontrado", 404)).erro == "nao_encontrado"
 
 
 # ----------------------------------------------------------------- e-mail

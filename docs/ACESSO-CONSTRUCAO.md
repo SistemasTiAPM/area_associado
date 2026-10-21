@@ -47,8 +47,10 @@ usando um container local com `AUTH_MODE=stub`: o modo stub existe só para test
 
 ## O que NÃO fazer nesta fase
 
-- Não ligar `HUB_MODE=real` sem a provisão do hub (P-02, P-05) e sem a P-29: com a escrita
-  liberada, o que o associado digitar vai para o CRM de verdade.
+- `HUB_MODE=real` só com a provisão do hub (P-02) e **com `HUB_ESCRITA_HABILITADA=false`** até a
+  P-29: com a escrita ligada, o que o associado digitar vai para o CRM de verdade. Desligada, o
+  perfil mostra os dados reais só para leitura. O e2e de escrita (`frontend/e2e/fase2.spec.ts`)
+  precisa de `HUB_ESCRITA_HABILITADA=true` no container local de teste.
 - Não voltar para `AUTH_MODE=stub` no ambiente público: o token seria compartilhado de novo.
 - Não publicar porta no `docker-compose.yml`: o acesso é pelo porteiro.
 - Não guardar CPF completo, tokens ou segredos em sessão, log ou `evento_log` (regras 4 e 8 do

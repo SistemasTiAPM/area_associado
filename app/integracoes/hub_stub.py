@@ -8,6 +8,7 @@ workers, a memória não é compartilhada — por isso a área sempre relê do c
 `falhar = True` simula hub fora do ar (testes de degradação, RNF-18).
 `endereco_disponivel = False` simula o hub sem a flag/Metadata do endereço:
 perfil sem endereço e gravação de endereço com 409.
+Escrita obedece a `HUB_ESCRITA_HABILITADA` como no cliente real.
 Proibido em produção (validador de `Settings`).
 """
 
@@ -17,7 +18,7 @@ import hashlib
 import threading
 from typing import Any
 
-from .hub import Endereco, HubError, PerfilCrm
+from .hub import Endereco, HubError, PerfilCrm, exigir_escrita_habilitada
 
 
 class ClienteHubStub:
@@ -54,6 +55,7 @@ class ClienteHubStub:
                              endereco_disponivel=self.endereco_disponivel, email=dados.get("email"))
 
     def contato_atualizar(self, contact_id: str, campos: dict[str, Any]) -> list[str]:
+        exigir_escrita_habilitada()
         self._verificar()
         if "endereco" in campos and not self.endereco_disponivel:
             raise HubError("endereco_indisponivel", 409)
@@ -69,6 +71,7 @@ class ClienteHubStub:
             return self._fotos.get(contact_id)
 
     def foto_atualizar(self, contact_id: str, jpeg: bytes | None) -> None:
+        exigir_escrita_habilitada()
         self._verificar()
         with self._lock:
             if jpeg:

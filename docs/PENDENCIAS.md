@@ -22,20 +22,24 @@ demonstração". Fases 1, 2a e 2b implantadas; RDS com `sql/001`–`007`.
 |---|---|---|
 | 0 — Documentação | concluída | — |
 | 1 — Fundação (SPA, sessão cifrada, API, flags, analytics) | **no ar** em minha.apm.org.br (construção) | — |
-| 2a — Perfil, e-mail por código, foto, carteirinha | **no ar** (hub e SMTP simulados) | dados reais: P-02, P-05, P-27 |
-| 2b — mcp_hub com perfil, contato e foto no CRM | código concluído nos dois repositórios | provisão P-02, P-05; escrita real só depois de P-29; P-30, P-31 |
+| 2a — Perfil, e-mail por código, foto, carteirinha | **no ar** (hub e SMTP simulados) | dados reais: P-02, P-27 |
+| 2b — mcp_hub com perfil, contato e foto no CRM | hub em produção; área com escrita desligável | P-02 (lado da área), P-41; escrita real só depois de P-29; P-30, P-31 |
 | 3 — Solicitações | **não iniciada**, pode começar já (fila local não depende do hub) | P-06 só para o espelho no CRM |
 | 4 a 8 | não iniciadas | ver roteiro no fim deste arquivo |
 
 **O que está nas mãos de quem**
-- **Operador (você):** replicar o `.env` atualizado no Secrets Manager (P-36); P-02, implantar o hub
-  novo (aplicar `sql/004` e `005` do hub no RDS antes do código, credenciais, conta `area-associado`);
-  P-01, certificado de origem; decidir o catch-all do porteiro (P-34).
+- **Operador (você):** replicar o `.env` atualizado no Secrets Manager (P-36); P-02, segredo do hub
+  em `HUB_CLIENT_SECRET`, `HUB_MODE=real` com `HUB_ESCRITA_HABILITADA=false` e `check_hub`; P-41,
+  volume esperado para o hub; P-01, certificado de origem; decidir o catch-all do porteiro (P-34).
 - **TI / infra:** P-27, credencial SMTP.
-- **CRM admin:** P-37, contatos de teste no CRM para a agência entrar pelo Login APM; P-05, app
-  registration e papel de escrita; P-29, flows em update de `contact`; P-30, homologar a foto;
-  P-06, entidade das solicitações.
+- **CRM admin:** P-37, contatos de teste no CRM para a agência entrar pelo Login APM; P-29, flows em
+  update de `contact`; P-30, homologar a foto (`CanStoreFullImage=False` hoje); P-06, entidade das
+  solicitações.
 - **Negócio:** P-31 (confirmar os campos do endereço), P-32 (formato de telefone), P-10 e P-22.
+
+**2026-10-21:** hub em produção do lado do hub (P-02 em andamento, P-05 concluída). A área passa a
+pedir o escopo conforme `HUB_ESCRITA_HABILITADA` (padrão `false`: só `ferramentas:ler`, perfil só de
+leitura). Próximo passo: segredo do hub no `.env`, `HUB_MODE=real`, `check_hub`, e responder P-41.
 
 **Para retomar:** Fase 3 (solicitações, plano neste repositório). Cada fase começa com plano e
 aprovação (CLAUDE.md, sessão 4). Toda entrega daqui para a frente vai ao ar em minha.apm.org.br
@@ -48,9 +52,8 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 | ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
 |---|---|---|---|---|---|---|
 | P-01 | P0 | Certificado de origem do `nginx_porteiro` (`origin.pem`, autoassinado) venceu em 10/10/2026. Os sites só seguem no ar porque a zona Cloudflare não está em Full (strict). Emitir Cloudflare Origin CA e passar a zona para Full (strict). | Estivador / infra | Cutover (`docs/CUTOVER.md`) e qualquer acesso externo | aberta | 2026-10-10 |
-| P-02 | P0 | Provisionar o `mcp_hub` em produção, na ordem do RUNBOOK do hub (§2 e §3.1): schemas `mcp_hub`/`mcp_hub_dados` com `sql/000`–`005` (004 e 005 **antes** do código novo; conferência do cabeçalho do 005 = 0) e `db_check` OK; credenciais próprias de leitura (CRM e F&O); conta `area-associado` com `ips_permitidos` da `rede_publica`, escopos ler (+ escrever só depois de P-29), `chamadas_por_minuto` e cota PII próprias, grants **exatos** `modo_pii=completo` em `associado.perfil_consultar`, `contato_atualizar`, `foto_obter`, `foto_atualizar` (depois `totalpass.adesao_consultar`, `solicitacao.*`); segredo em `HUB_CLIENT_SECRET` da área, `HUB_MODE=real` e `scripts/check_hub.py` OK. | mcp_hub / operador | dados reais na área (até lá `HUB_MODE=stub`) | aberta | 2026-10-16 |
+| P-02 | P0 | Provisionar o `mcp_hub` em produção, na ordem do RUNBOOK do hub (§2 e §3.1): schemas `mcp_hub`/`mcp_hub_dados` com `sql/000`–`005` (004 e 005 **antes** do código novo; conferência do cabeçalho do 005 = 0) e `db_check` OK; credenciais próprias de leitura (CRM e F&O); conta `area-associado` com `ips_permitidos` da `rede_publica`, escopos ler (+ escrever só depois de P-29), `chamadas_por_minuto` e cota PII próprias, grants **exatos** `modo_pii=completo` em `associado.perfil_consultar`, `contato_atualizar`, `foto_obter`, `foto_atualizar` (depois `totalpass.adesao_consultar`, `solicitacao.*`); segredo em `HUB_CLIENT_SECRET` da área, `HUB_MODE=real` e `scripts/check_hub.py` OK. **Hub (2026-10-21):** em produção em `mcp.apm.org.br`, as 4 ferramentas no ar, conta `area-associado` (grupo `svc-area-associado`, grants exatos `completo`, allowlist `172.19.0.0/16`) só com `ferramentas:ler`; ensaio de `perfil_consultar` e `foto_obter` OK contra o CRM real, sem CPF, `endereco_disponivel=false`. **Falta na área:** receber o segredo, `HUB_CLIENT_SECRET` + `HUB_MODE=real` + `HUB_ESCRITA_HABILITADA=false` no `.env`, `check_hub` OK e responder o volume (P-41). | mcp_hub / operador | dados reais na área (até lá `HUB_MODE=stub`) | em andamento | 2026-10-16 |
 | P-04 | P0 | `mcp_hub`: aceitar `contact_id` como chave em `associado.consultar`, `totalpass.adesao_consultar` e `financeiro.*`, resolvendo o CPF dentro do hub. **Parcial (2026-10-19):** `dataverse.contato_por_id` existe e as 4 ferramentas da Minha APM já são por `contact_id`, com titular auditado por contato; faltam as ferramentas que hoje exigem CPF. A área não tem CPF por regra (ADR-0014). | mcp_hub | Fases 4 e 7 | em andamento | 2026-10-16 |
-| P-05 | P0 | Entra ID: app registration **de escrita** "APM MCP Hub CRM escrita" (outra, nunca a de leitura), application user no Dataverse e security role **só Read + Write em `contact`** (na Fase 3, create/write em `task`, P-06). Gravar no painel do hub como "Dataverse — escrita" e rodar `scripts/check_conectores` do hub: tem que dar OK no papel (sem Create/Delete/Assign/Share/Append) e imprime a Metadata do endereço e da `entityimage`. Avaliar field security. | CRM admin | escrita real de contato e foto | aberta | 2026-10-16 |
 | P-06 | P0 | Definir a entidade do CRM que espelha as solicitações. Proposta: `task` *regarding* contact, `subject` `[Minha APM] <tipo> <uuid>`. Alternativa: entidade custom. Verificar flows que disparam em create e quem do atendimento trata a fila. | CRM / negócio | Fase 3 (o espelho; a fila local funciona sem ele) | aberta | 2026-10-16 |
 | P-07 | P0 | Locaweb `portal_apm`: criar usuário **novo somente leitura** com SELECT só em `pw_portal_{posts,postmeta,terms,term_taxonomy,term_relationships,yoast_indexable}`, verificar suporte a TLS (`have_ssl`), restringir origem ao IP da EC2. Depois de migrar o appapm (P-16), revogar `portal_apm@%`, marcado como vazado em `PENDENCIAS_AWS.md`. | infra / Planeta W | Fase 5 (até lá `WP_MODE=stub`) | aberta | 2026-10-16 |
 | P-34 | P1 | **Catch-all na 443 do porteiro.** Host proxied sem vhost cai no primeiro `server` em ordem alfabética, hoje `apm_parceiros.conf`: em 19/10 `minha.apm.org.br` abriu o Sistema de Parceiros até o vhost da área entrar. Proposta: `server { listen 443 ssl default_server; server_name _; return 444; }` num arquivo `_00_padrao.conf`, mantendo o default da porta 80 (health check do ALB, ver `totalpass.conf`). Mexe no porteiro de todos os projetos. | Estivador / operador | — (risco para qualquer DNS novo) | aberta | 2026-10-19 |
@@ -86,7 +89,7 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 | P-19 | P2 | Incluir `area_associado` e `area-associado-jobs` em `/home/ubuntu/verificar-pos-reboot.sh` (hoje fora da lista de 12 containers). | Estivador | após Fase 1 | aberta | 2026-10-16 |
 | P-27 | P0 | Credencial SMTP própria da área (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) com remetente autorizado (SPF/DKIM). Sem ela a troca de e-mail fica indisponível em produção (`SMTP_MODE=stub` é proibido lá). | TI / infra | produção da troca de e-mail (ADR-0015) | aberta | 2026-10-17 |
 | P-29 | P0 | **Flows, plugins e workflows que disparam em update de `contact`** no Dataverse: mapear quais existem, o que fazem quando a área muda celular, telefone, e-mail, endereço ou foto, e se algum notifica o associado, sincroniza com outro sistema ou sobrescreve campo. **O escopo `ferramentas:escrever` não é marcado na conta `area-associado` em produção antes disso.** | CRM admin | escrita real no CRM | aberta | 2026-10-19 |
-| P-30 | P1 | Homologar a foto no CRM: `entityimage` com `CanStoreFullImage` (senão o CRM guarda só 144×144) e `MaxSizeInKB` (o `check_conectores` do hub imprime os dois); confirmar que o PATCH com base64 é aceito e que `foto_obter` devolve a imagem gravada. Plano B no hub se o PATCH falhar: `PUT .../entityimage` com `application/octet-stream`. | CRM admin / Integrador | foto real no CRM | aberta | 2026-10-19 |
+| P-30 | P1 | Homologar a foto no CRM: `entityimage` com `CanStoreFullImage` (senão o CRM guarda só 144×144) e `MaxSizeInKB` (o `check_conectores` do hub imprime os dois); confirmar que o PATCH com base64 é aceito e que `foto_obter` devolve a imagem gravada. Plano B no hub se o PATCH falhar: `PUT .../entityimage` com `application/octet-stream`. **2026-10-21 (hub):** o CRM está com `CanStoreFullImage=False` e `MaxSizeInKB=10240`, ou seja, guarda só 144×144. A miniatura local (128×128) não sofre; quem mais lê a foto do CRM recebe 144×144. Decidir com o CRM admin se liga a imagem cheia. | CRM admin / Integrador | foto real no CRM | aberta | 2026-10-19 |
 | P-31 | P1 | Confirmar com o negócio que os 7 atributos do endereço no `contact` têm o mesmo significado do lead (`address1_line1` logradouro, `alf_numero_endereco` número, `address1_line2` complemento, `alf_bairro` bairro, `address1_city`, `address1_stateorprovince`, `address1_postalcode`) e então ligar `CRM_ENDERECO_HABILITADO=true` no hub. Até lá a área mostra "o endereço ainda não pode ser alterado por aqui" e o hub responde 409. A Metadata prova só que os campos existem. | negócio / CRM admin | edição de endereço | aberta | 2026-10-19 |
 | P-32 | P2 | Convenção de formato de telefone no CRM. A área e o hub gravam `(11) 91234-5678` / `(11) 3188-6200`; confirmar se flows, discador ou integrações esperam outro formato (E.164, só dígitos) antes de virar padrão. | CRM admin / negócio | — | aberta | 2026-10-19 |
 | P-33 | P2 | No ensaio ponta a ponta de 19/10, 1 de 9 emissões de token do hub para a área voltou 503 `temporarily_unavailable`; não se repetiu em 8 tentativas e o log daquela rodada se perdeu com o container. Após implantar o hub, vigiar `oauth/token indisponível` e `nenhuma chave de assinatura ativa` no log; se aparecer, investigar o cache do chaveiro e o pool do RDS. | Integrador | — | aberta | 2026-10-19 |
@@ -94,6 +97,7 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 | P-25 | P2 | Sem CI: pytest, Vitest, lint e typecheck rodam no build da imagem, mas o e2e (Playwright) e o Lighthouse são manuais. Avaliar GitHub Actions com a deploy key do repositório. | Estivador | — | aberta | 2026-10-17 |
 | P-26 | P2 | O host não tem o plugin `docker-buildx`: build com BuildKit falha; hoje se usa `DOCKER_BUILDKIT=0`. Instalar o plugin (`apt install docker-buildx`) é mudança de sistema, decisão do operador. | infra | — | aberta | 2026-10-17 |
 
+| P-41 | P1 | Responder ao mcp_hub o pico de chamadas/min e o total/dia esperados da conta `area-associado` (definem `chamadas_por_minuto` e a cota PII). Do código: 1 `perfil_consultar` por associado a cada `PERFIL_CACHE_TTL` (24 h) e só ao abrir o Perfil, + 1 por worker a cada deploy; `foto_obter` ainda sem uso; escrita limitada a 10/h de contato e 5/h de foto por associado. Falta a estimativa de acessos diários ao Perfil. Rever com `evento_uso` 30 dias depois da virada. | usuário / negócio | taxa e cota da conta no hub (P-02) | aberta | 2026-10-21 |
 ---
 
 ## Roteiro por fase
@@ -105,7 +109,7 @@ Cada fase tem plano próprio e aprovação antes de codar (CLAUDE.md, sessão 4)
 | 0 | Requisitos, ADRs, pendências, concluídos, CLAUDE.md | — | concluída em 2026-10-17 |
 | 1 | Fundação: Vite + shell + tokens + fontes, `spa.py`, sessão cifrada, CSRF por header, `uso.py`, `flags.py`, `sql/003-005`, Dockerfile multi-stage, vhost, testes de rotas | — | código concluído em 2026-10-17; no ar em minha.apm.org.br desde 2026-10-19 |
 | 2a | Perfil e carteirinha na área: cache do perfil, contato, e-mail com código, foto, carteirinha com QR, verificação pública, escopo `carteirinha` | — | código concluído em 2026-10-17; no ar em minha.apm.org.br desde 2026-10-19 |
-| 2b | mcp_hub com perfil, contato e foto no CRM (contrato em `docs/CONTRATO-HUB.md`) e troca de `HUB_MODE` para `real` | P-02, P-05, P-29, P-30, P-31 | código concluído em 2026-10-19; provisão pendente |
+| 2b | mcp_hub com perfil, contato e foto no CRM (contrato em `docs/CONTRATO-HUB.md`) e troca de `HUB_MODE` para `real` | P-02, P-41, P-29, P-30, P-31 | código concluído em 2026-10-19; provisão pendente |
 | 3 | Solicitações: `sql/008`, máquina de estados, API, jobs de outbox e sincronização, tela | P-06 | próxima |
 | 4 | Benefícios: `sql/007` seed, ativações, TotalPass via hub + deep-link, home | P-04, P-10, P-22 | — |
 | 5 | Notícias e eventos: `portal_wp.py` só no job, caches, temas, salvos, inscrições, banner do Congresso | P-07, P-10, P-21 | — |

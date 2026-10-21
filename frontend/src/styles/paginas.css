@@ -284,6 +284,10 @@
   text-align: right;
 }
 
+.dados-perfil__linha {
+  display: block;
+}
+
 .email-atual {
   font-size: 16px;
   font-weight: 600;

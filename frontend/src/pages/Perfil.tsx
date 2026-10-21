@@ -93,26 +93,30 @@ function SecaoFoto({ perfil, aoMudar }: { perfil: Perfil; aoMudar: (versao: stri
           {perfil.status_associativo ? <span className="tag tag--info">{perfil.status_associativo}</span> : null}
         </div>
       ) : null}
-      <div className="botoes identidade__botoes">
-        <input
-          ref={entrada}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          hidden
-          onChange={(e) => void aoEscolher(e)}
-          aria-hidden="true"
-          tabIndex={-1}
-        />
-        <button type="button" className="botao botao--secundario" disabled={ocupado} onClick={() => entrada.current?.click()}>
-          {perfil.tem_foto ? 'Trocar foto' : 'Enviar foto'}
-        </button>
-        {perfil.tem_foto ? (
-          <button type="button" className="botao botao--secundario" disabled={ocupado} onClick={() => void aoRemover()}>
-            Remover foto
-          </button>
-        ) : null}
-      </div>
-      <p className="secao__subtitulo">JPG, PNG ou WebP de até 5 MB. A foto é recortada em quadrado e vai para o seu cadastro na APM.</p>
+      {perfil.edicao_disponivel ? (
+        <>
+          <div className="botoes identidade__botoes">
+            <input
+              ref={entrada}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              onChange={(e) => void aoEscolher(e)}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+            <button type="button" className="botao botao--secundario" disabled={ocupado} onClick={() => entrada.current?.click()}>
+              {perfil.tem_foto ? 'Trocar foto' : 'Enviar foto'}
+            </button>
+            {perfil.tem_foto ? (
+              <button type="button" className="botao botao--secundario" disabled={ocupado} onClick={() => void aoRemover()}>
+                Remover foto
+              </button>
+            ) : null}
+          </div>
+          <p className="secao__subtitulo">JPG, PNG ou WebP de até 5 MB. A foto é recortada em quadrado e vai para o seu cadastro na APM.</p>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -144,6 +148,40 @@ function SecaoCadastro({ perfil }: { perfil: Perfil }) {
 }
 
 /* ---------------------------------------------------------------- contato */
+function linhasEndereco(e: Endereco): string[] {
+  const rua = [e.logradouro, e.numero].filter(Boolean).join(', ');
+  const cidade = [e.cidade, e.uf].filter(Boolean).join('/');
+  return [
+    e.complemento ? `${rua} — ${e.complemento}` : rua,
+    [e.bairro, cidade, e.cep ? `CEP ${e.cep}` : ''].filter(Boolean).join(' · '),
+  ].filter(Boolean);
+}
+
+/** Edição desligada: os mesmos dados, sem formulário. */
+function SecaoContatoLeitura({ perfil }: { perfil: Perfil }) {
+  return (
+    <section className="cartao secao-perfil" aria-labelledby="titulo-contato">
+      <h2 className="secao__titulo" id="titulo-contato">
+        Contato
+      </h2>
+      <dl className="dados-perfil">
+        <dt>Celular</dt>
+        <dd>{perfil.celular ?? '—'}</dd>
+        <dt>Telefone</dt>
+        <dd>{perfil.telefone ?? '—'}</dd>
+        <dt>Outro telefone</dt>
+        <dd>{perfil.telefone2 ?? '—'}</dd>
+        <dt>Endereço</dt>
+        <dd>
+          {perfil.endereco
+            ? linhasEndereco(perfil.endereco).map((linha) => <span key={linha} className="dados-perfil__linha">{linha}</span>)
+            : '—'}
+        </dd>
+      </dl>
+    </section>
+  );
+}
+
 const ENDERECO_VAZIO: Endereco = { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: 'SP', cep: '' };
 
 function SecaoContato({ perfil, aoAtualizar }: { perfil: Perfil; aoAtualizar: (p: Perfil) => void }) {
@@ -354,7 +392,7 @@ function SecaoEmail({ perfil, aoAtualizar }: { perfil: Perfil; aoAtualizar: (p: 
         É para este e-mail que o Login APM envia os códigos de primeiro acesso e de recuperação de senha.
       </p>
 
-      {fase === 'inicial' ? (
+      {!perfil.edicao_disponivel ? null : fase === 'inicial' ? (
         <div className="botoes">
           <button type="button" className="botao botao--secundario" onClick={() => setFase('novo')}>
             Alterar e-mail
@@ -469,13 +507,22 @@ export function PaginaPerfil() {
           indisponíveis até a conexão voltar.
         </p>
       ) : null}
+      {!perfil.edicao_disponivel ? (
+        <p className="aviso" role="status">
+          A alteração do cadastro ainda não está disponível por aqui. Para alterar, fale com a Central de Relacionamento.
+        </p>
+      ) : null}
       <div className="grade-perfil">
         <div className="grade-perfil__coluna">
           <SecaoFoto perfil={perfil} aoMudar={(versao) => atualizar({ ...perfil, tem_foto: versao !== null, foto_versao: versao })} />
           <SecaoCadastro perfil={perfil} />
         </div>
         <div className="grade-perfil__coluna">
-          <SecaoContato key={perfil.atualizado_em ?? 'contato'} perfil={perfil} aoAtualizar={atualizar} />
+          {perfil.edicao_disponivel ? (
+            <SecaoContato key={perfil.atualizado_em ?? 'contato'} perfil={perfil} aoAtualizar={atualizar} />
+          ) : (
+            <SecaoContatoLeitura perfil={perfil} />
+          )}
           <SecaoEmail perfil={perfil} aoAtualizar={atualizar} />
         </div>
       </div>

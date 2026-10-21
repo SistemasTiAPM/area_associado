@@ -30,6 +30,63 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-21 — Escopo do hub conforme a escrita habilitada (pedido do mcp_hub)
+
+Pedido do hub: a conta `area-associado` nasce só com `ferramentas:ler`, mas a área pedia
+`ferramentas:ler ferramentas:escrever` fixo, e o `/oauth/token` respondia 400 `invalid_scope`.
+Com isso até as leituras falhariam ao ligar `HUB_MODE=real`.
+
+**Entregue — 🛡️ Sentinela:** `HUB_ESCRITA_HABILITADA` em `app/config.py`, padrão `false`
+(fail-closed).
+
+**Entregue — 🔌 Integrador:**
+- `app/integracoes/hub.py`: `escopos_do_token()` pede `ferramentas:ler` e só acrescenta
+  `ferramentas:escrever` com a flag ligada.
+- `exigir_escrita_habilitada()` barra toda chamada `escrita=True` antes da rede, sem pedir nem o
+  token; o `hub_stub` obedece à mesma barreira.
+- `scripts/check_hub.py` pede o escopo da flag e imprime qual pediu e se a edição está ligada.
+- `docs/CONTRATO-HUB.md` atualizado.
+
+**Entregue — ⚙️ Maestro:**
+- `exigir_edicao` (`app/api/v1/deps.py`) entra logo depois de sessão e CSRF nas 5 rotas de
+  escrita: `PUT /perfil/contato`, `POST /perfil/email`, `POST /perfil/email/confirmar`,
+  `POST /perfil/foto` e `DELETE /perfil/foto`. Com a flag desligada a resposta é 404
+  `recurso_desligado` (regra 19), sem consumir limite, gerar código, enviar e-mail ou chamar o hub.
+- `GET /perfil` ganha `edicao_disponivel`; com ela `false`, `endereco_disponivel` também é `false`.
+
+**Entregue — 🎨 Vitrine:** com `edicao_disponivel=false`, o Perfil fica só de leitura: aviso
+para falar com a Central, contato e endereço em lista, sem botões de foto nem "Alterar e-mail".
+
+**Entregue — 📦 Estivador:**
+- `.env.example` ganha a flag.
+- `docs/CUTOVER.md` ganha a seção "Ligar a edição do cadastro", com a ordem: P-29, depois o
+  escopo no hub, depois a flag.
+- `docs/ACESSO-CONSTRUCAO.md` passa a permitir `HUB_MODE=real` com a escrita desligada.
+
+**Recebido do hub (2026-10-21):**
+- Hub em produção com as 4 ferramentas no ar.
+- **P-05 concluída** do lado do hub: credencial de escrita, papel Read + Write em `contact` e
+  perfil de segurança de coluna.
+- P-02 concluída do lado do hub; o lado da área segue em PENDENCIAS.
+- Ensaio contra o CRM real com o contato sintético `8eb5da36-…`: `perfil_consultar` e
+  `foto_obter` OK, sem CPF, `endereco_disponivel=false`, `data_filiacao` agora em -03:00 (a área
+  já lê só `AAAA-MM-DD`).
+- `CanStoreFullImage=False` foi registrado na P-30.
+
+**Pendências:** P-02 em andamento (falta o lado da área); P-05 sai; P-30 atualizada; P-41 nova
+(volume para taxa e cota do hub).
+
+**Evidências (2026-10-21)**
+
+| Verificação | Resultado |
+|---|---|
+| `npm run check` no estágio Node da imagem (typecheck, ESLint com regras de CSP, Vitest) | 47 passaram (1 novo: perfil só de leitura) |
+| pytest na imagem, sem banco | 156 passaram (11 de MySQL pulados); 18 novos: escopo por flag, escrita sem rede, stub, mapeamento, 5 rotas × (404 sem hub/limite/e-mail e CSRF primeiro), `edicao_disponivel` |
+| pytest com MySQL 8.4 descartável (`sql/000`–`007`) | 167 passaram (integração com a edição ligada) |
+| Playwright e2e | não rodado: a mudança visível está coberta pelo Vitest; o e2e de escrita exige `HUB_ESCRITA_HABILITADA=true` no container local |
+
+---
+
 ## 2026-10-20 — Verificação pública da carteirinha no visual novo
 
 Pedido do usuário: `/verificar/{token}` ainda estava no layout antigo. A página passa a usar o

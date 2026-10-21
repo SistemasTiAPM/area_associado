@@ -6,6 +6,9 @@
   (só NOMES de campos, nunca valores) e `evento_uso` em transação própria.
 - E-mail é o canal de recuperação do Login APM: troca exige login recente no
   IdP (`REAUTH_MAX_IDADE`) e código enviado ao novo endereço.
+- Com `HUB_ESCRITA_HABILITADA=false`, toda rota de escrita responde 404
+  `recurso_desligado` logo após sessão e CSRF (`exigir_edicao`) e o perfil
+  sai com `edicao_disponivel=false` para a SPA esconder a edição.
 """
 
 from __future__ import annotations
@@ -30,10 +33,13 @@ from ...integracoes.hub import HubError, obter_hub
 from ...limites import LimiteJanela
 from ...session_guard import autenticacao_recente, require_associado
 from ..erros import ApiError
-from .deps import MENSAGEM_ENDERECO_INDISPONIVEL, Contexto, contexto, erro_do_hub
+from .deps import MENSAGEM_ENDERECO_INDISPONIVEL, Contexto, contexto, erro_do_hub, exigir_edicao
 
 logger = logging.getLogger("area_associado.api.perfil")
 router = APIRouter(tags=["perfil"])
+
+# Toda escrita: sessão, CSRF e edição habilitada, nesta ordem, antes de limite, upload, código e hub.
+_ESCRITA = [Depends(require_associado), Depends(exigir_csrf), Depends(exigir_edicao)]
 
 _limite_contato = LimiteJanela(maximo=10, janela_s=3600)
 _limite_foto = LimiteJanela(maximo=5, janela_s=3600)
@@ -164,7 +170,8 @@ def _saida(p: perfil.Perfil, request: Request, ctx: Contexto) -> dict[str, Any]:
         "endereco": p.endereco, "num_contato": p.num_contato, "crm": p.crm, "crm_uf": p.crm_uf,
         "tipo_associado": p.tipo_associado, "status_associativo": p.status_associativo,
         "data_filiacao": p.data_filiacao, "tem_foto": p.tem_foto, "foto_versao": p.foto_etag,
-        "endereco_disponivel": perfil.endereco_disponivel() is True,
+        "edicao_disponivel": s.hub_escrita_habilitada,
+        "endereco_disponivel": s.hub_escrita_habilitada and perfil.endereco_disponivel() is True,
         "atualizado_em": _iso(p.contato_atualizado_em or p.atualizado_em), "desatualizado": p.desatualizado,
         "email_exige_reautenticacao": not autenticacao_recente(ctx.associado, s.reauth_max_idade),
     }
@@ -196,7 +203,7 @@ async def obter_perfil(request: Request, ctx: Contexto = Depends(contexto)) -> d
     return _saida(p, request, ctx)
 
 
-@router.put("/perfil/contato", dependencies=[Depends(require_associado), Depends(exigir_csrf)])
+@router.put("/perfil/contato", dependencies=_ESCRITA)
 async def atualizar_contato(entrada: ContatoEntrada, request: Request, ctx: Contexto = Depends(contexto)):
     try:
         campos = entrada.campos()
@@ -224,7 +231,7 @@ async def atualizar_contato(entrada: ContatoEntrada, request: Request, ctx: Cont
     return _saida(p, request, ctx)
 
 
-@router.post("/perfil/email", status_code=202, dependencies=[Depends(require_associado), Depends(exigir_csrf)])
+@router.post("/perfil/email", status_code=202, dependencies=_ESCRITA)
 async def iniciar_troca_email(entrada: EmailEntrada, request: Request, ctx: Contexto = Depends(contexto)):
     _exigir_reautenticacao(ctx)
     novo = entrada.email
@@ -271,7 +278,7 @@ def _avisar_email_antigo(antigo: str) -> None:
         logger.error("perfil: aviso ao e-mail antigo não entregue")
 
 
-@router.post("/perfil/email/confirmar", dependencies=[Depends(require_associado), Depends(exigir_csrf)])
+@router.post("/perfil/email/confirmar", dependencies=_ESCRITA)
 async def confirmar_troca_email(entrada: ConfirmacaoEntrada, request: Request, ctx: Contexto = Depends(contexto)):
     _exigir_reautenticacao(ctx)
     try:
@@ -299,7 +306,7 @@ async def confirmar_troca_email(entrada: ConfirmacaoEntrada, request: Request, c
 
 
 # ------------------------------------------------------------------- foto
-@router.post("/perfil/foto", dependencies=[Depends(require_associado), Depends(exigir_csrf)])
+@router.post("/perfil/foto", dependencies=_ESCRITA)
 async def enviar_foto(request: Request, ctx: Contexto = Depends(contexto)):
     # Corpo lido SÓ depois de sessão, CSRF e limites (o FastAPI leria um
     # UploadFile antes das dependências).
@@ -337,7 +344,7 @@ async def enviar_foto(request: Request, ctx: Contexto = Depends(contexto)):
     return {"tem_foto": True, "foto_versao": versao}
 
 
-@router.delete("/perfil/foto", dependencies=[Depends(require_associado), Depends(exigir_csrf)])
+@router.delete("/perfil/foto", dependencies=_ESCRITA)
 async def remover_foto(request: Request, ctx: Contexto = Depends(contexto)):
     if not _limite_foto.permitir(ctx.contact_id):
         raise ApiError(429, "limite_taxa")

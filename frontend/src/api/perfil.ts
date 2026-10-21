@@ -18,6 +18,8 @@ export interface Perfil {
   telefone: string | null;
   telefone2: string | null;
   endereco: Endereco | null;
+  /** Edição do cadastro desligada (`HUB_ESCRITA_HABILITADA`): perfil só de leitura, rotas de escrita dão 404. */
+  edicao_disponivel: boolean;
   /** O CRM ainda não aceita endereço pela área (flag/Metadata do hub): mostrar só o aviso. */
   endereco_disponivel: boolean;
   num_contato: string | null;

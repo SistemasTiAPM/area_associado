@@ -8,8 +8,10 @@ Implementado no `mcp_hub` na Fase 2b (19/10/2026, commits `365a531`..`8bb3c43` d
 ## Transporte
 
 - `POST /oauth/token`: `grant_type=client_credentials`, `client_secret_basic`,
-  `scope=ferramentas:ler ferramentas:escrever`. O hub só emite escopos que a conta tem
-  (`invalid_scope` se pedir a mais). Resposta `{access_token, expires_in}`. A cada chamada o
+  `scope=ferramentas:ler`, mais `ferramentas:escrever` só com `HUB_ESCRITA_HABILITADA=true` na
+  área (2026-10-21, pedido do hub). O hub só emite escopos que a conta tem (`invalid_scope` se
+  pedir a mais). Com a flag desligada a área não chama ferramenta de escrita: as rotas respondem
+  404 `recurso_desligado` antes de tocar o hub. Resposta `{access_token, expires_in}`. A cada chamada o
   escopo do token é intersectado com o da conta atual: revogar no painel vale em até 30 s.
 - `POST /api/v1/ferramentas/{nome}` com `{"argumentos": {...}}` e `Authorization: Bearer`.
 - Sucesso: `{"colunas", "linhas", "total", "truncado", "modo_pii", "observacoes"}`; a área lê `linhas`.
@@ -24,7 +26,7 @@ Implementado no `mcp_hub` na Fase 2b (19/10/2026, commits `365a531`..`8bb3c43` d
 | Item | Valor |
 |---|---|
 | Cliente | `area-associado` (`HUB_CLIENT_ID`), segredo em `HUB_CLIENT_SECRET` |
-| Escopos da conta | `ferramentas:ler` e `ferramentas:escrever`. **O de escrita só é marcado em produção depois da P-29** |
+| Escopos da conta | `ferramentas:ler` e `ferramentas:escrever`. **O de escrita só é marcado em produção depois da P-29**; a área só o pede com `HUB_ESCRITA_HABILITADA=true` |
 | Origem permitida | CIDR da `rede_publica` |
 | Grants | **exatos** (curinga não libera escrita), `modo_pii=completo`, nas 4 ferramentas abaixo |
 | Taxa e cota | por conta (antiga P-03, resolvida no hub): `chamadas_por_minuto` (1–6000) e cota PII própria; os padrões por principal (60/min, 500 PII/dia) não servem a um app |

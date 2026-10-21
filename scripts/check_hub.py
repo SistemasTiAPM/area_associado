@@ -3,8 +3,9 @@
 Uso (dentro do container, com HUB_MODE=real):
     docker compose exec area-associado python -m scripts.check_hub [contact_id]
 
-1. Emite o token com `ferramentas:ler ferramentas:escrever` (prova que a conta
-   `area-associado` tem os dois escopos — P-05).
+1. Emite o token com o escopo que a área vai pedir em produção: `ferramentas:ler`,
+   mais `ferramentas:escrever` só com `HUB_ESCRITA_HABILITADA=true` (prova que a
+   conta `area-associado` tem esses escopos — P-02; `escrever` só depois da P-29).
 2. Com um `contact_id` de teste, chama `associado.perfil_consultar` e imprime
    só QUAIS campos vieram (nunca valores), se o endereço está disponível e se
    a resposta veio sem CPF (ADR-0014).
@@ -20,7 +21,7 @@ import httpx
 
 from app.config import get_settings
 from app.dominio.associado import contact_id_valido
-from app.integracoes.hub import ClienteHubReal, HubError, perfil_de_linha
+from app.integracoes.hub import ClienteHubReal, HubError, escopos_do_token, perfil_de_linha
 
 _ESPERADOS = ("nome", "email", "celular", "telefone", "telefone2", "endereco", "endereco_disponivel", "num_contato",
               "crm", "crm_uf", "tipo_associado", "status_associativo", "data_filiacao", "tem_foto")
@@ -48,13 +49,16 @@ def main(argv: list[str]) -> int:
         return 0
     print(f"hub       : {s.effective_hub_base_url} (Host={s.hub_public_host})")
     print(f"client_id : {s.hub_client_id}")
+    escopos = escopos_do_token()
     cliente = _Sonda()
     try:
         cliente._obter_token(renovar=True)
     except HubError as exc:
-        print(f"FALHA: token recusado ({exc.codigo}) — conta sem os dois escopos ou segredo errado", file=sys.stderr)
+        print(f"FALHA: token recusado ({exc.codigo}) — conta sem '{escopos}' (invalid_scope) ou segredo errado",
+              file=sys.stderr)
         return 1
-    print("token     : ok (ferramentas:ler ferramentas:escrever)")
+    print(f"token     : ok ({escopos})")
+    print(f"edição    : {'habilitada' if s.hub_escrita_habilitada else 'desligada (HUB_ESCRITA_HABILITADA=false)'}")
     if len(argv) < 2:
         print("perfil    : -- (informe um contact_id de teste para consultar)")
         return 0
