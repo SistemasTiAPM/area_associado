@@ -30,6 +30,23 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-21 — Hub real em produção, só leitura (P-02 concluída)
+
+**P-02 concluída.** Do lado do hub: provisão, conta `area-associado` com `ferramentas:ler`,
+grants exatos e allowlist da `rede_publica`. Do lado da área: segredo em `HUB_CLIENT_SECRET`
+(entre aspas simples, `.env` em `600`), `HUB_ESCRITA_HABILITADA=false` e, depois do deploy de
+`28798a5`, `HUB_MODE=real`. **P-05 concluída** pelo hub (credencial de escrita, papel Read +
+Write em `contact`, perfil de segurança de coluna); a escrita segue desligada até a P-29.
+
+**Evidências (2026-10-21)**
+
+| Verificação | Resultado |
+|---|---|
+| `scripts/check_hub.py` com o contato sintético `8eb5da36-…` | `token: ok (ferramentas:ler)`, `edição: desligada`, `sem cpf: ok`, `campos: 14/14`, `endereço: indisponível`, `UF do CRM: sigla ok` |
+| Container após `HUB_MODE=real` | `healthy`, `/health` 200, `/db-health` 403 no edge, sem erro no log |
+
+---
+
 ## 2026-10-21 — Escopo do hub conforme a escrita habilitada (pedido do mcp_hub)
 
 Pedido do hub: a conta `area-associado` nasce só com `ferramentas:ler`, mas a área pedia
