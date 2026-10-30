@@ -30,6 +30,105 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-30 — Onda 1 do plano de execução: base transversal da spec v2 (no ar)
+
+**Plano:** `docs/PLANO-EXECUCAO.md` (7 ondas, do mais fácil ao mais problemático), aprovado em 30/10 com
+as decisões DEC-01/02/04/13/22/28/29 (→ ADR-0018 solicitações v2, ADR-0019 serviço de jobs, ADR-0020 limites
+por contagem no banco, ADR-0021 flags v2) e DEC-03 parte de banco (→ ADR-0022 `apm_area_bo`/`apm_area_painel`).
+Executada por cinco frentes paralelas (Vitrine, Maestro+Sentinela, Atlas+Estivador, Integrador, REQUISITOS).
+
+**Entregue (TI do levantamento §12):**
+- **Backend (TI-05, TI-04 parcial, TI-09, TI-13, TI-07, TI-11):** `app/uso.py` com 51 ações e `detalhes` tipados
+  em todas as origens (nomes da spec: `acesso_primeiro`, `home_bloco_clicar`, `uso_registrar`, `carencia_vencer`,
+  `solicitacao_avaliar`, `cancelamento_pedir`, `consentimento_alterar`, `fatura_segunda_via`, `vitais_web`,
+  `erro_js`…; `fatura_pdf_baixar` retirada); `acesso_primeiro` emitido no primeiro login; `exigir_reautenticacao`
+  reutilizável (`CELULAR_EXIGE_REAUTH`, desligada); 7 flags novas em `sql/009_flags_v2.sql`; OpenAPI como artefato
+  (`docs/api/openapi.json`, modelos Pydantic de resposta, `operation_id` estável, verificação no build do
+  `Dockerfile`); catálogo de campanha `utm_*`/`g=A0n` (`frontend/src/lib/campanha.ts` + validação no servidor);
+  teste `AcaoUi` = `ACOES_UI`.
+- **Front (TI-61, TI-62, TI-63, TI-65, TI-69, TI-23, TI-68):** voz §3.3 (sem exclamação, verbo nos botões,
+  "Associado", "Meu valor"), alvos 44 px, `scroll-padding-bottom`, `100dvh`, axe **WCAG 2.2 AA** em todas as rotas,
+  projeto `mobile-360` (WebKit configurado via `E2E_WEBKIT=1`; host sem libs), 10 primitivos puros com Vitest
+  (`SeloEstado`, `Dialogo`, `Accordion`, `Combobox`, `Tabs`, `BarraProgresso`, `Skeleton`, `EstadoErro`,
+  `GrupoOpcoes`, `ImagemSegura`), sub-rotas no shell (`/beneficios/{slug}`, `/solicitacoes/{uuid}`,
+  `/eventos/{id}`; `h1` da página; `pagina_ver` sem dado pessoal), template de teste por tela, LICENSES/errata
+  ADR-0017.
+- **Banco e infra (TI-02, TI-03, TI-78, TI-74, TI-76, TI-12 + Onda 0):** `sql/008_particao_eventos.sql`
+  (partição mensal de `evento_log`/`evento_uso`, 26 partições + `pMAX`, ensaiada em MySQL 8.4.11 com
+  `db_check` real "conforme" e 11 testes `mysql`; sha256 `8c3e26ad6c816391f861ead35acd0a0b2f9c4d0e7cc51e06f6edd2932e6ec493`;
+  **aplicação pelo operador**, PROVISIONAMENTO §2.3); `scripts/db_check.py` com políticas por usuário
+  (`apm_area`, `apm_area_bo`, `apm_area_painel`), falha em tabela da allowlist sem grant, allowlist só de
+  migradas, checagem de partições; compose com `TZ=America/Sao_Paulo`, tmpfs `size=64m,noexec`, pids 256;
+  `scripts/deploy.sh` (tag por sha, healthy, smoke `db_check`/`check_oidc`/`csp_check`/`health`, rollback com
+  `--force-recreate`, `--dry-run`); `scripts/alertas.sh`; `deploy/nginx_porteiro/_00_padrao.conf.example`;
+  `deploy/verificar-pos-reboot.patch.md`; `docs/OPERACAO.md` (P-01, P-36, P-34, P-19, monitor, backup/restore,
+  partições, rotação de chaves, alertas, hub); CUTOVER.md e comentário do vhost atualizados; `csp_check.py`
+  passou a esperar 303 em `/` (raiz redireciona desde 20/10 — era um falso negativo, pego pelo `deploy.sh`).
+- **Hub (TI-47, TI-51 parcial) — `SistemasTiAPM/mcp_hub`:** `associado.situacao` e `associado.historico_associacao`
+  por `contact_id` **sem coluna `cpf`**, `situacao_normalizada` (enum fechado), `statecode`; titular auditado por
+  CPF resolvido internamente e por contato; conta `area-associado-jobs` documentada (RUNBOOK 4b, M-8); M-7 (grant
+  no painel) e M-9 (option set de `alf_status_associativo`) abertas. Na área: `hub.situacao_consultar` +
+  stub, `check_hub` com passo `situacao` (falha se vier `cpf`), CONTRATO-HUB atualizado. **Hub reconstruído e
+  em produção em 30/10** (`db_check` OK; smoke do IdP `check_crm` OK: as duas ferramentas aceitam `contact_id`).
+- **Docs (TI-06):** `REQUISITOS-minha-apm.md` **v0.2** (1 371 → 2 501 linhas; 71 RFs novos; §6 com `sql/008..022`;
+  §7 com 8 status; §8 catálogo unificado; D-15..D-19); ADR-0018..0022 + índice; `PLANO-EXECUCAO.md`;
+  PENDENCIAS (P-41 respondida; Onda 0 como ações do operador); levantamento com 20 TI marcados ✅ e DEC decididas;
+  skill `spec-minha-apm` atualizada.
+
+**Evidências:** pytest na imagem **202 passed / 11 skipped** (`mysql`), `openapi: em dia`; `npm run check`
+em Node 24: typecheck, ESLint e **Vitest 118** verdes; build da imagem (com `npm run check` e verificação do
+OpenAPI) ok; **e2e Playwright 34 passed / 2 skipped** (desktop-1440, mobile-390, mobile-360; 0 violações de
+CSP, 0 violações axe WCAG 2.2 AA em 10 rotas × 3 viewports; MySQL 8.4 descartável com `sql/000..009`);
+`scripts/deploy.sh --sem-pull` → "deploy de 6a20cbf2 concluído" (container recriado com `TZ`/tmpfs/pids,
+healthy, 4 smokes ok); em produção: `check_hub` 14/14 campos sem CPF e passo `situacao` acusando "sem grant"
+(esperado até M-7); `db_check` "conforme" com aviso "sql/008 ainda não aplicada" (esperado).
+
+**Fica com o operador:** M-7 (grant exato de `associado.situacao`/`historico_associacao` à conta
+`area-associado` no painel do hub); `sql/008` e `sql/009` no RDS (snapshot antes; PROVISIONAMENTO §2.3/§2.4);
+P-36, P-01, P-34, P-19, P-61 (`OPERACAO.md` §2–§5); P-59/P-60 (IAM e teste de restauração); WebKit no host
+de e2e (`npx playwright install --with-deps webkit`, root). Próxima: **Onda 2** (Fase 3 ampliada), sem nova
+rodada de decisões.
+
+## 2026-10-29 — Levantamento técnico da especificação funcional v2 da agência
+
+**Entrada:** PDF "MINHA APM _ ESPECIFICAÇÕES.pdf" (*especificação funcional para a TI, v2, 30/09/2026*,
+Comunicação Encantada, 34 páginas) colocado em `docs/` pelo usuário. **Pedido:** só levantamento
+(sem código de produto), separando o que é TI do que depende de terceiro; specs de conhecimento;
+skills de prontidão.
+
+**Entregue (sem commit; o usuário decide):**
+- `docs/spec-v2/ESPECIFICACAO-FUNCIONAL-v2-2026-09-30.pdf` (o original, renomeado para ASCII) e
+  `.md` (transcrição fiel, 15 seções, tabelas e âncoras) + `docs/spec-v2/INDICE-IDS.md` (mapa de
+  P01–P17, B01–B13, A01–A20, tipos 1–6, 8 status, 28 eventos, códigos ACE/HOM/…/F0-0n → spec →
+  REQUISITOS/ADR/código).
+- `docs/LEVANTAMENTO-TECNICO-spec-v2.md`: reconciliação F0–F3 × fases 1–8, checklist do gate F0,
+  páginas P01–P17 e backoffice B01–B13 (escopo novo, decisão do usuário), motor de regras (6 estados,
+  carências, tipos de ativação, máquina de 8 status, cálculo de valor, recomendação v1), dados e
+  analytics (modelo de dados `sql/008+`, catálogo unificado de eventos, indicadores 1–14, LGPD),
+  comunicação A01–A20 × RD Station, 13 integrações e contrato de dados §13.2 campo a campo, RNFs,
+  **46 divergências DIV-nn**, **36 decisões DEC-nn**, **92 tarefas TI-nn** (43 podem começar hoje) e
+  **38 dependências externas EXT-nn**, síntese por persona e rastreabilidade.
+- Método: 3 agentes de inventário (REQUISITOS × spec, código, repositórios irmãos) + 6 análises por
+  persona (Sentinela, Atlas, Maestro, Integrador, Vitrine, Estivador) consolidadas.
+- `docs/PENDENCIAS.md`: P-42 a P-65 (uma por dependência externa nova), roteiro com coluna "F da
+  spec", Fase 3 ampliada e Fase 3b, correção de "sql/007 seed", P-10 e P-15 anotadas.
+- `docs/REQUISITOS-minha-apm.md` §0: aviso da spec v2 e do delta (revisão v0.2 = TI-06).
+- `CLAUDE.md`: spec v2 e levantamento entre os documentos que governam; `WP_MODE` marcado como alvo.
+- Skills de projeto em `.claude/skills/`: `spec-minha-apm` (mapa de conhecimento e precedência),
+  `nova-fase-minha-apm` (checklist de abertura/fechamento de fase), `integracao-terceiro-minha-apm`
+  (roteiro do Integrador).
+- Verificação: script de cobertura (todo ID da spec no índice e no levantamento; todo EXT com P-xx;
+  todo TI com camada/persona/fase; links relativos) — resultado registrado no final do levantamento.
+
+**Decisões do usuário em 29/10:** criar as 3 skills; backoffice levantado como escopo novo com "onde
+vive" em DEC-03; spec versionada em Markdown. Nenhuma decisão anterior reaberta.
+
+**Achados que mudam o próximo plano (Fase 3):** adotar os 8 status da spec já na `sql/008`
+(DEC-01); P14 entra na Fase 3; outbox de comunicação e `notificacao` produzidas desde a Fase 3;
+serviço de jobs nasce agora; verificação pública da carteirinha precisa consultar a situação
+(DIV-13); P-01 (certificado vencido), P-36 e monitor externo são os três itens sem código mais
+urgentes.
+
 ## 2026-10-21 — Hub real em produção, só leitura (P-02 concluída)
 
 **P-02 concluída.** Do lado do hub: provisão, conta `area-associado` com `ferramentas:ler`,

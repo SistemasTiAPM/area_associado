@@ -16,3 +16,5 @@ frontend/dist/
 frontend/test-results/
 frontend/playwright-report/
 app/static/spa/
+# Estado do scripts/deploy.sh (sha da imagem anterior, para rollback).
+.deploy-anterior

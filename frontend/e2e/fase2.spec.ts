@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { auditarAxe, vigiarCsp } from './apoio';
 
 /** Fase 2a — perfil, e-mail com código, foto e carteirinha contra o container real (hub/SMTP stub). */
 
@@ -17,14 +18,6 @@ async function jpeg(page: Page): Promise<Buffer> {
     return tela.toDataURL('image/jpeg', 0.9).split(',')[1] ?? '';
   });
   return Buffer.from(b64, 'base64');
-}
-
-async function vigiarCsp(page: Page): Promise<string[]> {
-  const violacoes: string[] = [];
-  page.on('console', (msg) => {
-    if (/Content Security Policy/i.test(msg.text())) violacoes.push(msg.text());
-  });
-  return violacoes;
 }
 
 async function entrar(page: Page, destino = '/area/perfil') {
@@ -69,6 +62,8 @@ test('perfil: contato, troca de e-mail com código e foto no avatar', async ({ p
   expect(await avatar.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(128);
   await page.getByRole('button', { name: 'Remover foto' }).click();
   await expect(page.locator('header .avatar img')).toHaveCount(0);
+  // Estado final da tela com formulário de e-mail já usado: WCAG 2.2 AA (TI-63).
+  expect(await auditarAxe(page)).toEqual([]);
   expect(violacoes).toEqual([]);
 });
 
@@ -80,6 +75,7 @@ test('carteirinha: QR e verificação pública sem sessão', async ({ page, brow
   await expect(cartao.getByText(/CRM-SP \d+ · na APM desde 2014/)).toBeVisible();
   const qr = cartao.getByRole('img', { name: /QR code/ });
   await expect.poll(() => qr.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  expect(await auditarAxe(page)).toEqual([]);
 
   const url = await page.evaluate(async () => {
     const r = await fetch('/api/v1/carteirinha');

@@ -40,6 +40,7 @@ _ESCOPO_LER = "ferramentas:ler"
 _ESCOPO_ESCREVER = "ferramentas:escrever"
 _RE_FERRAMENTA = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 _RE_UF = re.compile(r"^[A-Z]{2}$")
+_RE_GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _CORPO_MAX = 2 * 1024 * 1024  # foto 512x512 em base64 cabe com folga
 
 
@@ -103,8 +104,38 @@ class PerfilCrm:
     extras: dict[str, Any] = field(default_factory=dict)
 
 
+SITUACOES_NORMALIZADAS = frozenset({"ativo", "suspenso", "cancelado", "outro"})
+
+
+@dataclass
+class SituacaoCrm:
+    """Campos de `associado.situacao` (docs/CONTRATO-HUB.md). Sem CPF, sem nome, sem contato.
+
+    `situacao_normalizada` é o enum fechado do hub (`ativo|suspenso|cancelado|outro`); valor
+    fora do enum vira `outro` aqui (fail-closed — nunca "ativo" por engano). `statecode` é o
+    estado do REGISTRO no CRM (0 ativo, 1 inativo): quem decide acesso confere os dois.
+    """
+
+    contact_id: str | None = None
+    status_associativo: str | None = None
+    status_associativo_codigo: int | None = None
+    situacao_normalizada: str = "outro"
+    tipo_associado: str | None = None
+    data_filiacao: str | None = None
+    statecode: int | None = None
+    associacao_status: str | None = None
+    associacao_status_codigo: int | None = None
+    associacao_data: str | None = None
+
+    @property
+    def ativa(self) -> bool:
+        """Associado ativo com registro ativo no CRM — a única combinação que vale "ativo"."""
+        return self.situacao_normalizada == "ativo" and self.statecode == 0
+
+
 class ClienteHub(Protocol):
     def perfil_consultar(self, contact_id: str) -> PerfilCrm | None: ...
+    def situacao_consultar(self, contact_id: str) -> SituacaoCrm | None: ...
     def contato_atualizar(self, contact_id: str, campos: dict[str, Any]) -> list[str]: ...
     def foto_obter(self, contact_id: str) -> bytes | None: ...
     def foto_atualizar(self, contact_id: str, jpeg: bytes | None) -> None: ...
@@ -121,6 +152,43 @@ def _uf(valor: Any) -> str | None:
     """Só sigla de 2 letras; qualquer outra coisa vira None — nunca um corte ("Sã")."""
     texto = _texto(valor, 40)
     return texto.upper() if texto and _RE_UF.match(texto.upper()) else None
+
+
+def _guid(valor: Any) -> str | None:
+    """GUID do Dataverse em minúsculas, ou None (nunca um texto livre do hub como identificador)."""
+    texto = valor.strip().lower() if isinstance(valor, str) else ""
+    return texto if _RE_GUID.match(texto) else None
+
+
+def _inteiro(valor: Any) -> int | None:
+    """Código de option set: int (ou string numérica do gateway). bool e lixo viram None."""
+    if isinstance(valor, bool) or valor is None:
+        return None
+    if isinstance(valor, int):
+        return valor
+    if isinstance(valor, str) and valor.strip().lstrip("-").isdigit():
+        return int(valor.strip())
+    return None
+
+
+def situacao_de_linha(linha: dict[str, Any]) -> SituacaoCrm:
+    normalizada = linha.get("situacao_normalizada")
+    if normalizada not in SITUACOES_NORMALIZADAS:
+        if normalizada is not None:
+            logger.warning("hub: situacao_normalizada fora do enum (tratada como 'outro') — revisar contrato")
+        normalizada = "outro"
+    return SituacaoCrm(
+        contact_id=_guid(linha.get("contact_id")),
+        status_associativo=_texto(linha.get("status_associativo"), 40),
+        status_associativo_codigo=_inteiro(linha.get("status_associativo_codigo")),
+        situacao_normalizada=normalizada,
+        tipo_associado=_texto(linha.get("tipo_associado"), 40),
+        data_filiacao=_texto(linha.get("data_filiacao"), 10),
+        statecode=_inteiro(linha.get("statecode")),
+        associacao_status=_texto(linha.get("associacao_status"), 40),
+        associacao_status_codigo=_inteiro(linha.get("associacao_status_codigo")),
+        associacao_data=_texto(linha.get("associacao_data"), 10),
+    )
 
 
 def perfil_de_linha(linha: dict[str, Any]) -> PerfilCrm:
@@ -254,6 +322,11 @@ class ClienteHubReal:
     def perfil_consultar(self, contact_id: str) -> PerfilCrm | None:
         linhas = self.chamar("associado.perfil_consultar", {"contact_id": contact_id})
         return perfil_de_linha(linhas[0]) if linhas else None
+
+    def situacao_consultar(self, contact_id: str) -> SituacaoCrm | None:
+        """`associado.situacao` por contact_id: 1 linha sem dado de contato; None = inexistente no CRM."""
+        linhas = self.chamar("associado.situacao", {"contact_id": contact_id})
+        return situacao_de_linha(linhas[0]) if linhas else None
 
     def contato_atualizar(self, contact_id: str, campos: dict[str, Any]) -> list[str]:
         linhas = self.chamar("associado.contato_atualizar", {"contact_id": contact_id, **campos}, escrita=True)

@@ -9,12 +9,27 @@
 > (`area_associado`) no RDS `mysql-producao`, com **TLS verificado** e **UPDATE só por tabela**.
 
 **Documentos que governam o projeto**
-- `docs/SPEC-minha-apm.md` — estrutura, texto e comportamento da área do associado; o **visual**
-  (cor, fonte, forma, movimento) segue os mockups da agência (ADR-0017). Em conflito com
-  segurança, vence a Sentinela (regra 13).
+- `docs/spec-v2/ESPECIFICACAO-FUNCIONAL-v2-2026-09-30.md` — **especificação funcional v2 da
+  agência (30/09/2026)**: fases F0–F3, páginas P01–P17, backoffice B01–B13, tipos de ativação,
+  8 status de solicitação, elegibilidade/carências, cálculo de valor, eventos de uso, gatilhos
+  A01–A20, integrações, CSV do plano B, RNFs e governança. É a fonte **funcional**; índice de
+  identificadores em `docs/spec-v2/INDICE-IDS.md`.
+- `docs/LEVANTAMENTO-TECNICO-spec-v2.md` — leitura técnica da spec v2 (29/10/2026): estado de
+  cada item, listas **TI-nn** (só TI) e **EXT-nn** (dependem de terceiro), divergências DIV-nn e
+  decisões pendentes DEC-nn. Toda fase nova parte dele.
+- `docs/PLANO-EXECUCAO.md` — ordem de execução em **7 ondas**, do mais fácil ao mais problemático
+  (30/10/2026): Onda 0 operador, Onda 1 base transversal (feita em 30/10), Onda 2 = Fase 3 ampliada
+  (solicitações com 8 status, P14, jobs, outbox), 3 = P13/LGPD, 4 = catálogo/elegibilidade/home/Meu
+  valor, 5 = integrações reais, 6 = backoffice, 7 = F2/F3. Cada onda tem plano próprio.
+- `docs/SPEC-minha-apm.md` — descrição do protótipo navegável (01/10/2026): estrutura, texto e
+  comportamento de UI onde a spec v2 não detalha; o **visual** (cor, fonte, forma, movimento)
+  segue os mockups da agência (ADR-0017). Em conflito com segurança, vence a Sentinela (regra 13).
 - `docs/REQUISITOS-minha-apm.md` — requisitos RF/RNF, integrações, modelo de dados, máquina de
-  estados das solicitações, eventos de uso, perfil editável, flags, lacunas.
-- `docs/adr/` — decisões de arquitetura (ADR-0001..0014). Mudança de decisão = ADR nova.
+  estados das solicitações, eventos de uso, perfil editável, flags, lacunas (v0.1, anterior à
+  spec v2; o delta está no levantamento).
+- `docs/adr/` — decisões de arquitetura (ADR-0001..0022; 0018 solicitações v2 com 8 status, 0019 serviço
+  de jobs, 0020 limites por contagem no banco, 0021 flags v2, 0022 usuário de banco do backoffice).
+  Mudança de decisão = ADR nova.
 - `docs/PENDENCIAS.md` e `docs/CONCLUIDO.md` — **toda entrega atualiza os dois**: item resolvido
   sai de PENDENCIAS e entra em CONCLUIDO com data e evidência; descoberta nova entra em PENDENCIAS.
 
@@ -36,7 +51,7 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 | **CSRF** | [atual] Form field `csrf` (`/auth/*`); na API, `X-CSRF-Token` + `Sec-Fetch-Site: same-origin` (ou `Origin` = `PUBLIC_BASE_URL`) + `Content-Type` JSON/multipart | `app/csrf.py` (`exigir_csrf`). Token entregue em `GET /api/v1/sessao`. Recusa vai para `evento_log` (`csrf_recusado`). |
 | **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials` com `ferramentas:ler` (+ `ferramentas:escrever` só com `HUB_ESCRITA_HABILITADA=true`, depois da P-29), REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`, implementado no hub na Fase 2b (`SistemasTiAPM/mcp_hub` `8bb3c43`; provisão P-02, P-05, P-29). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Escrita desligada = perfil só de leitura e rotas de escrita em 404 `recurso_desligado` sem chamar o hub. Token do hub só em memória de processo. Timeouts `HUB_TIMEOUT` (leitura) e `HUB_TIMEOUT_ESCRITA` (30 s). `HUB_MODE=real\|stub` (stub proibido em produção). Smoke: `scripts/check_hub.py`. ADR-0002. |
 | **Site WordPress** | MySQL `portal_apm` (Locaweb), usuário somente leitura próprio | [alvo Fase 5] `app/integracoes/portal_wp.py`, **só no serviço de jobs**; o processo web nunca conecta na Locaweb. Cache em `noticia_cache`/`evento_cache`. ADR-0006, P-07. |
-| **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [alvo Fase 3] Sincronização do portal, outbox de solicitações para o CRM, status de volta, cache de perfil. Rastro em `job_execucao`. |
+| **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [alvo Onda 2 / Fase 3] Agendador in-process, `GET_LOCK` por job, `job_execucao`, `JOBS_APLICAR` (dry-run por padrão), conta própria no hub (ADR-0019). Outbox de solicitações e de comunicação, `sem_retorno`, carência, sincronização do portal, cache de perfil. |
 | **Imagens** | Pillow 13 (foto de perfil), segno (QR em SVG) | [atual] Em memória, magic bytes, `MAX_IMAGE_PIXELS`, 512×512 para o CRM (`entityimage`), miniatura 128×128 local. ADR-0005. |
 | **E-mail** | SMTP com STARTTLS (`app/integracoes/email.py`), `SMTP_MODE=real\|stub` | [atual] Código de troca de e-mail e aviso ao endereço antigo (ADR-0015). Stub proibido em produção; credencial própria pendente (P-27). |
 | **ORM / Driver** | SQLAlchemy 2.0 + PyMySQL 1.1 | [atual] `ssl_ca=/etc/ssl/rds/global-bundle.pem`, `ssl_verify_cert`, `ssl_verify_identity`. Bundle baixado no `Dockerfile`. |
@@ -132,7 +147,7 @@ JSON, nunca 303.
    localmente como se o CRM tivesse aceitado.
 6. **`AUTH_MODE=stub` jamais em produção.** O validador do `Settings` é a lei: com `APP_ENV=production`
    o container não sobe. Stub exige `DEV_STUB_TOKEN` (≥32), grava `amr=["stub"]` e exibe faixa.
-   O mesmo vale para `HUB_MODE=stub` e `WP_MODE=stub`.
+   O mesmo vale para `HUB_MODE=stub` e, quando o `Settings` ganhar `WP_MODE` (Fase 5), para `WP_MODE=stub`.
 7. **`same_site="lax"`, não `strict`**: o callback é navegação cross-site; `strict` quebra o login
    com `state_mismatch` silencioso.
 8. **Trilhas são só INSERT** (privilégio): `evento_log`, `evento_uso`, `solicitacao_evento`,
@@ -216,5 +231,5 @@ Invariantes: código pronto para produção (erros, bordas, segurança, desempen
 **Sentinela tem precedência**; mudança fora do escopo aprovado exige novo plano.
 
 ---
-*Criado em 2026-10-01. Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
+*Criado em 2026-10-01. Revisado em 2026-10-30 (plano de execução em 7 ondas; ADR-0018..0022; Onda 1 executada). Revisado em 2026-10-29 (spec v2 da agência e levantamento técnico como documentos que governam; skills de prontidão em `.claude/skills/`). Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
 regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Revisado em 2026-10-19 (Fase 2b: hub implementado, regra 21 com o endereço e a escrita incerta). Revisado em 2026-10-20 (landing de entrada; visual dos mockups da agência, ADR-0017, regra 13). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*

@@ -48,9 +48,11 @@ server {
 
     # ---------------------------------------------------------------- #
     # FASE DE CONSTRUCAO — PUBLICO desde 2026-10-19 (a agencia acompanha #
-    # o progresso). Quem entra na area e so quem tem o DEV_STUB_TOKEN; o #
-    # hub e o SMTP sao simulados (nenhum dado real). Remover o noindex   #
-    # no cutover (docs/CUTOVER.md).                                      #
+    # o progresso). Desde 2026-10-20 a entrada e pelo Login APM          #
+    # (AUTH_MODE=oidc, qualquer associado; o DEV_STUB_TOKEN nao existe   #
+    # mais). Hub real so leitura desde 21/10; SMTP simulado e faixa de   #
+    # demonstracao (docs/ACESSO-CONSTRUCAO.md). Remover o noindex no     #
+    # cutover (docs/CUTOVER.md).                                         #
     # ---------------------------------------------------------------- #
     add_header X-Robots-Tag "noindex, nofollow" always;
 

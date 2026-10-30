@@ -1,0 +1,48 @@
+# =====================================================================
+# Catch-all da porta 443 — nginx_porteiro (P-34 / TI-71).
+# Copiar para /home/ubuntu/nginx-proxy/sites-enabled/_00_padrao.conf e aplicar:
+#   docker exec nginx_porteiro nginx -t && docker exec nginx_porteiro nginx -s reload
+#
+# POR QUE: sem um default_server explícito na 443, qualquer nome que aponte
+# para esta EC2 sem vhost próprio (DNS criado antes do vhost, IP direto,
+# subdomínio antigo, varredura por IP) cai no PRIMEIRO server da 443 em
+# ordem alfabética — hoje apm_parceiros.conf — e é servido com o conteúdo
+# de parceiros.apm.org.br. Este bloco fecha a conexão sem resposta (444):
+# pré-requisito para qualquer DNS novo (`hml-minha`, `admin`) e para a
+# homologação (TI-79).
+#
+# O QUE NÃO MUDA: a porta 80 continua sem default_server explícito — o
+# primeiro server da 80 (apm_parceiros.conf) permanece o default, como
+# exige o comentário de _00_seguranca.conf e do totalpass.conf (health
+# check sem Host). Este arquivo NÃO declara `listen 80`.
+#
+# ORDEM DE CARGA: "_00_padrao" ordena antes de "_00_seguranca" e de todos
+# os vhosts; como só há `server` aqui (nenhum `map`), isso não interfere
+# nos mapas globais. `default_server` é o que decide, não a ordem.
+#
+# TLS: reaproveita o include dos demais vhosts (certificado de origem).
+# Quem chega sem SNI conhecido recebe o certificado *.apm.org.br e, em
+# seguida, a conexão fechada. Alternativa mais seca para nginx >= 1.19.4
+# (o porteiro é 1.31): trocar o include por `ssl_reject_handshake on;`,
+# que recusa o handshake sem apresentar certificado — não adotada agora
+# para o comportamento ficar igual ao dos outros 7 vhosts e o log
+# continuar contando as tentativas (status 444).
+#
+# CONFERIR DEPOIS DO RELOAD (do próprio host; o IP é o da EC2):
+#   curl -sk -o /dev/null -w '%{http_code}\n' https://52.67.3.198/            # 000 (conexão fechada)
+#   curl -sk -o /dev/null -w '%{http_code}\n' -H 'Host: nao-existe.apm.org.br' \
+#        --resolve nao-existe.apm.org.br:443:52.67.3.198 https://nao-existe.apm.org.br/   # 000
+#   curl -s  -o /dev/null -w '%{http_code}\n' https://minha.apm.org.br/health            # 200 (intacto)
+#   docker exec nginx_porteiro nginx -T | grep -c "default_server"              # 1
+# =====================================================================
+
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    include /etc/nginx/conf.d/_ssl.inc;
+    server_name _;
+
+    # 444: fecha sem devolver nada (nem corpo, nem cabeçalho) — mesma
+    # resposta usada em _00_seguranca.conf para varredura.
+    return 444;
+}

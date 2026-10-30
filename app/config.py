@@ -138,6 +138,11 @@ class Settings(BaseSettings):
     carteirinha_hmac_key: str | None = Field(None, alias="CARTEIRINHA_HMAC_KEY")
     perfil_cache_ttl: int = Field(86400, alias="PERFIL_CACHE_TTL")
     reauth_max_idade: int = Field(900, alias="REAUTH_MAX_IDADE")
+    # Step-up também para trocar o CELULAR (`PUT /perfil/contato`). Nasce
+    # desligado: ligar no dia em que o IdP passar a mandar OTP por celular —
+    # a partir daí trocar o número é trocar o canal de recuperação de senha
+    # (mesmo raciocínio da ADR-0015 para o e-mail; TI-09).
+    celular_exige_reauth: bool = Field(False, alias="CELULAR_EXIGE_REAUTH")
     foto_max_bytes: int = Field(5 * 1024 * 1024, alias="FOTO_MAX_BYTES")
     email_codigo_ttl: int = Field(600, alias="EMAIL_CODIGO_TTL")
 

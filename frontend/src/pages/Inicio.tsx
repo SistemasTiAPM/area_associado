@@ -39,12 +39,14 @@ export function Inicio() {
           <p className="hero-inicio__texto">
             Aqui você acompanha o que a APM coloca à sua disposição, em um só lugar.
           </p>
+          {/* Um único botão principal por bloco; a ação secundária vira link de texto (spec v2 §3.2). */}
           <div className="botoes">
             <Link to="/carteirinha" className="botao botao--claro">
               Ver minha carteirinha
             </Link>
-            <Link to="/perfil" className="botao botao--vidro vidro--escuro">
-              Meu perfil
+            <Link to="/perfil" className="link-texto link-texto--claro">
+              Atualizar meu perfil
+              <Icon nome="seta" tamanho={14} />
             </Link>
           </div>
         </div>

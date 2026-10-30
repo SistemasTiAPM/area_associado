@@ -2,8 +2,27 @@ import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
-import type { Sessao } from '../api/tipos';
+import type { ChaveFlag, Sessao } from '../api/tipos';
 import { App } from '../App';
+
+/** Todas as flags conhecidas, desligadas (regra 19). O typecheck falha se `ChaveFlag` ganhar uma chave sem entrada aqui. */
+export const FLAGS_DESLIGADAS: Record<ChaveFlag, boolean> = {
+  mensalidade_zero: false,
+  fatura_valor: false,
+  patrocinio: false,
+  clube_economia: false,
+  comunidade_posts: false,
+  wallet: false,
+  erp_financeiro: false,
+  totalpass: false,
+  notificacoes: false,
+  encaminhamento_parceiro: false,
+  reservas: false,
+  inscricoes: false,
+  comunicacao_outbox: false,
+  cancelamento_online: false,
+  lgpd_consentimentos: false,
+};
 
 export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flags' | 'config'>> & {
   associado?: Partial<Sessao['associado']>;
@@ -28,17 +47,7 @@ export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flag
       foto_versao: null,
       ...parcial.associado,
     },
-    flags: {
-      mensalidade_zero: false,
-      fatura_valor: false,
-      patrocinio: false,
-      clube_economia: false,
-      comunidade_posts: false,
-      wallet: false,
-      erp_financeiro: false,
-      totalpass: false,
-      ...parcial.flags,
-    },
+    flags: { ...FLAGS_DESLIGADAS, ...parcial.flags },
     config: { whatsapp: '551131886200', show_whatsapp: true, animations: true, ...parcial.config },
   };
 }

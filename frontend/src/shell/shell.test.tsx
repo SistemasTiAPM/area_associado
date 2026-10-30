@@ -13,19 +13,20 @@ describe('shell da Minha APM', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Início' })).toBeInTheDocument();
   });
 
-  it('flags desligadas escondem Fatura (menu e rota) e o bloco Mensalidade Zero', async () => {
+  it('flags desligadas escondem Meu valor (menu e rota) e o bloco Mensalidade Zero', async () => {
     montarApp('/fatura');
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' });
-    expect(within(menu).queryByRole('link', { name: /Fatura de valor/ })).toBeNull();
+    expect(within(menu).queryByRole('link', { name: /Meu valor/ })).toBeNull();
     expect(screen.getByRole('heading', { level: 1, name: 'Página não encontrada' })).toBeInTheDocument();
     expect(screen.queryByText('Mensalidade Zero ativa')).toBeNull();
     expect(screen.queryByText(/patrocínio ativo/)).toBeNull();
   });
 
-  it('flag ligada mostra a Fatura no menu e a pill no header', async () => {
+  it('flag ligada mostra Meu valor no menu e a pill no header', async () => {
     montarApp('/fatura', fabricarSessao({ flags: { fatura_valor: true, mensalidade_zero: true } }));
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' });
-    expect(within(menu).getByRole('link', { name: /Fatura de valor/ })).toHaveAttribute('aria-current', 'page');
+    expect(within(menu).getByRole('link', { name: /Meu valor/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('heading', { level: 1, name: 'Meu valor' })).toBeInTheDocument();
     expect(screen.getByText('Mensalidade Zero ativa')).toBeInTheDocument();
   });
 
@@ -105,6 +106,16 @@ describe('shell da Minha APM', () => {
     });
     expect(dialogo).not.toHaveClass('drawer--aberto');
     expect(hamburguer).toHaveFocus();
+  });
+
+  it('voz §3.3: hero da Início com um único botão principal e ação secundária como link de texto', async () => {
+    montarApp('/');
+    const hero = await screen.findByRole('region', { name: /Olá, Telma/ });
+    const botoes = within(hero).getAllByRole('link');
+    expect(botoes.map((b) => b.textContent?.trim())).toEqual(['Ver minha carteirinha', 'Atualizar meu perfil']);
+    expect(botoes.filter((b) => b.classList.contains('botao'))).toHaveLength(1);
+    expect(botoes[1]).toHaveClass('link-texto');
+    expect(hero.textContent).not.toMatch(/!/);
   });
 
   it('registra pagina_ver no analytics', async () => {

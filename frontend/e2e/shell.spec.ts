@@ -1,12 +1,10 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { auditarAxe, ehMobile, entrar, semRolagemHorizontal, vigiarCsp } from './apoio';
 
 /**
  * Critérios de aceite da Fase 1 (REQUISITOS RF-SH-*, RF-AU-*, RNF-01/10/13/20)
  * contra o container real em modo stub.
  */
-
-const TOKEN = process.env.E2E_STUB_TOKEN ?? '';
 
 const ROTAS = [
   ['/area', 'Início'],
@@ -19,41 +17,6 @@ const ROTAS = [
   ['/area/perfil', 'Meu perfil'],
   ['/area/solicitacoes', 'Minhas solicitações'],
 ] as const;
-
-/** Coleta violações de CSP antes de qualquer script da página (RNF-01). */
-async function vigiarCsp(page: Page): Promise<string[]> {
-  const violacoes: string[] = [];
-  await page.exposeFunction('__registrarViolacaoCsp', (v: string) => violacoes.push(v));
-  await page.addInitScript(() => {
-    document.addEventListener('securitypolicyviolation', (e) => {
-      (window as unknown as { __registrarViolacaoCsp: (v: string) => void }).__registrarViolacaoCsp(
-        `${e.violatedDirective} ${e.blockedURI}`,
-      );
-    });
-  });
-  page.on('console', (msg) => {
-    if (/Content Security Policy/i.test(msg.text())) violacoes.push(msg.text());
-  });
-  return violacoes;
-}
-
-async function entrar(page: Page, tipo = 'Efetivo', destino = '/area') {
-  expect(TOKEN, 'defina E2E_STUB_TOKEN').not.toBe('');
-  await page.goto(destino);
-  await expect(page).toHaveURL(/\/auth\/login\?next=/);
-  await page.getByLabel('Token de construção').fill(TOKEN);
-  await page.getByLabel('Nome').fill('TELMA NOGUEIRA');
-  await page.getByLabel('E-mail').fill('telma@example.org');
-  await page.getByLabel('Tipo de associado (persona)').selectOption(tipo);
-  await page.getByLabel('CPF (apenas para a máscara)').fill('12345678901');
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-}
-
-async function semRolagemHorizontal(page: Page) {
-  const larguras = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
-  expect(larguras[0]).toBeLessThanOrEqual(larguras[1] ?? 0);
-}
 
 test('login stub → saudação, 9 rotas pelo URL com recarga, sem violação de CSP', async ({ page }) => {
   const violacoes = await vigiarCsp(page);
@@ -117,23 +80,72 @@ test('navegação pelo menu (desktop) ou drawer + bottom-nav (mobile)', async ({
     await drawer.getByRole('link', { name: 'Congresso e eventos' }).click();
     await expect(drawer).toBeHidden();
     await expect(page.getByRole('heading', { level: 1, name: 'Congresso e eventos' })).toBeVisible();
-    // Busca em linha inteira e conteúdo com reserva para a bottom-nav (spec, 390 px).
+    // Busca em linha inteira (ocupa a largura útil: viewport − margens do shell e do cabeçalho).
     const busca = await page.getByRole('search').boundingBox();
-    expect(busca?.width ?? 0).toBeGreaterThan(340);
+    const largura = page.viewportSize()?.width ?? 390;
+    expect(busca?.width ?? 0).toBeGreaterThan(largura - 60);
     await semRolagemHorizontal(page);
   }
 });
 
-test('acessibilidade (axe) sem violações em Início, Benefícios e Carteirinha', async ({ page }) => {
+test('acessibilidade (axe, WCAG 2.2 AA) sem violações em todas as rotas, inclusive não encontrada', async ({ page }) => {
   await entrar(page);
-  for (const caminho of ['/area', '/area/beneficios', '/area/carteirinha', '/area/perfil']) {
+  for (const [caminho] of [...ROTAS, ['/area/nao-existe', 'Página não encontrada']] as const) {
+    await page.goto(caminho);
+    expect(await auditarAxe(page), caminho).toEqual([]);
+  }
+});
+
+test('mobile: Tab chega ao último controle do conteúdo sem ficar sob a barra inferior (WCAG 2.2 2.4.11)', async ({ page }, info) => {
+  test.skip(!ehMobile(info.project.name), 'barra inferior só existe abaixo de 900 px');
+  await entrar(page, 'Efetivo', '/area/perfil');
+  await expect(page.getByText(/Carregando/)).toHaveCount(0);
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === 'finished'));
+  const barra = await page.getByRole('navigation', { name: 'Atalhos' }).boundingBox();
+  expect(barra).not.toBeNull();
+
+  // Tab a partir do h1 até o foco sair do <main>; em cada passo o elemento focado
+  // precisa estar inteiro acima da barra inferior fixa (scroll-padding-bottom).
+  // Os controles do cabeçalho (busca, perfil) vêm antes do <main> na ordem do DOM: o laço
+  // ignora o foco fora do conteúdo até entrar nele e só para quando sai depois de ter entrado.
+  await page.getByRole('heading', { level: 1 }).focus();
+  let dentro = 0;
+  let entrou = false;
+  for (let i = 0; i < 80; i += 1) {
+    await page.keyboard.press('Tab');
+    const foco = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || !document.getElementById('conteudo')?.contains(el)) return null;
+      const r = el.getBoundingClientRect();
+      return { bottom: r.bottom, top: r.top, inner: window.innerHeight, tag: el.tagName, texto: (el.textContent ?? '').trim().slice(0, 40) };
+    });
+    if (foco === null) {
+      if (entrou) break;
+      continue;
+    }
+    entrou = true;
+    dentro += 1;
+    expect(foco.bottom, `${foco.tag} "${foco.texto}" ficou sob a barra inferior`).toBeLessThanOrEqual((barra?.y ?? 0) + 1);
+    expect(foco.top).toBeGreaterThanOrEqual(0);
+  }
+  expect(dentro, 'o Tab precisa percorrer controles dentro do conteúdo').toBeGreaterThan(3);
+});
+
+test('reflow em celular: nenhuma rota rola na horizontal, nem com o drawer aberto', async ({ page }, info) => {
+  test.skip(!ehMobile(info.project.name), 'reflow é critério do celular (spec v2 §14, 360 px)');
+  await entrar(page);
+  for (const [caminho] of ROTAS) {
     await page.goto(caminho);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByText(/Carregando/)).toHaveCount(0);
-    // Mede o estado final: no meio da entrada (opacidade < 1) o contraste calculado cai.
-    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === 'finished'));
-    const resultado = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-    expect(resultado.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+    await semRolagemHorizontal(page);
+  }
+  await page.getByRole('button', { name: 'Abrir menu' }).click();
+  await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible();
+  await semRolagemHorizontal(page);
+  // Alvos mínimos de 44 px nos controles da barra inferior e nos botões (spec v2 §14).
+  for (const aba of await page.getByRole('navigation', { name: 'Atalhos' }).getByRole('link').all()) {
+    const caixa = await aba.boundingBox();
+    expect(caixa?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
 });
 

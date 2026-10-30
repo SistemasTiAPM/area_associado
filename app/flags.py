@@ -33,6 +33,15 @@ FLAGS_CONHECIDAS: tuple[str, ...] = (
     "wallet",
     "erp_financeiro",
     "totalpass",
+    # v2 (ADR-0021, sql/009): tipos de ativação e módulos da spec v2 que
+    # dependem de fonte/terceiro ou de parecer. Nascem desligadas.
+    "notificacoes",            # P15 sino e central de notificações (DEC-08)
+    "encaminhamento_parceiro",  # tipo 2: solicitação encaminhada ao parceiro (DEC-04, EXT-12)
+    "reservas",                # tipo 4: reserva com disponibilidade do parceiro (F2)
+    "inscricoes",              # tipo 5: inscrição real em evento (EXT-13)
+    "comunicacao_outbox",      # outbox de comunicação → RD Station (DEC-18, P-46)
+    "cancelamento_online",     # P14 pedido de cancelamento pela área (A16)
+    "lgpd_consentimentos",     # P13 consentimentos, exportação e exclusão (P-54)
 )
 
 _lock = threading.Lock()

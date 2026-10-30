@@ -105,6 +105,31 @@
   --aviso-borda: #f0dcae;
   --erro-bg: #fdecea;
   --erro-fg: #a12d1a;
+  --erro-borda: #f3c4bd;
+  --destrutivo: #a12d1a;
+  --destrutivo-hover: #7f2211;
+
+  /* ---- Esqueleto de carregamento (Skeleton) ---- */
+  --skeleton-base: rgba(0, 65, 101, 0.08);
+  --skeleton-brilho: rgba(255, 255, 255, 0.65);
+
+  /* ---- Selos de estado de elegibilidade (spec v2 §8.1; texto + ícone, nunca só cor) ---- */
+  --selo-disponivel-bg: var(--mint-100);
+  --selo-disponivel-fg: var(--green-700);
+  --selo-ativo-bg: var(--navy-900);
+  --selo-ativo-fg: var(--branco);
+  --selo-libera-bg: var(--azul-100);
+  --selo-libera-fg: var(--azul-texto);
+  --selo-exclusivo-bg: var(--gray-100);
+  --selo-exclusivo-fg: var(--ink-700);
+  --selo-suspenso-bg: var(--rose-100);
+  --selo-suspenso-fg: var(--rose-texto);
+  --selo-regiao-bg: var(--gray-100);
+  --selo-regiao-fg: var(--ink-700);
+  --selo-novo-bg: var(--amber-100);
+  --selo-novo-fg: var(--amber-texto);
+  --selo-patrocinado-bg: var(--branco);
+  --selo-patrocinado-fg: var(--ink-700);
 
   /* ---- Tipografia ---- */
   --fonte-base: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

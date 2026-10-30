@@ -55,6 +55,12 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY app ./app
 COPY scripts ./scripts
+# TI-07: o contrato OpenAPI versionado (docs/api/openapi.json) tem de bater com o
+# código. O script monta o app com ambiente fictício (APP_ENV=test, sem rede nem
+# banco) e sai com erro se divergir — a imagem não é construída com contrato velho.
+# Regenerar: `python -m scripts.openapi_export` (docstring do script).
+COPY docs/api/openapi.json /tmp/openapi.json
+RUN python -m scripts.openapi_export --verificar /tmp/openapi.json && rm -f /tmp/openapi.json
 # Build da SPA (estágio 1) servido pelo FastAPI em /static/spa (index em /area).
 COPY --from=frontend /frontend/dist ./app/static/spa
 

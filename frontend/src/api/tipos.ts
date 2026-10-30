@@ -33,7 +33,14 @@ export type ChaveFlag =
   | 'comunidade_posts'
   | 'wallet'
   | 'erp_financeiro'
-  | 'totalpass';
+  | 'totalpass'
+  | 'notificacoes'
+  | 'encaminhamento_parceiro'
+  | 'reservas'
+  | 'inscricoes'
+  | 'comunicacao_outbox'
+  | 'cancelamento_online'
+  | 'lgpd_consentimentos';
 
 /** Corpo de erro único da API (REQUISITOS §3.0). */
 export interface CorpoErro {

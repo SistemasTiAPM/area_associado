@@ -18,6 +18,7 @@
   display: grid;
   grid-template-columns: var(--sidebar-largura) minmax(0, 1fr);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .principal {
@@ -30,6 +31,7 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   padding: 18px 0 18px 14px;
 }
 
@@ -401,8 +403,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -586,6 +588,7 @@
   display: grid;
   place-items: center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 24px;
   text-align: center;
 }
@@ -610,6 +613,13 @@
 
 /* ============================================================ < 900 px */
 @media (max-width: 899.98px) {
+  /* WCAG 2.2 2.4.11 (foco não obscurecido): barra inferior (52 + 12 + 6·2 px) e FAB da
+     Central (48 px em bottom 92 px) cobrem o fim da página. O scroll-padding faz o
+     navegador rolar o elemento focado para cima dessa faixa (TI-62). */
+  html {
+    scroll-padding-bottom: calc(156px + env(safe-area-inset-bottom));
+  }
+
   .shell {
     grid-template-columns: minmax(0, 1fr);
   }

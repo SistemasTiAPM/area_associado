@@ -29,15 +29,22 @@ Pendências referenciadas (P-xx) estão no plano de implementação; as regras c
 | [ADR-0015](0015-troca-de-email-com-codigo-e-reautenticacao.md) | Troca de e-mail com código e reautenticação | Aceita | 2026-10-17 |
 | [ADR-0016](0016-persona-incompleta-recusa-login.md) | Cadastro sem tipo ou situação recusa o login | Aceita | 2026-10-17 |
 | [ADR-0017](0017-mockup-da-agencia-como-referencia-visual.md) | Mockups da agência como referência visual | Aceita | 2026-10-20 |
+| [ADR-0018](0018-solicitacoes-v2-oito-status.md) | Solicitações v2: oito status da spec, marcador `sem_retorno`, atores (adenda à 0003) | Aceita | 2026-10-30 |
+| [ADR-0019](0019-servico-de-jobs-in-process.md) | Serviço de jobs `area-associado-jobs` com agendador in-process, `GET_LOCK`, `job_execucao`, dry-run | Aceita | 2026-10-30 |
+| [ADR-0020](0020-limites-de-negocio-por-contagem-no-banco.md) | Limites de negócio por contagem no banco; janela por minuto em memória; sem Redis | Aceita | 2026-10-30 |
+| [ADR-0021](0021-feature-flags-v2.md) | Feature flags v2: chaves novas da spec v2 (adenda à 0007) | Aceita | 2026-10-30 |
+| [ADR-0022](0022-usuario-de-banco-do-backoffice.md) | Usuário de banco próprio do backoffice (`apm_area_bo`) e só-leitura dos painéis | Aceita | 2026-10-30 |
 
 ## Mapa de dependências
 
 ```
 0001 SPA ──────────────── 0013 CSP ──── 0006 WordPress
-0002 Hub ──┬── 0003 Solicitações ── 0004 UPDATE por tabela ── 0012 evento_uso
+0002 Hub ──┬── 0003 Solicitações ── 0018 Solicitações v2 ── 0019 Jobs
+           │                 └── 0004 UPDATE por tabela ── 0012 evento_uso ── 0022 Usuário do backoffice
+           │                 └── 0020 Limites de negócio
            ├── 0005 Foto
            ├── 0008 TotalPass
-           ├── 0010 ERP ──── 0007 Flags ──── 0009 Parceiros
+           ├── 0010 ERP ──── 0007 Flags ──── 0021 Flags v2 ── 0009 Parceiros
            └── 0014 contact_id ── 0011 Cookie cifrado
 ```
 

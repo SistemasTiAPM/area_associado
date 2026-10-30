@@ -12,6 +12,7 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/shell.css';
 import './styles/paginas.css';
+import './styles/componentes.css';
 import './styles/motion.css';
 
 import { StrictMode } from 'react';
@@ -19,10 +20,14 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { instalarEnvioAoSair } from './lib/analytics';
+import { capturarCampanha } from './lib/campanha';
 
 const raiz = document.getElementById('raiz');
 if (!raiz) throw new Error('Elemento #raiz ausente do index.html');
 
+// Campanha (utm_*/g=) lida UMA vez e tirada da URL antes de o roteador montar
+// (um <Navigate> inicial trocaria a URL e a perderia). Vai no 1.º pagina_ver.
+capturarCampanha();
 instalarEnvioAoSair();
 createRoot(raiz).render(
   <StrictMode>

@@ -69,3 +69,6 @@ anuidade) apresentados como reais.
   mostraria dados falsos como reais.
 - **Trilho só com ícones (padrão do mockup):** com 11 itens, a identificação por ícone fica
   difícil; o usuário escolheu ícone + nome.
+
+---
+*Errata (2026-10-30, TI-68): o Contexto fala em "12 mockups", mas a lista tem 13 nomes (`login`, `painel`, `beneficios`, `clube`, `servicos`, `ciencia`, `defesa`, `eventos`, `relacionamento`, `financeiro`, `carteirinha`, `onboarding`, `perfil`); o número correto é 13 (EXT-01/P-39).*

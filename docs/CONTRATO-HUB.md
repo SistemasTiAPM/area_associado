@@ -28,7 +28,7 @@ Implementado no `mcp_hub` na Fase 2b (19/10/2026, commits `365a531`..`8bb3c43` d
 | Cliente | `area-associado` (`HUB_CLIENT_ID`), segredo em `HUB_CLIENT_SECRET` |
 | Escopos da conta | `ferramentas:ler` e `ferramentas:escrever`. **O de escrita só é marcado em produção depois da P-29**; a área só o pede com `HUB_ESCRITA_HABILITADA=true` |
 | Origem permitida | CIDR da `rede_publica` |
-| Grants | **exatos** (curinga não libera escrita), `modo_pii=completo`, nas 4 ferramentas abaixo |
+| Grants | **exatos** (curinga não libera escrita), `modo_pii=completo`, nas 4 ferramentas da Fase 2b abaixo **e**, desde 2026-10-30 (TI-47), em `associado.situacao` e `associado.historico_associacao` (sem coluna pessoal: o modo PII é indiferente). Nunca `associado.*`: liberaria `consultar`/`visao_360`, que devolvem CPF |
 | Taxa e cota | por conta (antiga P-03, resolvida no hub): `chamadas_por_minuto` (1–6000) e cota PII própria; os padrões por principal (60/min, 500 PII/dia) não servem a um app |
 
 ## Regras para TODAS as ferramentas
@@ -36,9 +36,13 @@ Implementado no `mcp_hub` na Fase 2b (19/10/2026, commits `365a531`..`8bb3c43` d
 1. Chave de entrada é `contact_id` (GUID do Dataverse; o GUID todo zero é recusado). O hub
    lê o contato por `GET /contacts({id})`. **Nenhuma resposta contém CPF** (ADR-0014); a área
    ainda descarta e loga a chave `cpf` se vier.
-2. Só transporte REST: as quatro não aparecem no MCP nem no portal do hub.
-3. Titular auditado por `contact_id` (`auditoria_titular_contato`). Pedido LGPD no hub = busca
-   pelo CPF **e** pelo contact_id.
+2. Só transporte REST: as quatro da Fase 2b não aparecem no MCP nem no portal do hub.
+   `associado.situacao` e `associado.historico_associacao` são compartilhadas com o IdP
+   (`login_associado`) e com o portal do hub; aceitam `cpf` **ou** `contact_id`, mas a área só
+   chama por `contact_id` e a saída nunca traz CPF para ninguém.
+3. Titular auditado por `contact_id` (`auditoria_titular_contato`). Nas duas compartilhadas o
+   hub resolve o CPF do contato **internamente**, grava o HMAC em `auditoria_titular` e descarta;
+   a linha de saída não o contém. Pedido LGPD no hub = busca pelo CPF **e** pelo contact_id.
 4. Escrita: `efeito=escrita`, intenção gravada antes (sem ela, 503 `auditoria_indisponivel` e
    nada vai ao CRM), resultado depois; `If-Match: *` (nunca cria contato); credencial própria do
    hub com papel Read + Write em Contact; 1 retry só em 401 e 429/503 (`Retry-After` ≤ 5 s).
@@ -78,6 +82,40 @@ atualizável (P-31):
 | `uf` | `address1_stateorprovince` (sai como sigla) |
 | `cep` | `address1_postalcode` (gravado só com dígitos; sai `00000-000`) |
 
+### `associado.situacao` (leitura) — TI-47, 2026-10-30
+
+Situação associativa em **uma** linha, sem nome, e-mail, telefone ou CPF. Base da verificação
+pública em tempo quase real (TI-45, Onda 2) e do job noturno de situação (TI-55). Entrada
+`{"contact_id": "<guid>"}`. Saída: uma linha, ou nenhuma (`total: 0`) se o contato não existir.
+Hub: 12 s de teto; a área usa `HUB_TIMEOUT`.
+
+| Campo | Origem | Observação |
+|---|---|---|
+| `contact_id` | `contactid` | minúsculas |
+| `status_associativo` | rótulo de `alf_status_associativo` | texto do CRM, muda com idioma/edição |
+| `status_associativo_codigo` | `alf_status_associativo` | int do option set (`2` = Ativo, `3` = Pendente) |
+| `situacao_normalizada` | tabela versionada no hub (`app/tools/associado.py`) | **enum fechado** `ativo` \| `suspenso` \| `cancelado` \| `outro`. Código mapeado vence o rótulo; código desconhecido cai no rótulo exato (sem acento/caixa); o resto é `outro`. Só `2`/`3` têm código confirmado no tenant (M-9 do hub); suspenso/cancelado entram pelo rótulo até lá |
+| `tipo_associado` | rótulo de `alf_tipo_associado` | |
+| `data_filiacao` | `alf_data_filiacao` | `AAAA-MM-DD` |
+| `statecode` | `statecode` do contato | int: `0` ativo, `1` inativo (registro desativado no CRM). **Não** entra na normalização |
+| `situacao_registro` | rótulo de `statecode` | |
+| `associacao_status` / `associacao_status_codigo` | `sol_associacao` mais recente (`sol_dt_dataassociacao desc, createdon desc`) | `100000001` = ativa; `null` se o contato não tem associação |
+| `associacao_data` / `associacao_criada_em` | idem | `AAAA-MM-DD` / ISO `-03:00` |
+
+Regra da área (`SituacaoCrm.ativa` em `app/integracoes/hub.py`): **ativo = `situacao_normalizada == "ativo"` e
+`statecode == 0`**; qualquer outra combinação não é "ativo". Valor de `situacao_normalizada` fora do
+enum vira `outro` no cliente (fail-closed) e gera log de anomalia. Nada é gravado localmente a
+partir desta ferramenta nesta onda; o uso em `carteirinha.resolver` é TI-45.
+
+### `associado.historico_associacao` (leitura) — TI-47, 2026-10-30
+
+Registros de `sol_associacao` do contato, do mais recente ao mais antigo (até 50). Entrada
+`{"contact_id": "<guid>"}`. Saída: 0..50 linhas com `contact_id`, `nome` (PII `nome`, mascarado
+sem grant `completo`), `status_associacao` (rótulo), `status_associacao_codigo` (int),
+`data_associacao`, `criada_em`, `modificada_em`, `situacao_registro`. **Sem `cpf`.** Reservada ao
+histórico de categorias (A13 / `diff_cadastro`, TI-55); a área ainda não a chama — confirmar
+antes se `sol_associacao` registra categoria (levantamento §8.2).
+
 ### `associado.contato_atualizar` (escrita)
 
 Entrada `{"contact_id", "celular"?, "telefone"?, "telefone2"?, "email"?, "endereco"?}`.
@@ -111,6 +149,7 @@ P-30 (homologação).
 |---|---|---|---|
 | 400 | `entrada_invalida` | validação do hub ou valor recusado pelo CRM | 400 com os `detalhes` |
 | 404 | `nao_encontrado` | contato inexistente no PATCH | 404 |
+| 409 | `cpf_duplicado` | `situacao`/`historico`: mais de um contato com o CPF do contato pedido (só acontece por `cpf`; por `contact_id` não há busca) | 503 `fonte_indisponivel`; nunca escolher um |
 | 404 | (outro) | ferramenta inexistente, sem grant, sem escopo ou transporte errado — resposta única | 503 `fonte_indisponivel` (integração) |
 | 409 | `endereco_indisponivel` | endereço sem flag/Metadata | 409, a área marca o endereço como indisponível |
 | 413 | `corpo_grande` | corpo acima do teto da ferramenta | 503 (a área nunca manda isso) |

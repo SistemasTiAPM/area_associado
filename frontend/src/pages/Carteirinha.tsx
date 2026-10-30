@@ -91,7 +91,7 @@ export function PaginaCarteirinha() {
             </span>
             <span className="carteirinha__selo vidro--escuro">
               <Icon nome="escudo" tamanho={14} />
-              {d.tipo_associado ?? 'Membro'}
+              {d.tipo_associado ?? 'Associado'}
             </span>
           </div>
           <div className="carteirinha__corpo">

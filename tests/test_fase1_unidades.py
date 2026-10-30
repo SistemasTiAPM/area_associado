@@ -44,10 +44,13 @@ def test_chaves_proibidas_somem_dos_detalhes_do_servidor():
     assert det == '{"tipo": "outro"}'
 
 
-def test_catalogo_cobre_as_36_acoes_dos_requisitos():
-    assert len(uso.CATALOGO) == 36
-    assert uso.ACOES_UI >= {"pagina_ver", "erro_exibido", "central_whatsapp_abrir"}
-    assert "beneficio_ativar" not in uso.ACOES_UI
+def test_catalogo_cobre_as_acoes_dos_requisitos_e_da_spec_v2():
+    # 36 do REQUISITOS §8 − fatura_pdf_baixar (sem emissor) + 16 do levantamento §6.2 (TI-04).
+    assert len(uso.CATALOGO) == 51
+    assert "fatura_pdf_baixar" not in uso.CATALOGO and "fatura_segunda_via" in uso.CATALOGO
+    assert uso.ACOES_UI >= {"pagina_ver", "erro_exibido", "central_whatsapp_abrir", "home_bloco_clicar",
+                            "ajuda_contatar", "notificacao_abrir", "vitais_web", "erro_js"}
+    assert "beneficio_ativar" not in uso.ACOES_UI and "acesso_primeiro" not in uso.ACOES_UI
 
 
 def test_falha_de_banco_conta_e_nao_lanca(monkeypatch):

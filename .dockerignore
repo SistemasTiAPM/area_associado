@@ -10,6 +10,8 @@ __pycache__/
 venv/
 *.md
 docs/
+# TI-07: só o contrato versionado entra, para o build conferir que está em dia.
+!docs/api/openapi.json
 deploy/
 sql/
 tests/

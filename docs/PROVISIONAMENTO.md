@@ -73,6 +73,66 @@ done
 Sem as tabelas a aplicação **continua no ar** (fail-safe): flags ficam todas desligadas,
 `evento_uso` e o registro de acesso só geram log de erro e o contador `uso_falhas` em `/db-health`.
 
+### 2.3 Onda 1 — `sql/008_particao_eventos` (2026-10-30)
+
+`008_particao_eventos` **reconstrói** `evento_log` e `evento_uso`: PK composta `(id, ocorrido_em)` e
+`PARTITION BY RANGE (TO_DAYS(ocorrido_em))` mensal, 25 partições pré-criadas (2026-10 … 2028-10) +
+`pMAX`. Nenhum GRANT novo: as trilhas continuam só INSERT para `apm_area`; o expurgo da P-15 passa a ser
+`DROP PARTITION`/`EXCHANGE PARTITION` administrativo (procedimentos no cabeçalho do arquivo e em
+`docs/OPERACAO.md` §7). Ensaiada em MySQL 8.4.11 descartável em 2026-10-30 (000→008 em ordem, `SHOW
+CREATE TABLE`, INSERT como `apm_area` ok, UPDATE/DELETE/ALTER recusados, suíte `-m mysql` verde).
+
+Particularidades: (1) **não é reaplicável** — rodar duas vezes só reconstrói de novo; confira antes
+`SELECT versao FROM schema_migrations` (sem `008`); (2) a cópia segura um *metadata lock*: os INSERTs da
+aplicação esperam alguns segundos e `audit`/`uso` nunca derrubam a resposta — ainda assim, janela de pouco
+tráfego; (3) **snapshot manual do RDS antes** (`docs/OPERACAO.md` §6). sha256 esperado do arquivo:
+`8c3e26ad6c816391f861ead35acd0a0b2f9c4d0e7cc51e06f6edd2932e6ec493` (confira com `sha256sum`; se
+divergir, o arquivo foi editado depois do ensaio — não aplique).
+
+```bash
+cd /home/ubuntu/area_associado
+sha256sum sql/008_particao_eventos.sql          # deve bater com o hash acima
+for f in sql/008_particao_eventos.sql; do
+  echo "aplicando $f"
+  mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado < "$f" || break
+done
+for v in 008; do
+  f=$(ls sql/${v}_*.sql); h=$(sha256sum "$f" | cut -d' ' -f1)
+  mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado -e \
+    "INSERT INTO schema_migrations (versao, arquivo, sha256) VALUES ('$v', '$(basename $f)', '$h') AS novo
+     ON DUPLICATE KEY UPDATE sha256 = novo.sha256;"
+done
+mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado -e \
+  "SELECT TABLE_NAME, COUNT(*) particoes FROM information_schema.PARTITIONS
+   WHERE TABLE_SCHEMA='area_associado' AND TABLE_NAME IN ('evento_log','evento_uso') GROUP BY TABLE_NAME;"
+docker compose exec area-associado python -m scripts.db_check   # particoes : evento_log=26 evento_uso=26
+```
+
+### 2.4 Onda 1 — `sql/009_flags_v2` (2026-10-30)
+
+`009_flags_v2` insere as 7 flags da spec v2 (ADR-0021): `notificacoes`, `encaminhamento_parceiro`,
+`reservas`, `inscricoes`, `comunicacao_outbox`, `cancelamento_online`, `lgpd_consentimentos` — todas
+**desligadas**, sem GRANT novo (só INSERT na `feature_flag` da `003`; reexecução atualiza apenas a
+`descricao`, nunca `ligada`). Mesmo laço do §2.1:
+
+```bash
+for f in sql/009_flags_v2.sql; do
+  echo "aplicando $f"
+  mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado < "$f" || break
+done
+for v in 009; do
+  f=$(ls sql/${v}_*.sql); h=$(sha256sum "$f" | cut -d' ' -f1)
+  mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado -e \
+    "INSERT INTO schema_migrations (versao, arquivo, sha256) VALUES ('$v', '$(basename $f)', '$h') AS novo
+     ON DUPLICATE KEY UPDATE sha256 = novo.sha256;"
+done
+mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado -e \
+  "SELECT chave, ligada FROM feature_flag ORDER BY chave;"   # 15 linhas, todas as novas com ligada=0
+```
+
+Antes de aplicar, a aplicação já conhece as chaves (`app/flags.py`) e as trata como desligadas; depois,
+ligar uma é `UPDATE feature_flag SET ligada = 1 WHERE chave = '...'` (vale em até `FLAGS_CACHE_TTL`).
+
 ## 3. Conferir
 
 ```bash
@@ -110,9 +170,13 @@ docker compose ps                                   # (healthy)
 docker compose exec area-associado python -m scripts.db_check
 ```
 
-`db_check` imprime usuário efetivo, cifra TLS e grants; sai com 1 se não houver TLS, se o
-usuário for a conta master ou se os grants violarem a ADR-0004 (UPDATE fora da allowlist
-`TABELAS_COM_UPDATE`, qualquer DELETE, ALL ou privilégio em outro schema).
+`db_check` imprime usuário efetivo, cifra TLS, grants, migrações registradas e partições; sai com 1
+se não houver TLS, se o usuário for a conta master (ou sem política em `POLITICAS`), se os grants
+violarem a ADR-0004 (UPDATE fora da allowlist do usuário, qualquer DELETE, ALL ou privilégio em outro
+schema), se uma **tabela da allowlist existir sem o GRANT UPDATE** (ADR-0004 §6 — migração aplicada pela
+metade) ou se `evento_log`/`evento_uso` não estiverem particionadas com a `008` registrada. Avisa (sem
+falhar) quando a `008` ainda não foi aplicada e quando a última partição mensal termina em < 90 dias.
+A allowlist lista **só tabelas já migradas**; tabela nova entra no mesmo commit da migração.
 
 Este host não tem o plugin `buildx`: com BuildKit ligado o build falha. Construir com o
 builder clássico (suporta o Dockerfile multi-stage):

@@ -19,12 +19,22 @@ from ...csrf import exigir_csrf
 from ...limites import LimiteJanela
 from ...session_guard import Associado, require_associado
 from ..erros import ApiError
+from .modelos import UsoResposta
 
 router = APIRouter(tags=["uso"])
 
 _limite_lotes = LimiteJanela(maximo=60, janela_s=60)
 
-ValorDetalhe = int | Annotated[str, StringConstraints(max_length=64)]
+TextoCurto = Annotated[str, StringConstraints(max_length=64)]
+# Escalar, lista curta (ex.: `blocos[]`) ou sub-objeto raso (ex.: `campanha`).
+# O catálogo de app/uso.py decide, chave a chave, o que sobrevive.
+ValorDetalhe = (
+    int
+    | float
+    | TextoCurto
+    | Annotated[list[TextoCurto], Field(max_length=16)]
+    | Annotated[dict[Annotated[str, StringConstraints(max_length=32)], int | TextoCurto], Field(max_length=8)]
+)
 
 
 class EventoUi(BaseModel):
@@ -43,7 +53,8 @@ class LoteUso(BaseModel):
 
 
 # Ordem importa: sem sessão → 401 (não 403 de CSRF, que não existe sem sessão).
-@router.post("/uso", status_code=202, dependencies=[Depends(require_associado), Depends(exigir_csrf)])
+@router.post("/uso", status_code=202, response_model=UsoResposta,
+             dependencies=[Depends(require_associado), Depends(exigir_csrf)])
 async def registrar_uso(
     lote: LoteUso, request: Request, associado: Associado = Depends(require_associado)
 ) -> JSONResponse:

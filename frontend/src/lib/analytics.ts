@@ -1,4 +1,5 @@
 import { obterCsrf } from '../api/client';
+import { consumirCampanha, type Campanha } from './campanha';
 
 /**
  * Eventos de uso de origem `ui` (REQUISITOS §8). Fila em memória, enviada em
@@ -7,10 +8,15 @@ import { obterCsrf } from '../api/client';
  *
  * Analytics nunca pode quebrar a tela: falha de envio descarta o lote e só
  * incrementa um contador (útil em teste e depuração).
+ *
+ * O primeiro `pagina_ver` depois do boot leva `detalhes.campanha` (parâmetros utm e gatilho
+ * lidos uma vez da URL por `campanha.ts`, TI-11); o servidor revalida tudo.
  */
 
+/** Espelho de `ACOES_UI` em app/uso.py — tests/test_espelho_front.py falha se divergir. */
 export type AcaoUi =
   | 'pagina_ver'
+  | 'home_bloco_clicar'
   | 'busca_global'
   | 'filtro_aplicar'
   | 'categoria_abrir'
@@ -25,13 +31,20 @@ export type AcaoUi =
   | 'programa_saber_mais'
   | 'wallet_adicionar'
   | 'central_whatsapp_abrir'
-  | 'erro_exibido';
+  | 'ajuda_contatar'
+  | 'notificacao_abrir'
+  | 'erro_exibido'
+  | 'vitais_web'
+  | 'erro_js';
+
+/** Escalar, lista curta (ex.: `blocos`) ou sub-objeto raso (ex.: `campanha`). Nunca texto livre. */
+export type ValorDetalhe = string | number | string[] | Campanha;
 
 export interface EventoUi {
   acao: AcaoUi;
   entidade: string;
   entidade_id?: string;
-  detalhes?: Record<string, string | number>;
+  detalhes?: Record<string, ValorDetalhe>;
 }
 
 const LOTE_MAX = 20;
@@ -74,8 +87,15 @@ export function enviarFila(keepalive = false): void {
   }
 }
 
+function comCampanha(evento: EventoUi): EventoUi {
+  if (evento.acao !== 'pagina_ver') return evento;
+  const campanha = consumirCampanha();
+  if (!campanha) return evento;
+  return { ...evento, detalhes: { ...evento.detalhes, campanha } };
+}
+
 export function registrarUso(evento: EventoUi): void {
-  fila.push(evento);
+  fila.push(comCampanha(evento));
   if (fila.length >= LOTE_MAX) {
     enviarFila();
   } else if (temporizador === null) {

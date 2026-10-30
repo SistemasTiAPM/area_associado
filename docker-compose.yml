@@ -5,14 +5,22 @@ services:
     restart: always
     env_file:
       - .env
+    environment:
+      # Fuso dos logs e de qualquer hora "local" do processo (fila 8h, horário
+      # 8h–20h da spec; TI-78). O banco continua em UTC (ocorrido_em). A
+      # imagem tem tzdata (python:3.12-slim) — conferido em 2026-10-30.
+      TZ: America/Sao_Paulo
     expose:
       - "8000"          # alcançável SOMENTE pelo nginx_porteiro na rede_publica
 
     # Endurecimento idêntico ao login_associado (validado em 10/09/2026): a app
     # não grava nada fora de /tmp, roda sem capabilities e sem escalar privilégio.
     read_only: true
+    # /tmp com teto: gunicorn (heartbeat dos workers), Pillow e uploads em
+    # memória cabem com folga em 64M; sem teto, um tmpfs cresce até a RAM do host.
+    # noexec/nosuid/nodev: nada em /tmp precisa executar (TI-78).
     tmpfs:
-      - /tmp:mode=1777
+      - /tmp:mode=1777,size=64m,noexec,nosuid,nodev
     cap_drop:
       - ALL
     security_opt:
@@ -24,6 +32,11 @@ services:
       resources:
         limits:
           memory: 512M
+          # Teto de processos/threads (TI-78): gunicorn 2 workers + threadpool
+          # do Starlette (40) + pool do banco fica < 100; 256 segura um fork
+          # bomb sem atrapalhar. (Equivale a `pids_limit`; o compose 2.40
+          # recusa as duas formas juntas quando há `deploy.resources.limits`.)
+          pids: 256
     logging:
       driver: json-file
       options:

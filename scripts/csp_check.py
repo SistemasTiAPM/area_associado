@@ -75,7 +75,7 @@ def main() -> int:
     base = args.base.rstrip("/")
 
     falhas: list[str] = []
-    esperados = {"/": 200, "/auth/login": (200, 302), "/health": 200, "/api/v1/sessao": 401, "/area": 303}
+    esperados = {"/": 303, "/auth/login": (200, 302), "/health": 200, "/api/v1/sessao": 401, "/area": 303}  # "/" redireciona ao Login APM ou a /area desde 2026-10-20
     for caminho, status_ok in esperados.items():
         status, cab = _buscar(base, caminho, contexto)
         aceitos = status_ok if isinstance(status_ok, tuple) else (status_ok,)

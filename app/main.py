@@ -134,9 +134,21 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _operation_id(route) -> str:
+    """`operation_id` estável por rota (TI-07): o nome da função, em pt-BR e
+    snake_case, em vez do padrão `nome_caminho_metodo` do FastAPI. A unicidade
+    é conferida por `scripts/openapi_export.py` e pelo teste."""
+    return route.name
+
+
 app = FastAPI(
     title="Minha APM",
+    version="0.1.0",
+    description="API da Área do Associado da APM (`minha.apm.org.br`). Sessão por cookie cifrado; "
+                "escrita exige `X-CSRF-Token`. Erros seguem o contrato único `ApiError`. "
+                "Exportada para `docs/api/openapi.json`; `/docs` só em development.",
     lifespan=lifespan,
+    generate_unique_id_function=_operation_id,
     docs_url="/docs" if settings.expose_openapi else None,
     redoc_url="/redoc" if settings.expose_openapi else None,
     openapi_url="/openapi.json" if settings.expose_openapi else None,

@@ -15,6 +15,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh; /* iOS Safari: barra de endereço não conta (TI-62) */
   background-color: var(--gray-50);
   background-image: radial-gradient(70vmax 50vmax at 88% 12%, var(--campo-lavanda), transparent 70%),
     radial-gradient(60vmax 45vmax at 6% 62%, var(--campo-pessego), transparent 70%),
@@ -127,13 +128,15 @@ svg {
   }
 }
 
-/* ---- Botões (mockup: pílulas; primário em gradiente navy) ---- */
+/* ---- Botões (mockup: pílulas; primário em gradiente navy) ----
+   Alvo mínimo 44 px (spec v2 §14; WCAG 2.2 2.5.8 pede 24, a spec pede 44). */
 .botao {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 10px 20px;
   border: 0;
   border-radius: var(--raio-botao);
@@ -193,6 +196,16 @@ svg {
   cursor: not-allowed;
 }
 
+/* Ação destrutiva (cancelar, remover): só dentro de Dialogo destrutivo ou com confirmação. */
+.botao--destrutivo {
+  background: var(--destrutivo);
+  color: var(--branco);
+}
+
+.botao--destrutivo:hover:not(:disabled) {
+  background: var(--destrutivo-hover);
+}
+
 .link-texto {
   display: inline-flex;
   align-items: center;
@@ -208,6 +221,17 @@ svg {
 
 .link-texto:hover {
   text-decoration: underline;
+}
+
+/* Link de texto sobre fundo navy (hero): ação secundária ao lado do único botão principal. */
+.link-texto--claro {
+  min-height: 44px;
+  padding: 0 6px;
+  color: var(--branco);
+}
+
+.link-texto--claro:focus-visible {
+  outline-color: var(--foco-sobre-escuro);
 }
 
 /* Tags de status do mockup (`tag(kind)`). */

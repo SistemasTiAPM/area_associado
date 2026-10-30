@@ -27,8 +27,8 @@ export function urlExternaSegura(bruta: string, hosts: readonly string[] = HOSTS
   return url.toString();
 }
 
-/** Mensagem pré-preenchida da Central APM — proposta (REQUISITOS LA-18). */
-export const MENSAGEM_CENTRAL = 'Olá! Vim pela Minha APM e preciso de ajuda.';
+/** Mensagem pré-preenchida da Central APM — proposta (REQUISITOS LA-18); sem exclamação (spec v2 §3.3). */
+export const MENSAGEM_CENTRAL = 'Olá. Vim pela Minha APM e preciso de ajuda.';
 
 export function urlWhatsapp(numero: string, mensagem: string): string | null {
   if (!/^[1-9][0-9]{9,14}$/.test(numero)) return null;

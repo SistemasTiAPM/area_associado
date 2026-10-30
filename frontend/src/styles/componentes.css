@@ -1,0 +1,562 @@
+/* Primitivos puros (TI-65): selo de estado, diálogo, accordion, combobox, tabs,
+   barra de progresso, skeleton, estado de erro, grupos de opção, imagem segura.
+   Só tokens (tokens.css); nenhum hex aqui. Sem estilo inline (ADR-0013). */
+
+/* ------------------------------------------------------------ SeloEstado */
+.selo-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 11px;
+  border-radius: var(--raio-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.selo-estado--compacto {
+  min-height: 22px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+}
+
+.selo-estado--disponivel {
+  background: var(--selo-disponivel-bg);
+  color: var(--selo-disponivel-fg);
+}
+
+.selo-estado--ativo {
+  background: var(--selo-ativo-bg);
+  color: var(--selo-ativo-fg);
+}
+
+.selo-estado--libera_em {
+  background: var(--selo-libera-bg);
+  color: var(--selo-libera-fg);
+}
+
+.selo-estado--exclusivo {
+  background: var(--selo-exclusivo-bg);
+  color: var(--selo-exclusivo-fg);
+}
+
+.selo-estado--suspenso {
+  background: var(--selo-suspenso-bg);
+  color: var(--selo-suspenso-fg);
+}
+
+.selo-estado--indisponivel_regiao {
+  background: var(--selo-regiao-bg);
+  color: var(--selo-regiao-fg);
+}
+
+.selo-estado--novo {
+  background: var(--selo-novo-bg);
+  color: var(--selo-novo-fg);
+}
+
+/* Patrocinado: borda, não cor cheia — sinaliza sem competir com o conteúdo (spec §3.2). */
+.selo-estado--patrocinado {
+  background: var(--selo-patrocinado-bg);
+  color: var(--selo-patrocinado-fg);
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+
+/* --------------------------------------------------------------- Dialogo */
+.dialogo-camada {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.dialogo-camada .scrim {
+  pointer-events: auto;
+}
+
+.dialogo {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  background: var(--vidro-fundo-forte);
+  pointer-events: auto;
+}
+
+.dialogo--destrutivo {
+  box-shadow: var(--vidro-sombra), inset 0 0 0 2px var(--erro-borda);
+}
+
+.dialogo__cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialogo__titulo {
+  font-size: var(--fs-h4);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
+}
+
+.dialogo__fechar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px 0 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--gray-100);
+  color: var(--navy-900);
+}
+
+.dialogo__descricao,
+.dialogo__corpo {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-700);
+}
+
+.dialogo__acoes {
+  justify-content: flex-end;
+}
+
+/* ------------------------------------------------------------- Accordion */
+.accordion {
+  display: grid;
+  border-top: 1px solid var(--linha);
+}
+
+.accordion__cabecalho {
+  margin: 0;
+  font-size: inherit;
+}
+
+.accordion__botao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--linha);
+  background: transparent;
+  color: var(--ink-900);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.accordion__botao:hover {
+  color: var(--navy-900);
+}
+
+.accordion__seta {
+  display: inline-flex;
+  flex: none;
+  color: var(--green-700);
+  transition: transform var(--dur-curta) var(--easing);
+}
+
+.accordion__botao[aria-expanded='true'] .accordion__seta {
+  transform: rotate(180deg);
+}
+
+.accordion__conteudo {
+  padding: 4px 4px 16px;
+  border-bottom: 1px solid var(--linha);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-700);
+}
+
+/* -------------------------------------------------------------- Combobox */
+.combobox {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.combobox__campo {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.combobox__entrada {
+  padding-right: 48px;
+}
+
+.combobox__limpar {
+  position: absolute;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-500);
+}
+
+.combobox__lista {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 6px 0 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: var(--raio-controle);
+  background: var(--vidro-fundo-forte);
+  -webkit-backdrop-filter: var(--vidro-desfoque);
+  backdrop-filter: var(--vidro-desfoque);
+  box-shadow: var(--vidro-sombra);
+  max-height: 320px;
+  overflow: auto;
+}
+
+.combobox__lista[hidden] {
+  display: none;
+}
+
+.combobox__opcao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 13.5px;
+}
+
+.combobox__opcao--ativa {
+  background: var(--mint-100);
+  color: var(--green-700);
+}
+
+.combobox__tipo {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--ink-500);
+}
+
+.combobox__vazio {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: var(--raio-controle);
+  background: var(--vidro-fundo-forte);
+  box-shadow: var(--vidro-sombra);
+  font-size: 13px;
+  color: var(--ink-500);
+}
+
+/* ------------------------------------------------------------------ Tabs */
+.tabs {
+  display: grid;
+  gap: 14px;
+}
+
+.tabs__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: var(--raio-pill);
+  background: var(--vidro-fundo);
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+
+.tabs__aba {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--raio-pill);
+  background: transparent;
+  color: var(--ink-500);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tabs__aba--ativa {
+  background: var(--grad-ativo);
+  color: var(--branco);
+}
+
+.tabs__painel:focus-visible {
+  outline-offset: 6px;
+}
+
+/* -------------------------------------------------------- BarraProgresso */
+.barra-progresso {
+  display: grid;
+  gap: 6px;
+}
+
+.barra-progresso__trilho {
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--raio-pill);
+  background: var(--gray-200);
+}
+
+/* Largura pela custom property definida via CSSOM (BarraProgresso.tsx). */
+.barra-progresso__preenchimento {
+  width: calc(var(--progresso, 0) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--grad-ativo);
+  transition: width var(--dur-media) var(--easing);
+}
+
+.barra-progresso__texto {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+/* -------------------------------------------------------------- Skeleton */
+@keyframes skeleton-brilho {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton__formas {
+  display: grid;
+  gap: 10px;
+}
+
+.skeleton__forma {
+  display: block;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-brilho) 50%, var(--skeleton-base) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-brilho 1.6s linear infinite;
+}
+
+.skeleton__forma--linha {
+  height: 14px;
+}
+
+.skeleton__forma--curta {
+  width: 60%;
+}
+
+.skeleton__forma--bloco {
+  height: 120px;
+  border-radius: var(--raio-card);
+}
+
+.skeleton__forma--quadrado {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--raio-subcard);
+}
+
+.skeleton__forma--circulo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.skeleton__item {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.skeleton--card {
+  padding: var(--pad-card);
+  border-radius: var(--raio-card);
+  background: var(--vidro-fundo);
+}
+
+/* ------------------------------------------------------------ EstadoErro */
+.estado-erro {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px 14px;
+  align-items: start;
+  border: 1px solid var(--erro-borda);
+}
+
+.estado-erro__icone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--erro-bg);
+  color: var(--erro-fg);
+}
+
+.estado-erro__textos {
+  display: grid;
+  gap: 6px;
+}
+
+.estado-erro__titulo {
+  font-size: var(--fs-h4);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.estado-erro__mensagem {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-700);
+}
+
+.estado-erro__codigo {
+  font-size: 12.5px;
+  color: var(--ink-500);
+}
+
+.estado-erro__codigo code {
+  font-family: var(--fonte-mono);
+  font-size: 12px;
+  color: var(--ink-900);
+}
+
+.estado-erro__botao {
+  grid-column: 2;
+  justify-self: start;
+}
+
+/* ----------------------------------------------- RadioGroup / CheckboxGroup */
+.grupo-opcoes {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.grupo-opcoes__legenda {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.grupo-opcoes__lista {
+  display: grid;
+  gap: 8px;
+}
+
+.opcao {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--raio-controle);
+  background: var(--vidro-fundo-forte);
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+
+.opcao--marcada {
+  box-shadow: inset 0 0 0 2px var(--green-600);
+}
+
+.grupo-opcoes--erro .opcao {
+  box-shadow: inset 0 0 0 1px var(--erro-borda);
+}
+
+.opcao__entrada {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--green-700);
+}
+
+.opcao__rotulo {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.opcao__descricao {
+  font-size: 12.5px;
+  color: var(--ink-500);
+}
+
+.opcao__entrada:disabled + .opcao__rotulo {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------- ImagemSegura */
+.imagem-segura {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--raio-subcard);
+  background: var(--gray-100);
+}
+
+.imagem-segura--1-1 {
+  aspect-ratio: 1 / 1;
+}
+
+.imagem-segura--4-3 {
+  aspect-ratio: 4 / 3;
+}
+
+.imagem-segura--3-2 {
+  aspect-ratio: 3 / 2;
+}
+
+.imagem-segura--16-9 {
+  aspect-ratio: 16 / 9;
+}
+
+.imagem-segura__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imagem-segura--placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--ink-400);
+}

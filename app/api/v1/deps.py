@@ -9,7 +9,7 @@ from fastapi import Depends
 from ...config import get_settings
 from ...dominio.associado import contact_id_valido
 from ...integracoes.hub import HubError
-from ...session_guard import Associado, require_associado
+from ...session_guard import Associado, autenticacao_recente, require_associado
 from ..erros import MENSAGENS_PADRAO, ApiError
 
 
@@ -26,6 +26,27 @@ def contexto(associado: Associado = Depends(require_associado)) -> Contexto:
         raise ApiError(403, "cadastro_sem_contato",
                        "Não encontramos o seu cadastro. Fale com a Central de Relacionamento.")
     return Contexto(associado, cid)
+
+
+MENSAGEM_REAUTENTICACAO = "Por segurança, confirme sua senha no Login APM antes de continuar."
+
+
+def reautenticacao_recente(associado: Associado) -> bool:
+    """Senha digitada no IdP há no máximo `REAUTH_MAX_IDADE` (regra 22: `idp_at`, nunca `auth_at`)."""
+    return autenticacao_recente(associado, get_settings().reauth_max_idade)
+
+
+def verificar_reautenticacao(associado: Associado, mensagem: str | None = None) -> None:
+    """Step-up (ADR-0015, TI-09): 403 `reautenticacao_necessaria` no contrato único
+    de erro. A SPA reage ao código (`/auth/login?reauth=1`), nunca ao texto."""
+    if not reautenticacao_recente(associado):
+        raise ApiError(403, "reautenticacao_necessaria", mensagem or MENSAGEM_REAUTENTICACAO)
+
+
+def exigir_reautenticacao(associado: Associado = Depends(require_associado)) -> None:
+    """Dependência de rota: `dependencies=[..., Depends(exigir_reautenticacao)]` em
+    cancelamento, exclusão/exportação de dados, troca de canais (Fases 3/3b)."""
+    verificar_reautenticacao(associado)
 
 
 MENSAGEM_EDICAO_DESLIGADA = ("A alteração do cadastro ainda não está disponível por aqui. "

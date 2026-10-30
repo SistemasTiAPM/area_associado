@@ -20,6 +20,7 @@ from ...dominio import perfil
 from ...dominio.associado import contact_id_valido
 from ...flags import flags_efetivas
 from ...session_guard import Associado, require_associado
+from .modelos import SessaoResposta
 
 router = APIRouter(tags=["sessao"])
 
@@ -77,7 +78,7 @@ def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]
     }
 
 
-@router.get("/sessao")
+@router.get("/sessao", response_model=SessaoResposta)
 async def obter_sessao(request: Request, associado: Associado = Depends(require_associado)) -> dict[str, Any]:
     flags = await run_in_threadpool(flags_efetivas)
     versao = await run_in_threadpool(perfil.foto_etag, contact_id_valido(associado.contact_id))

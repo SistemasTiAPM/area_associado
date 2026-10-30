@@ -5,7 +5,9 @@
 - Toda escrita: CSRF (dependência), limite por associado, `evento_log`
   (só NOMES de campos, nunca valores) e `evento_uso` em transação própria.
 - E-mail é o canal de recuperação do Login APM: troca exige login recente no
-  IdP (`REAUTH_MAX_IDADE`) e código enviado ao novo endereço.
+  IdP (`REAUTH_MAX_IDADE`) e código enviado ao novo endereço. O celular passa
+  a exigir o mesmo step-up quando `CELULAR_EXIGE_REAUTH=true` (dia em que o IdP
+  mandar OTP por celular; TI-09).
 - Com `HUB_ESCRITA_HABILITADA=false`, toda rota de escrita responde 404
   `recurso_desligado` logo após sessão e CSRF (`exigir_edicao`) e o perfil
   sai com `edicao_disponivel=false` para a SPA esconder a edição.
@@ -31,9 +33,18 @@ from ...dominio import email_verificacao, foto, perfil
 from ...integracoes import email as correio
 from ...integracoes.hub import HubError, obter_hub
 from ...limites import LimiteJanela
-from ...session_guard import autenticacao_recente, require_associado
+from ...session_guard import require_associado
 from ..erros import ApiError
-from .deps import MENSAGEM_ENDERECO_INDISPONIVEL, Contexto, contexto, erro_do_hub, exigir_edicao
+from .deps import (
+    MENSAGEM_ENDERECO_INDISPONIVEL,
+    Contexto,
+    contexto,
+    erro_do_hub,
+    exigir_edicao,
+    reautenticacao_recente,
+    verificar_reautenticacao,
+)
+from .modelos import FotoResposta, PerfilResposta, TrocaEmailIniciada
 
 logger = logging.getLogger("area_associado.api.perfil")
 router = APIRouter(tags=["perfil"])
@@ -165,6 +176,7 @@ def _iso(valor: datetime | None) -> str | None:
 
 def _saida(p: perfil.Perfil, request: Request, ctx: Contexto) -> dict[str, Any]:
     s = get_settings()
+    recente = reautenticacao_recente(ctx.associado)
     return {
         "nome": p.nome, "email": p.email, "celular": p.celular, "telefone": p.telefone, "telefone2": p.telefone2,
         "endereco": p.endereco, "num_contato": p.num_contato, "crm": p.crm, "crm_uf": p.crm_uf,
@@ -173,14 +185,13 @@ def _saida(p: perfil.Perfil, request: Request, ctx: Contexto) -> dict[str, Any]:
         "edicao_disponivel": s.hub_escrita_habilitada,
         "endereco_disponivel": s.hub_escrita_habilitada and perfil.endereco_disponivel() is True,
         "atualizado_em": _iso(p.contato_atualizado_em or p.atualizado_em), "desatualizado": p.desatualizado,
-        "email_exige_reautenticacao": not autenticacao_recente(ctx.associado, s.reauth_max_idade),
+        "email_exige_reautenticacao": not recente,
+        "celular_exige_reautenticacao": s.celular_exige_reauth and not recente,
     }
 
 
-def _exigir_reautenticacao(ctx: Contexto) -> None:
-    if not autenticacao_recente(ctx.associado, get_settings().reauth_max_idade):
-        raise ApiError(403, "reautenticacao_necessaria",
-                       "Por segurança, confirme sua senha no Login APM antes de trocar o e-mail.")
+_MENSAGEM_REAUTH_EMAIL = "Por segurança, confirme sua senha no Login APM antes de trocar o e-mail."
+_MENSAGEM_REAUTH_CELULAR = "Por segurança, confirme sua senha no Login APM antes de trocar o celular."
 
 
 def _registrar(request: Request, ctx: Contexto, *, categoria: str, tipo: str, detalhes: dict[str, Any] | None,
@@ -194,7 +205,7 @@ def _registrar(request: Request, ctx: Contexto, *, categoria: str, tipo: str, de
 
 
 # ------------------------------------------------------------------ rotas
-@router.get("/perfil")
+@router.get("/perfil", response_model=PerfilResposta)
 async def obter_perfil(request: Request, ctx: Contexto = Depends(contexto)) -> dict[str, Any]:
     try:
         p = await run_in_threadpool(perfil.obter, ctx.contact_id)
@@ -203,12 +214,16 @@ async def obter_perfil(request: Request, ctx: Contexto = Depends(contexto)) -> d
     return _saida(p, request, ctx)
 
 
-@router.put("/perfil/contato", dependencies=_ESCRITA)
+@router.put("/perfil/contato", response_model=PerfilResposta, dependencies=_ESCRITA)
 async def atualizar_contato(entrada: ContatoEntrada, request: Request, ctx: Contexto = Depends(contexto)):
     try:
         campos = entrada.campos()
     except ValueError as exc:
         raise ApiError(400, "entrada_invalida", str(exc).capitalize() + ".") from exc
+    # Celular como canal de OTP do IdP (CELULAR_EXIGE_REAUTH): step-up antes do
+    # limite e do hub — trocar o número seria trocar a recuperação de senha.
+    if "celular" in campos and get_settings().celular_exige_reauth:
+        verificar_reautenticacao(ctx.associado, _MENSAGEM_REAUTH_CELULAR)
     # Sabidamente indisponível: recusa aqui, sem gastar o limite nem chamar o hub.
     # Desconhecido neste worker: o hub decide (409 se indisponível).
     if "endereco" in campos and perfil.endereco_disponivel() is False:
@@ -231,9 +246,9 @@ async def atualizar_contato(entrada: ContatoEntrada, request: Request, ctx: Cont
     return _saida(p, request, ctx)
 
 
-@router.post("/perfil/email", status_code=202, dependencies=_ESCRITA)
+@router.post("/perfil/email", status_code=202, response_model=TrocaEmailIniciada, dependencies=_ESCRITA)
 async def iniciar_troca_email(entrada: EmailEntrada, request: Request, ctx: Contexto = Depends(contexto)):
-    _exigir_reautenticacao(ctx)
+    verificar_reautenticacao(ctx.associado, _MENSAGEM_REAUTH_EMAIL)
     novo = entrada.email
     if not correio.email_valido(novo):
         raise ApiError(400, "entrada_invalida", "Informe um e-mail válido.",
@@ -278,9 +293,9 @@ def _avisar_email_antigo(antigo: str) -> None:
         logger.error("perfil: aviso ao e-mail antigo não entregue")
 
 
-@router.post("/perfil/email/confirmar", dependencies=_ESCRITA)
+@router.post("/perfil/email/confirmar", response_model=PerfilResposta, dependencies=_ESCRITA)
 async def confirmar_troca_email(entrada: ConfirmacaoEntrada, request: Request, ctx: Contexto = Depends(contexto)):
-    _exigir_reautenticacao(ctx)
+    verificar_reautenticacao(ctx.associado, _MENSAGEM_REAUTH_EMAIL)
     try:
         pedido = await run_in_threadpool(email_verificacao.conferir, ctx.contact_id, entrada.email, entrada.codigo)
     except email_verificacao.RecusaVerificacao as exc:
@@ -306,7 +321,7 @@ async def confirmar_troca_email(entrada: ConfirmacaoEntrada, request: Request, c
 
 
 # ------------------------------------------------------------------- foto
-@router.post("/perfil/foto", dependencies=_ESCRITA)
+@router.post("/perfil/foto", response_model=FotoResposta, dependencies=_ESCRITA)
 async def enviar_foto(request: Request, ctx: Contexto = Depends(contexto)):
     # Corpo lido SÓ depois de sessão, CSRF e limites (o FastAPI leria um
     # UploadFile antes das dependências).
@@ -344,7 +359,7 @@ async def enviar_foto(request: Request, ctx: Contexto = Depends(contexto)):
     return {"tem_foto": True, "foto_versao": versao}
 
 
-@router.delete("/perfil/foto", dependencies=_ESCRITA)
+@router.delete("/perfil/foto", response_model=FotoResposta, dependencies=_ESCRITA)
 async def remover_foto(request: Request, ctx: Contexto = Depends(contexto)):
     if not _limite_foto.permitir(ctx.contact_id):
         raise ApiError(429, "limite_taxa")
@@ -358,7 +373,9 @@ async def remover_foto(request: Request, ctx: Contexto = Depends(contexto)):
     return {"tem_foto": False, "foto_versao": None}
 
 
-@router.get("/perfil/foto")
+@router.get("/perfil/foto", response_class=Response,
+            responses={200: {"content": {"image/jpeg": {}}, "description": "Miniatura 128×128"},
+                       304: {"description": "Sem mudança (ETag)"}})
 async def obter_foto(request: Request, ctx: Contexto = Depends(contexto)) -> Response:
     achado = await run_in_threadpool(perfil.miniatura, ctx.contact_id)
     if achado is None:

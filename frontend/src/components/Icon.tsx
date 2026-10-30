@@ -30,6 +30,16 @@ const CAMINHOS = {
   loja: ['M3 9l2-5h14l2 5', 'M4 9v11h16V9', 'M9 20v-6h6v6'],
   local: ['M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z', 'M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'],
   estetoscopio: ['M6 3v6a4 4 0 0 0 8 0V3', 'M10 13v3a5 5 0 0 0 10 0v-2', 'M20 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'],
+  // Primitivos (TI-65): selos de estado, accordion/combobox, erro, imagem.
+  chevron: ['M6 9l6 6 6-6'],
+  relogio: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 7v5l3 2'],
+  cadeado: ['M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z', 'M8 11V8a4 4 0 0 1 8 0v3', 'M12 15v2'],
+  pausa: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M10 9v6', 'M14 9v6'],
+  etiqueta: ['M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z', 'M7.5 7.5v.01'],
+  imagem: ['M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z', 'M3 16l5-5 4 4 3-3 6 6', 'M15.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z'],
+  recarregar: ['M20 12a8 8 0 1 1-2.3-5.7', 'M20 4v4.5h-4.5'],
+  info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 11v5', 'M12 7.5v.01'],
+  megafone: ['M3 10v4a1 1 0 0 0 1 1h3l7 4V5L7 9H4a1 1 0 0 0-1 1z', 'M18 9a4 4 0 0 1 0 6'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type NomeIcone = keyof typeof CAMINHOS;

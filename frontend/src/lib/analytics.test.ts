@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { definirCsrf } from '../api/client';
 import { respostaJson } from '../test/utilidades';
 import { _reiniciarAnalytics, enviarFila, eventosDescartados, registrarUso } from './analytics';
+import { _reiniciarCampanha } from './campanha';
 
 describe('analytics de UI (REQUISITOS §8)', () => {
   beforeEach(() => {
     _reiniciarAnalytics();
+    _reiniciarCampanha();
+    window.history.replaceState(null, '', '/area');
     vi.useFakeTimers();
   });
 
@@ -38,6 +41,22 @@ describe('analytics de UI (REQUISITOS §8)', () => {
     registrarUso({ acao: 'pagina_ver', entidade: 'rota' });
     enviarFila(true);
     expect((f.mock.calls[1] as unknown as [string, RequestInit])[1].keepalive).toBe(true);
+  });
+
+  it('anexa a campanha da URL só ao primeiro pagina_ver e nunca a outras ações', async () => {
+    window.history.replaceState(null, '', '/area/beneficios/x?utm_source=rd&g=A03&q=cardio');
+    definirCsrf('tok');
+    const f = vi.fn(async () => respostaJson({ gravados: 3, descartados: 0 }, 202));
+    vi.stubGlobal('fetch', f);
+    registrarUso({ acao: 'central_whatsapp_abrir', entidade: 'central' });
+    registrarUso({ acao: 'pagina_ver', entidade: 'rota', entidade_id: '/area/beneficios/x', detalhes: { disp: 'mobile' } });
+    registrarUso({ acao: 'pagina_ver', entidade: 'rota', entidade_id: '/area' });
+    enviarFila();
+    const corpo = JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(corpo.eventos[0].detalhes).toBeUndefined();
+    expect(corpo.eventos[1].detalhes).toEqual({ disp: 'mobile', campanha: { origem: 'rd', gatilho: 'A03' } });
+    expect(corpo.eventos[2].detalhes).toBeUndefined();
+    expect(window.location.search).toBe('?q=cardio');
   });
 
   it('sem token CSRF ou com falha de rede descarta sem lançar', async () => {

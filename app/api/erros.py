@@ -17,6 +17,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .esquemas import ApiError as EsquemaApiError
+
 PREFIXO_API = "/api/"
 
 MENSAGENS_PADRAO: dict[int, tuple[str, str]] = {
@@ -32,6 +34,13 @@ MENSAGENS_PADRAO: dict[int, tuple[str, str]] = {
     503: ("fonte_indisponivel", "Não foi possível carregar agora. Tente novamente em instantes."),
 }
 _PADRAO_5XX = ("erro_interno", "Algo deu errado do nosso lado. Tente novamente em instantes.")
+
+
+# Respostas de erro possíveis em qualquer rota de /api/v1 (só documentação, TI-07).
+RESPOSTAS_ERRO: dict[int | str, dict[str, Any]] = {
+    status: {"model": EsquemaApiError, "description": f"`{codigo}` — {mensagem}"}
+    for status, (codigo, mensagem) in MENSAGENS_PADRAO.items()
+}
 
 
 class ApiError(Exception):

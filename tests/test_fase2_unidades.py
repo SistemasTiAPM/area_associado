@@ -315,6 +315,79 @@ def test_hub_stub_obedece_a_flag_de_escrita(monkeypatch):
     assert stub.contato_atualizar("cid", {"celular": "(11) 91234-5678"}) == ["celular"]
 
 
+def test_hub_situacao_por_contact_id_sem_cpf_enum_fechado(monkeypatch):
+    """TI-47: `associado.situacao` entra por contact_id, sai sem CPF; enum fora da lista vira `outro`."""
+    linhas = iter([
+        {"contact_id": "8EB5DA36-3847-EE11-BE6F-00224837E097", "cpf": "12345678901", "status_associativo": "Ativo",
+         "status_associativo_codigo": 2, "situacao_normalizada": "ativo", "tipo_associado": "Efetivo",
+         "data_filiacao": "2001-03-15", "statecode": "0", "situacao_registro": "Ativo",
+         "associacao_status": "Ativa", "associacao_status_codigo": 100000001, "associacao_data": "2024-05-01"},
+        {"contact_id": "cid-invalido", "status_associativo_codigo": True, "situacao_normalizada": "ATIVO",
+         "statecode": 1},
+        {"situacao_normalizada": "cancelado", "statecode": 0, "status_associativo_codigo": "100000005"},
+    ])
+
+    def rotas(req, n):
+        if req.url.path == "/oauth/token":
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 600})
+        return httpx.Response(200, json={"colunas": [], "linhas": [next(linhas)]})
+
+    cliente, chamadas = _hub(monkeypatch, rotas, escrita=False)
+    s1 = cliente.situacao_consultar("8eb5da36-3847-ee11-be6f-00224837e097")
+    assert s1.contact_id == "8eb5da36-3847-ee11-be6f-00224837e097" and s1.situacao_normalizada == "ativo"
+    assert s1.statecode == 0 and s1.status_associativo_codigo == 2 and s1.ativa is True
+    assert s1.associacao_status_codigo == 100000001 and s1.data_filiacao == "2001-03-15"
+    assert not hasattr(s1, "cpf") and "cpf" not in str(s1)
+    assert chamadas[1].url.path.endswith("/associado.situacao")
+    assert json.loads(chamadas[1].content) == {"argumentos": {"contact_id": "8eb5da36-3847-ee11-be6f-00224837e097"}}
+
+    s2 = cliente.situacao_consultar("cid")  # enum em caixa alta não é o contrato: fail-closed
+    assert s2.situacao_normalizada == "outro" and s2.contact_id is None and s2.status_associativo_codigo is None
+    assert s2.statecode == 1 and s2.ativa is False
+
+    s3 = cliente.situacao_consultar("cid")
+    assert s3.situacao_normalizada == "cancelado" and s3.ativa is False and s3.status_associativo_codigo == 100000005
+
+
+def test_hub_situacao_inexistente_e_sem_grant(monkeypatch):
+    from app.integracoes.hub import HubError
+
+    def rotas(req, n):
+        if req.url.path == "/oauth/token":
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 600})
+        if n == 2:
+            return httpx.Response(200, json={"linhas": [], "total": 0})
+        return httpx.Response(404, json={"erro": "ferramenta_inexistente"})  # sem grant exato: resposta única do hub
+
+    cliente, _ = _hub(monkeypatch, rotas, escrita=False)
+    assert cliente.situacao_consultar("cid") is None
+    with pytest.raises(HubError) as e:
+        cliente.situacao_consultar("cid")
+    assert (e.value.codigo, e.value.status) == ("fonte_indisponivel", 503)
+
+
+def test_hub_stub_situacao_deterministica():
+    from app.integracoes.hub import HubError, SituacaoCrm
+    from app.integracoes.hub_stub import ClienteHubStub
+
+    stub = ClienteHubStub()
+    a, b = stub.situacao_consultar("CID-1"), stub.situacao_consultar("CID-1")
+    assert isinstance(a, SituacaoCrm) and a == b and a.ativa and a.contact_id == "cid-1"
+    assert a.status_associativo_codigo == 2 and a.associacao_status_codigo == 100000001
+    assert "cpf" not in str(a)
+    stub.situacoes["cid-2"] = "cancelado"
+    stub.registros_inativos.add("cid-3")
+    stub.situacoes["cid-4"] = "inventado"
+    assert stub.situacao_consultar("cid-2").situacao_normalizada == "cancelado"
+    assert not stub.situacao_consultar("cid-2").ativa
+    c3 = stub.situacao_consultar("cid-3")
+    assert c3.situacao_normalizada == "ativo" and c3.statecode == 1 and not c3.ativa
+    assert stub.situacao_consultar("cid-4").situacao_normalizada == "outro"
+    stub.falhar = True
+    with pytest.raises(HubError, match="fonte_indisponivel"):
+        stub.situacao_consultar("cid-1")
+
+
 def test_edicao_desligada_vira_recurso_desligado_na_api():
     from app.api.v1.deps import erro_do_hub
     from app.integracoes.hub import HubError

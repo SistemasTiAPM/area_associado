@@ -16,11 +16,12 @@ from ...dominio import carteirinha, perfil
 from ...session_guard import require_associado
 from ..erros import ApiError
 from .deps import Contexto, contexto
+from .modelos import CarteirinhaResposta, UrlResposta
 
 router = APIRouter(tags=["carteirinha"])
 
 
-@router.get("/carteirinha")
+@router.get("/carteirinha", response_model=CarteirinhaResposta)
 async def obter_carteirinha(ctx: Contexto = Depends(contexto)) -> dict[str, Any]:
     p = await run_in_threadpool(perfil.ler, ctx.contact_id)
     if p is None:
@@ -41,14 +42,16 @@ async def obter_carteirinha(ctx: Contexto = Depends(contexto)) -> dict[str, Any]
     }
 
 
-@router.get("/carteirinha/qr.svg")
-async def qr(ctx: Contexto = Depends(contexto)) -> Response:
+@router.get("/carteirinha/qr.svg", response_class=Response,
+            responses={200: {"content": {"image/svg+xml": {}}, "description": "QR da URL pública de verificação"}})
+async def obter_qr_carteirinha(ctx: Contexto = Depends(contexto)) -> Response:
     svg = carteirinha.qr_svg(carteirinha.url_verificacao(carteirinha.token_para(ctx.contact_id)))
     return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=86400"})
 
 
-@router.post("/carteirinha/compartilhar", dependencies=[Depends(require_associado), Depends(exigir_csrf)])
-async def compartilhar(request: Request, ctx: Contexto = Depends(contexto)) -> dict[str, str]:
+@router.post("/carteirinha/compartilhar", response_model=UrlResposta,
+             dependencies=[Depends(require_associado), Depends(exigir_csrf)])
+async def compartilhar_carteirinha(request: Request, ctx: Contexto = Depends(contexto)) -> dict[str, str]:
     url = carteirinha.url_verificacao(carteirinha.token_para(ctx.contact_id))
     await run_in_threadpool(uso.registrar, "carteirinha_compartilhar", "carteirinha", contact_id=ctx.contact_id,
                             sub=ctx.associado.sub, request_id=getattr(request.state, "request_id", None))

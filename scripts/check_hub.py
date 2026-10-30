@@ -9,6 +9,9 @@ Uso (dentro do container, com HUB_MODE=real):
 2. Com um `contact_id` de teste, chama `associado.perfil_consultar` e imprime
    só QUAIS campos vieram (nunca valores), se o endereço está disponível e se
    a resposta veio sem CPF (ADR-0014).
+3. Chama `associado.situacao` com o mesmo `contact_id` (TI-47) e imprime só os
+   nomes dos campos e a `situacao_normalizada` (enum fechado, não é dado pessoal).
+   Falha se vier qualquer chave `cpf`.
 Sai com 1 em qualquer falha. Não imprime token, segredo nem dado pessoal.
 """
 
@@ -21,14 +24,17 @@ import httpx
 
 from app.config import get_settings
 from app.dominio.associado import contact_id_valido
-from app.integracoes.hub import ClienteHubReal, HubError, escopos_do_token, perfil_de_linha
+from app.integracoes.hub import ClienteHubReal, HubError, escopos_do_token, perfil_de_linha, situacao_de_linha
 
 _ESPERADOS = ("nome", "email", "celular", "telefone", "telefone2", "endereco", "endereco_disponivel", "num_contato",
               "crm", "crm_uf", "tipo_associado", "status_associativo", "data_filiacao", "tem_foto")
+_ESPERADOS_SITUACAO = ("contact_id", "status_associativo", "status_associativo_codigo", "situacao_normalizada",
+                       "tipo_associado", "data_filiacao", "statecode", "situacao_registro", "associacao_status",
+                       "associacao_status_codigo", "associacao_data", "associacao_criada_em")
 
 
 class _Sonda(ClienteHubReal):
-    """Olha a resposta CRUA antes de o cliente descartar a chave `cpf`."""
+    """Olha a resposta CRUA antes de o cliente descartar a chave `cpf` (acumula entre chamadas)."""
 
     cpf_visto = False
 
@@ -36,7 +42,8 @@ class _Sonda(ClienteHubReal):
         try:
             corpo = r.json()
             linhas = corpo.get("linhas") if isinstance(corpo, dict) else None
-            self.cpf_visto = isinstance(linhas, list) and any(isinstance(x, dict) and "cpf" in x for x in linhas)
+            if isinstance(linhas, list) and any(isinstance(x, dict) and "cpf" in x for x in linhas):
+                self.cpf_visto = True
         except ValueError:
             pass
         return super()._interpretar(ferramenta, r)
@@ -82,7 +89,26 @@ def main(argv: list[str]) -> int:
     perfil = perfil_de_linha(linha)
     print(f"endereço  : {'disponível' if perfil.endereco_disponivel else 'indisponível (flag/Metadata no hub)'}")
     print(f"UF do CRM : {'sigla ok' if perfil.crm_uf else 'vazia ou fora do padrão'}")
-    return 1 if faltando or cliente.cpf_visto else 0
+    falhas = bool(faltando) or cliente.cpf_visto
+
+    # 3. associado.situacao (TI-47): só nomes de campos + enum fechado; nunca valores pessoais.
+    try:
+        linhas_sit = cliente.chamar("associado.situacao", {"contact_id": cid})
+    except HubError as exc:
+        motivo = "sem grant exato na conta (404 do hub)" if exc.codigo == "fonte_indisponivel" else exc.codigo
+        print(f"situacao  : FALHA — {motivo} (HTTP {exc.status})", file=sys.stderr)
+        return 1
+    if not linhas_sit:
+        print("situacao  : FALHA — contato não encontrado", file=sys.stderr)
+        return 1
+    sit = linhas_sit[0]
+    faltando_sit = [c for c in _ESPERADOS_SITUACAO if c not in sit]
+    situacao = situacao_de_linha(sit)
+    print(f"situacao  : {'FALHA — o hub devolveu cpf' if cliente.cpf_visto else 'ok'} "
+          f"({situacao.situacao_normalizada}; registro {'ativo' if situacao.statecode == 0 else 'inativo/desconhecido'})")
+    print(f"campos    : {len(_ESPERADOS_SITUACAO) - len(faltando_sit)}/{len(_ESPERADOS_SITUACAO)}"
+          + (f" (faltando: {', '.join(faltando_sit)})" if faltando_sit else ""))
+    return 1 if falhas or faltando_sit or cliente.cpf_visto else 0
 
 
 if __name__ == "__main__":

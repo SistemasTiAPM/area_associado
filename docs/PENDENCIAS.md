@@ -8,7 +8,7 @@ resolvido, ele **sai daqui e entra em [CONCLUIDO.md](CONCLUIDO.md)** com data e 
 - **Referências:** decisões em [docs/adr/](adr/), requisitos em [REQUISITOS-minha-apm.md](REQUISITOS-minha-apm.md),
   plano por fases em [REQUISITOS-minha-apm.md §12](REQUISITOS-minha-apm.md) e no roteiro abaixo.
 
-## 📍 Onde paramos — 2026-10-19 (fim do dia)
+## 📍 Onde paramos — 2026-10-30 (Onda 1 fechada)
 
 **Últimos commits:** área na `main` (`SistemasTiAPM/area_associado`, ver [CONCLUIDO.md](CONCLUIDO.md));
 hub `8bb3c43` na `main` de `SistemasTiAPM/mcp_hub`. Ambos no GitHub.
@@ -41,7 +41,31 @@ demonstração". Fases 1, 2a e 2b implantadas; RDS com `sql/001`–`007`.
 demonstração continua por causa do SMTP simulado (P-27). Próximos: P-41 (volume ao hub), P-36
 (`.env` no Secrets Manager), P-29 para ligar a edição.
 
-**Para retomar:** Fase 3 (solicitações, plano neste repositório). Cada fase começa com plano e
+**2026-10-29:** chegou a **especificação funcional v2 da agência** (30/09/2026). Está transcrita em
+`docs/spec-v2/` e lida em `docs/LEVANTAMENTO-TECNICO-spec-v2.md` (listas **TI-nn** = só TI,
+**EXT-nn** = depende de terceiro, DIV-nn, DEC-nn). As dependências externas novas viraram **P-42 a
+P-65** abaixo; as decisões pendentes do usuário estão no §11 do levantamento. O roteiro ganhou a
+coluna "F da spec" e quatro blocos que a spec coloca na F1 e o roteiro não tinha: backoffice,
+P06 Meu valor v1, P14 Ajuda/cancelamento e o motor de elegibilidade/carências.
+
+**2026-10-30 — Onda 1 executada** (`docs/PLANO-EXECUCAO.md`): base transversal no ar — catálogo de
+`evento_uso` com 51 ações e `acesso_primeiro`, `exigir_reautenticacao`, flags v2 (`sql/009`), OpenAPI
+versionado em `docs/api/openapi.json` com verificação no build, campanha `utm_*`/`g=`, `db_check` por
+usuário, migração `sql/008` (partições; **aplicação pelo operador**), compose com `TZ`/tmpfs/pids,
+`scripts/deploy.sh`, `scripts/alertas.sh`, `docs/OPERACAO.md`, front com voz §3.3, alvos 44 px, axe
+WCAG 2.2 em todas as rotas, 10 primitivos puros, sub-rotas no shell; hub com `associado.situacao`/
+`historico_associacao` por `contact_id` sem CPF (grant M-7 pelo operador); REQUISITOS v0.2; ADR-0018..0022.
+Decisões DEC-01/02/04/13/22/28/29 aceitas e DEC-03 (parte de banco) decidida.
+
+**Ações do operador pendentes (Onda 0 + fechamento):** P-36, P-01, P-34, P-19, P-61 (`docs/OPERACAO.md`
+§2–§5); **M-7** grant exato de `associado.situacao` e `associado.historico_associacao` à conta
+`area-associado` no painel do hub; aplicar `sql/008` (snapshot antes; sha256 em PROVISIONAMENTO §2.3) e
+`sql/009` (§2.4); P-59/P-60 (IAM e teste de restauração); WebKit no host de e2e
+(`npx playwright install --with-deps webkit`, root).
+
+**Para retomar:** **Onda 2** = Fase 3 (solicitações), **ampliada** pelo levantamento (§12.2: 8 status da spec,
+P14 como dois tipos de solicitação, outbox de comunicação produzida, serviço de jobs). As decisões DEC-01, DEC-02, DEC-04, DEC-13, DEC-22, DEC-28 e DEC-29 já estão tomadas (ADR-0018..0021);
+o plano da Onda 2 não precisa de nova rodada de perguntas. Cada fase começa com plano e
 aprovação (CLAUDE.md, sessão 4). Toda entrega daqui para a frente vai ao ar em minha.apm.org.br
 com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência vê na hora).
 
@@ -51,12 +75,12 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 
 | ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
 |---|---|---|---|---|---|---|
-| P-01 | P0 | Certificado de origem do `nginx_porteiro` (`origin.pem`, autoassinado) venceu em 10/10/2026. Os sites só seguem no ar porque a zona Cloudflare não está em Full (strict). Emitir Cloudflare Origin CA e passar a zona para Full (strict). | Estivador / infra | Cutover (`docs/CUTOVER.md`) e qualquer acesso externo | aberta | 2026-10-10 |
+| P-01 | P0 | Certificado de origem do `nginx_porteiro` (`origin.pem`, autoassinado) venceu em 10/10/2026. Os sites só seguem no ar porque a zona Cloudflare não está em Full (strict). Emitir Cloudflare Origin CA e passar a zona para Full (strict). **2026-10-30:** runbook pronto em `docs/OPERACAO.md` §2 (TI-70); `scripts/alertas.sh` acusa o vencimento. | Estivador / infra | Cutover (`docs/CUTOVER.md`) e qualquer acesso externo | aberta | 2026-10-10 |
 | P-04 | P0 | `mcp_hub`: aceitar `contact_id` como chave em `associado.consultar`, `totalpass.adesao_consultar` e `financeiro.*`, resolvendo o CPF dentro do hub. **Parcial (2026-10-19):** `dataverse.contato_por_id` existe e as 4 ferramentas da Minha APM já são por `contact_id`, com titular auditado por contato; faltam as ferramentas que hoje exigem CPF. A área não tem CPF por regra (ADR-0014). | mcp_hub | Fases 4 e 7 | em andamento | 2026-10-16 |
 | P-06 | P0 | Definir a entidade do CRM que espelha as solicitações. Proposta: `task` *regarding* contact, `subject` `[Minha APM] <tipo> <uuid>`. Alternativa: entidade custom. Verificar flows que disparam em create e quem do atendimento trata a fila. | CRM / negócio | Fase 3 (o espelho; a fila local funciona sem ele) | aberta | 2026-10-16 |
 | P-07 | P0 | Locaweb `portal_apm`: criar usuário **novo somente leitura** com SELECT só em `pw_portal_{posts,postmeta,terms,term_taxonomy,term_relationships,yoast_indexable}`, verificar suporte a TLS (`have_ssl`), restringir origem ao IP da EC2. Depois de migrar o appapm (P-16), revogar `portal_apm@%`, marcado como vazado em `PENDENCIAS_AWS.md`. | infra / Planeta W | Fase 5 (até lá `WP_MODE=stub`) | aberta | 2026-10-16 |
-| P-34 | P1 | **Catch-all na 443 do porteiro.** Host proxied sem vhost cai no primeiro `server` em ordem alfabética, hoje `apm_parceiros.conf`: em 19/10 `minha.apm.org.br` abriu o Sistema de Parceiros até o vhost da área entrar. Proposta: `server { listen 443 ssl default_server; server_name _; return 444; }` num arquivo `_00_padrao.conf`, mantendo o default da porta 80 (health check do ALB, ver `totalpass.conf`). Mexe no porteiro de todos os projetos. | Estivador / operador | — (risco para qualquer DNS novo) | aberta | 2026-10-19 |
-| P-36 | P1 | Replicar o `.env` da área (alterado em 19/10 e 20/10: `PUBLIC_BASE_URL`, `SESSION_ENC_KEYS`, `CARTEIRINHA_HMAC_KEY`, `HUB_MODE`, `SMTP_MODE`, `AUTH_MODE=oidc`, `OIDC_SCOPES`, sem `DEV_STUB_TOKEN`) no Secrets Manager `prod/area-associado/env`; depois apagar `.env.bak-20261019-dominio` e `.env.bak-20261020-oidc`. Trocar `SESSION_ENC_KEYS` derruba todas as sessões; trocar `CARTEIRINHA_HMAC_KEY` invalida os QRs. | operador | recuperação do servidor | aberta | 2026-10-19 |
+| P-34 | P1 | **Catch-all na 443 do porteiro.** Host proxied sem vhost cai no primeiro `server` em ordem alfabética, hoje `apm_parceiros.conf`: em 19/10 `minha.apm.org.br` abriu o Sistema de Parceiros até o vhost da área entrar. Proposta: `server { listen 443 ssl default_server; server_name _; return 444; }` num arquivo `_00_padrao.conf`, mantendo o default da porta 80 (health check do ALB, ver `totalpass.conf`). Mexe no porteiro de todos os projetos. **2026-10-30:** arquivo pronto `deploy/nginx_porteiro/_00_padrao.conf.example` + `OPERACAO.md` §4 (TI-71). | Estivador / operador | — (risco para qualquer DNS novo) | aberta | 2026-10-19 |
+| P-36 | P1 | Replicar o `.env` da área (alterado em 19/10 e 20/10: `PUBLIC_BASE_URL`, `SESSION_ENC_KEYS`, `CARTEIRINHA_HMAC_KEY`, `HUB_MODE`, `SMTP_MODE`, `AUTH_MODE=oidc`, `OIDC_SCOPES`, sem `DEV_STUB_TOKEN`) no Secrets Manager `prod/area-associado/env`; depois apagar `.env.bak-20261019-dominio` e `.env.bak-20261020-oidc`. Trocar `SESSION_ENC_KEYS` derruba todas as sessões; trocar `CARTEIRINHA_HMAC_KEY` invalida os QRs. **2026-10-30:** runbook em `OPERACAO.md` §3 (TI-73); hoje há 3 `.env.bak-*` no disco; `alertas.sh` acusa. | operador | recuperação do servidor | aberta | 2026-10-19 |
 | P-08 | P1 | Parecer sobre licença e multiplexação do F&O antes de exibir dados do ERP a associados (`totalpass/docs/RUNBOOK_ERP_FO.md:205-211`). | TI / jurídico | Fase 7 | aberta | 2026-10-16 |
 
 ## Segurança e identidade
@@ -70,7 +94,7 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 
 | ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
 |---|---|---|---|---|---|---|
-| P-10 | P1 | Decidir as lacunas restantes da spec em [REQUISITOS §11](REQUISITOS-minha-apm.md): regra de validade da carteirinha (hoje omitida), o que é "Inscrever" e "Garantir minha vaga", destino de "Gerenciar", vocabulário único de categorias, textos dos toasts não definidos. E-mail e remoção de foto foram decididos em 2026-10-17. | negócio | Fases 4 e 5 | aberta | 2026-10-16 |
+| P-10 | P1 | Decidir as lacunas restantes da spec em [REQUISITOS §11](REQUISITOS-minha-apm.md): regra de validade da carteirinha (hoje omitida), o que é "Inscrever" e "Garantir minha vaga", destino de "Gerenciar", vocabulário único de categorias, textos dos toasts não definidos. E-mail e remoção de foto foram decididos em 2026-10-17. **2026-10-29:** a spec v2 responde boa parte (tipos de ativação 1–6, estados de elegibilidade, categorias); o que resta de catálogo está em P-48 e os textos em P-44. | negócio | Fases 4 e 5 | aberta | 2026-10-16 |
 | P-11 | P1 | Conteúdo: número da Central APM no WhatsApp e mensagem pré-preenchida, link de cada comunidade (convite de grupo, não `wa.me` 1:1), oferta da semana e catálogo do Clube. | comunicação | Fase 6 | aberta | 2026-10-16 |
 | P-12 | P2 | Fonte de dados para Mensalidade Zero, patrocínio, cashback e Fatura de valor. Até existir, as flags ficam forçadas desligadas (ADR-0007). | negócio | Fase 8 | aberta | 2026-10-16 |
 | P-13 | P2 | Wallet Apple/Google: conta developer, certificado de assinatura `.pkpass`, service account do Google Wallet. | TI | Fase 8 | aberta | 2026-10-16 |
@@ -82,10 +106,10 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 
 | ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
 |---|---|---|---|---|---|---|
-| P-15 | P2 | Política de retenção e purga de `evento_uso`, `noticia_cache`, `evento_cache` e `job_execucao`, executada pelo operador (sem DELETE pela aplicação). | Atlas | após Fase 5 | aberta | 2026-10-16 |
+| P-15 | P1 | Política de retenção e purga de `evento_uso`, `noticia_cache`, `evento_cache` e `job_execucao`, executada pelo operador (sem DELETE pela aplicação). **2026-10-29:** prazos por tabela vêm do jurídico (P-54); mecanismo proposto = partição mensal + `DROP PARTITION` administrativo (levantamento TI-02, TI-28). Antecipar para antes da Fase 4. | Atlas | Fase 4 | aberta | 2026-10-16 |
 | P-16 | P2 | Migrar o appapm para o usuário somente leitura novo da Locaweb (P-07) e aposentar `portal_apm@%`. | appapm | — | aberta | 2026-10-16 |
 | P-21 | P1 | Mapear no WordPress `portal_apm` como as **notícias** são publicadas (post type, taxonomia de tema, campos de imagem e fonte). As queries do appapm só cobrem `evento`, `banner-header` e `regional`. Exige o usuário RO de P-07. | Integrador / Planeta W | Fase 5 | aberta | 2026-10-17 |
-| P-19 | P2 | Incluir `area_associado` e `area-associado-jobs` em `/home/ubuntu/verificar-pos-reboot.sh` (hoje fora da lista de 12 containers). | Estivador | após Fase 1 | aberta | 2026-10-16 |
+| P-19 | P2 | Incluir `area_associado` e `area-associado-jobs` em `/home/ubuntu/verificar-pos-reboot.sh` (hoje fora da lista de 12 containers). **2026-10-30:** edições prontas em `deploy/verificar-pos-reboot.patch.md` (TI-72). | Estivador | após Fase 1 | aberta | 2026-10-16 |
 | P-27 | P0 | Credencial SMTP própria da área (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`) com remetente autorizado (SPF/DKIM). Sem ela a troca de e-mail fica indisponível em produção (`SMTP_MODE=stub` é proibido lá). | TI / infra | produção da troca de e-mail (ADR-0015) | aberta | 2026-10-17 |
 | P-29 | P0 | **Flows, plugins e workflows que disparam em update de `contact`** no Dataverse: mapear quais existem, o que fazem quando a área muda celular, telefone, e-mail, endereço ou foto, e se algum notifica o associado, sincroniza com outro sistema ou sobrescreve campo. **O escopo `ferramentas:escrever` não é marcado na conta `area-associado` em produção antes disso.** | CRM admin | escrita real no CRM | aberta | 2026-10-19 |
 | P-30 | P1 | Homologar a foto no CRM: `entityimage` com `CanStoreFullImage` (senão o CRM guarda só 144×144) e `MaxSizeInKB` (o `check_conectores` do hub imprime os dois); confirmar que o PATCH com base64 é aceito e que `foto_obter` devolve a imagem gravada. Plano B no hub se o PATCH falhar: `PUT .../entityimage` com `application/octet-stream`. **2026-10-21 (hub):** o CRM está com `CanStoreFullImage=False` e `MaxSizeInKB=10240`, ou seja, guarda só 144×144. A miniatura local (128×128) não sofre; quem mais lê a foto do CRM recebe 144×144. Decidir com o CRM admin se liga a imagem cheia. | CRM admin / Integrador | foto real no CRM | aberta | 2026-10-19 |
@@ -93,25 +117,66 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 | P-32 | P2 | Convenção de formato de telefone no CRM. A área e o hub gravam `(11) 91234-5678` / `(11) 3188-6200`; confirmar se flows, discador ou integrações esperam outro formato (E.164, só dígitos) antes de virar padrão. | CRM admin / negócio | — | aberta | 2026-10-19 |
 | P-33 | P2 | No ensaio ponta a ponta de 19/10, 1 de 9 emissões de token do hub para a área voltou 503 `temporarily_unavailable`; não se repetiu em 8 tentativas e o log daquela rodada se perdeu com o container. Após implantar o hub, vigiar `oauth/token indisponível` e `nenhuma chave de assinatura ativa` no log; se aparecer, investigar o cache do chaveiro e o pool do RDS. | Integrador | — | aberta | 2026-10-19 |
 | P-24 | P2 | Páginas Jinja fora da SPA (login stub e erro) ainda usam o visual antigo (Neo Sans, paleta azul/dourado). Unificar com a linguagem de `entrada.css` (Sora + paleta do mockup). Entrada (guardada sem rota) e `/verificar/{token}` já foram feitas em 2026-10-20. | Vitrine | cutover | aberta | 2026-10-17 |
-| P-25 | P2 | Sem CI: pytest, Vitest, lint e typecheck rodam no build da imagem, mas o e2e (Playwright) e o Lighthouse são manuais. Avaliar GitHub Actions com a deploy key do repositório. | Estivador | — | aberta | 2026-10-17 |
+| P-25 | P2 | Sem CI: pytest, Vitest, lint e typecheck rodam no build da imagem, mas o e2e (Playwright) e o Lighthouse são manuais. Avaliar GitHub Actions com a deploy key do repositório. **2026-10-30:** `scripts/deploy.sh` (tag, smoke, rollback) e `docs/api/openapi.json` verificado no build já existem; GitHub Actions é TI-77 (Onda 5, EXT-30). WebKit no e2e configurado (`E2E_WEBKIT=1`) mas o host não tem as libs: `npx playwright install --with-deps webkit` exige root (Estivador). | Estivador | — | aberta | 2026-10-17 |
 | P-26 | P2 | O host não tem o plugin `docker-buildx`: build com BuildKit falha; hoje se usa `DOCKER_BUILDKIT=0`. Instalar o plugin (`apt install docker-buildx`) é mudança de sistema, decisão do operador. | infra | — | aberta | 2026-10-17 |
 
-| P-41 | P1 | Responder ao mcp_hub o pico de chamadas/min e o total/dia esperados da conta `area-associado` (definem `chamadas_por_minuto` e a cota PII). Do código: 1 `perfil_consultar` por associado a cada `PERFIL_CACHE_TTL` (24 h) e só ao abrir o Perfil, + 1 por worker a cada deploy; `foto_obter` ainda sem uso; escrita limitada a 10/h de contato e 5/h de foto por associado. Falta a estimativa de acessos diários ao Perfil. Rever com `evento_uso` 30 dias depois da virada. **Provisório no hub (2026-10-21):** 120 chamadas/min e 5.000 registros pessoais/dia até este número; estourar a cota dá erro do hub, e o Perfil serve o cache marcado `desatualizado` (ou 503 a quem nunca teve cache). | usuário / negócio | taxa e cota da conta no hub | aberta | 2026-10-21 |
+| P-41 | P1 | **Respondida ao mcp_hub em 2026-10-30** (hipótese de **10 mil associados ativos** até o número real, EXT-23/P-49). **Conta web `area-associado`:** `perfil_consultar` 1×/24 h por associado que abre o Perfil (≈ 5 %/dia → ≈ 500/dia) + 1 por worker a cada deploy; `/verificar` em tempo quase real (TI-45, Onda 2) via `associado.situacao` com cache 5–15 min e limite global 60/min por processo (2 workers → teto 120/min; ≈ 100–300/dia); escrita < 50/dia. Total ≈ 1.000 registros PII/dia, pico teórico 150/min → **pedir 200/min e manter 5.000/dia** (hoje 120/min e 5.000/dia; subir só quando TI-45 entrar). **Conta `area-associado-jobs`** (Onda 2; `client_credentials` próprio, só `ler`, grants exatos em `situacao` e `perfil_consultar`, mesma allowlist): situação noturna em lote 10.000/noite (01h–05h, ≤ 5/s) + `diff_cadastro` só para quem acessou em 90 d (≈ 3.000 `perfil_consultar`/noite) → **300/min e 15.000 PII/dia**; cai para ≈ 2.000/dia com `associado.alterados_desde(cursor)` (TI-51). Dataverse: ≈ 26.000 pedidos/noite, abaixo de 6.000/5 min. Rever com `evento_uso` + `auditoria_chamada` 30 dias após a virada. Hub registrou como M-1/M-8. | usuário (painel do hub) | taxa e cota das duas contas | **respondida; aplicação pelo operador** | 2026-10-21 |
 ---
+
+## Dependências externas da spec v2 (levantamento de 2026-10-29)
+
+Cada item corresponde a um `EXT-nn` de `docs/LEVANTAMENTO-TECNICO-spec-v2.md` §13 (o levantamento diz
+o que a TI faz enquanto espera). Estado inicial: aguardando terceiro.
+
+| ID | Pri | Item | Dono | Bloqueia | Estado | Desde |
+|---|---|---|---|---|---|---|
+| P-42 | P1 | **Mockups que não existem** (EXT-02): P04 ficha e 6 estados, P05 lista/linha do tempo/avaliação, P06 v2, P08, P13 consentimentos/LGPD, P14, P12 por categoria, P15 sino, aba "Mais", selos textuais; aceite visual do sino. Até lá a TI constrói com os componentes e a linguagem do ADR-0017 e pede aceite depois. | agência | aceite visual das fases 3–4 | aguardando terceiro | 2026-10-29 |
+| P-43 | P2 | **Identidade visual formal** (EXT-03): a spec §14 pede Verdana e `#616365`; o projeto segue Sora e a paleta do mockup (ADR-0017, decisão do usuário). Botão principal verde `#009581` × gradiente navy (contraste 3,74). Registrar a divergência com Marketing/agência; ADR-0017 vale até resposta. | Marketing APM / agência | — | aguardando terceiro | 2026-10-29 |
+| P-44 | P1 | **Textos finais na voz §3.3** (EXT-05): chamadas de rota, estados vazios/erro, rótulos dos 6 estados de elegibilidade e 7 status, "como calculamos", FAQ inicial (≥ 20), motivos de cancelamento, pedidos comuns. Até lá, textos da spec marcados como proposta. | Encantada / Marketing APM | Fases 3–4 (aceite) | aguardando terceiro | 2026-10-29 |
+| P-45 | P2 | **Testes de usabilidade** com associados de faixas etárias diferentes (§14) e iPhone real para e2e manual (EXT-07). | Marketing / Encantada | aceite de P02/P03 e tamanho de fonte | aguardando terceiro | 2026-10-29 |
+| P-46 | P1 | **Contrato de comunicação com o RD Station** (EXT-08): app OAuth2 privado para a área (ou reuso do app do totalpass), campos `cf_apm_*` novos, tabela gatilho A01–A20 → `conversion_identifier` → fluxo, quem aplica o limite 2/semana, nomes de UTM/código do gatilho, dono único dos campos (sincronia CRM→RD `cf_crm_contato_*` marcada "Não Funcionando", `birthdate` padrão). Até lá `RD_MODE=stub` e outbox acumulando. | Marketing (dono da conta RD) + CRM admin | envio real dos gatilhos; indicador 10; A18 | aguardando terceiro | 2026-10-29 |
+| P-47 | P2 | **Destino dos dados analíticos e ferramenta de painéis** (F0-06, EXT-09; DEC-16): views RO + ferramenta interna; nunca script de terceiro na SPA (CSP). Quem acessa cada painel do §11.5. | Marketing / Encantada / usuário | B12 | aguardando terceiro | 2026-10-29 |
+| P-48 | P0 | **Catálogo inicial validado** (EXT-10; amplia P-10): 30–40 benefícios com categoria, tipo de ativação, carência (regulamento 01/03/2024), categorias permitidas, região, vigência, parceiro, canal e prazo de retorno, modalidade de mensuração e **valor de referência aprovado pelo Financeiro**. É item do gate F0 (§15.1). Até lá: tabelas vazias e fixture de teste; nenhum card real. | Benefícios e parcerias + Financeiro (+ Jurídico: carência do Clube) | Fase 4 (P03/P04/P06 reais), A03/A05 | aguardando terceiro | 2026-10-29 |
+| P-49 | P1 | **Parâmetros e definições de negócio** (EXT-11; §15.5): dias de atraso que suspendem, prazo de retorno padrão, prazo de avaliação, "mudança de categoria reinicia carência?" (recomendação da spec: não), carência do Clube, motivos de cancelamento, vocabulário/códigos de categoria e contagem da base conciliada. Até lá `parametro` com padrões documentados e de-para provisório. | Presidência / Financeiro / Benefícios / Jurídico | Fase 4 (elegibilidade) | aguardando terceiro | 2026-10-29 |
+| P-50 | P2 | **Parceiros com API e contratos técnicos** (EXT-12; B04): por parceiro, autenticação, payload mínimo (LGPD), status de volta, prazo, host de destino por benefício, exigência de SSO/código pessoal. Cada um entra por ADR própria (ADR-0009). Até lá tipo 2 por canal manual + CSV. | Benefícios + parceiros | tipo 2 por API (F2) | aguardando terceiro | 2026-10-29 |
+| P-51 | P2 | **Fornecedores de MBE, biblioteca, Clube Certo e plataformas de eventos/IESAPM** (F0-01, EXT-13): mecanismo de acesso único (o Login APM como provedor; nunca identidade na URL) e API de retorno (resgate, inscrição, presença, certificado). Até lá link rastreado e inscrição como interesse. | Benefícios / fornecedores | tipos 1/5/6 reais; CLU-01..03; EVE/CON | aguardando terceiro | 2026-10-29 |
+| P-52 | P2 | **Qualicorp** (EXT-14): custo e forma da integração (API ou relatório). F2. | Benefícios + Qualicorp | F2 | aguardando terceiro | 2026-10-29 |
+| P-53 | P1 | **Arquivos CSV do plano B** (EXT-15; §13.3): parceiros sem API entregam até o dia 10 pelo canal definido em DEC-05 (upload no backoffice na F1; nunca e-mail). Parser e validador são TI. | Benefícios + parceiros | Meu valor v1 com importações; B06 | aguardando terceiro | 2026-10-29 |
+| P-54 | P1 | **Jurídico/encarregado de dados** (EXT-16; amplia P-15): textos e finalidades dos consentimentos com versão; base legal por finalidade; prazo de guarda por tabela (solicitação, auditoria, consentimento, uso/valor, `evento_uso`, comunicação, `job_execucao`); procedimento do pedido de exclusão (anonimização, sem DELETE — DEC-06; prazo de resposta); quem opera a fila. Até lá consentimentos atrás de flag com texto v0 e retenção pelas propostas das migrações. | Jurídico + encarregado | Fase 3b (P13 LGPD), retenção | aguardando terceiro | 2026-10-29 |
+| P-55 | P2 | **Parecer sobre dados de saúde** para a rede de encaminhamento (ENC-01, EXT-18). F3; antes vêm DIR-01/COM-01. | Jurídico | P16 ENC-01 | aguardando terceiro | 2026-10-29 |
+| P-56 | P1 | **Atributos do `contact` no CRM** (EXT-19; §13.2): data de nascimento (completude; exposta só como faixa de carreira ou `confere: bool`), nome social, especialidades, regional/distrital, isenção/remição, documentação pendente; se `sol_associacao` registra categoria ou só status. Destrava personalização (§7.1), elegibilidade por região, nascimento no primeiro acesso do IdP, A13/A14/A19. | CRM admin | Fase 4 (fase de carreira, região), IdP | aguardando terceiro | 2026-10-29 |
+| P-57 | P2 | **Sandbox do Dataverse** (ou contatos de teste marcados) acessível por uma conta do hub, para a homologação (EXT-22; DEC-30). | CRM admin | homologação antes da escrita real | aguardando terceiro | 2026-10-29 |
+| P-58 | P1 | **"Novo sistema de cadastro e cobrança"** (EXT-24; §13.1/13.2, F0-02): não aparece em nenhum repositório. Definir o que é, quem desenvolve, API, avisos automáticos (webhooks), situação financeira, **segunda via (PDF, linha digitável, Pix)** e renovação. Premissa da TI (DEC-17): D365 + eventos no hub; a área só muda o contrato por `contact_id` atrás do hub. Até lá ERP só leitura, sem 2.ª via ("fale com a Central"); jobs de diferença no lugar de avisos. | Diretoria / Financeiro / TI | P08, A09, A10, indicadores 4 e 11 | aguardando terceiro | 2026-10-29 |
+| P-59 | P1 | **IAM da EC2** (EXT-27): ampliar a role `EC2-ReadOnly-Billing` (ou perfil humano) com `rds:CreateDBSnapshot`, `rds:RestoreDBInstanceFromDBSnapshot`, `secretsmanager:GetSecretValue` em `prod/area-associado/env`, `cloudwatch:DescribeAlarms`, opcional `logs:*`. Até lá o operador faz pelo console. | AWS admin | backup/restore ensaiado, `env_check`, logs | aguardando terceiro | 2026-10-29 |
+| P-60 | P1 | **Teste de restauração do RDS** executado e datado (snapshot → instância temporária → `db_check` e contagens → descarte); retenção 7 → 14 dias; export de logs `error`/`slowquery` e Performance Insights (EXT-28; §14 "cópia de segurança diária com teste de restauração"; DEC-33). Hoje: snapshots diários, PITR, **zero teste**. | operador / AWS admin | cutover | aguardando terceiro | 2026-10-29 |
+| P-61 | P1 | **Monitor externo** (EXT-29): conta (UptimeRobot/Better Stack ou similar) com contatos de alerta para os 7 hosts; decidir o destino do Datadog pago. Nenhum monitor externo desde 14/09. | operador | alertas (indicador 14) | aguardando terceiro | 2026-10-29 |
+| P-62 | P2 | **Cloudflare Access e regras** (EXT-31): Zero Trust com IdP corporativo e MFA para `admin`/`hml`; lista de IPs/VPN da APM para allowlist; rate limit/WAF para `minha.apm.org.br` (`/auth/*`, `/verificar/*`). | Cloudflare admin / operador | backoffice, homologação | aguardando terceiro | 2026-10-29 |
+| P-63 | P2 | **Egress e armazenamento** (EXT-32): confirmar saída do SG da EC2 para Locaweb 3306 e API do RD (443) a partir do container de jobs; bucket S3 privado + role `PutObject` só se DEC-05 escolher S3 para o CSV. | AWS admin | jobs WP/RD; canal do CSV (F2) | aguardando terceiro | 2026-10-29 |
+| P-64 | P2 | **Canal celular para OTP e régua** (EXT-35): WhatsApp API oficial (Fortics, já previsto no IdP e desligado) ou provedor SMS, com contrato, remetente e limites. SMS não existe em nenhum sistema. Até lá só e-mail; P13 não mostra WhatsApp/SMS (regra 19). | TI / contratos / Marketing | OTP por celular no IdP, A02, canais em P13 | aguardando terceiro | 2026-10-29 |
+| P-65 | P1 | **Entra ID da APM para o backoffice** (EXT-36; DEC-03): tenant, app registration, grupos → 8 perfis (§9.1), política de MFA. O backoffice nunca usa o `login_associado` (IdP de associados). | TI / diretoria | backoffice (B01–B13) | aguardando terceiro | 2026-10-29 |
+
+### Decisões pendentes da spec v2
+
+As 36 decisões (DEC-01..36: máquina de estados, backoffice, CSV, exclusão, PWA, notificações, revogação
+da carteirinha, API de consulta de associação, navegação, jobs, homologação, deploy, OpenAPI…) estão no
+§11 de `docs/LEVANTAMENTO-TECNICO-spec-v2.md`, cada uma com opções e recomendação. As 46 divergências
+(DIV-01..46) estão no §10. Nenhuma delas reabre decisão já tomada pelo usuário.
 
 ## Roteiro por fase
 
-Cada fase tem plano próprio e aprovação antes de codar (CLAUDE.md, sessão 4).
+Cada fase tem plano próprio e aprovação antes de codar (CLAUDE.md, sessão 4). A ordem de execução por **ondas** está em [`PLANO-EXECUCAO.md`](PLANO-EXECUCAO.md): Onda 1 (base transversal) feita em 30/10; Onda 2 = Fase 3 ampliada; 3 = 3b; 4 = Fase 4; 5 = integrações reais (Fases 5–7); 6 = backoffice; 7 = F2/F3.
 
-| Fase | Entrega | Pendências que bloqueiam | Estado |
-|---|---|---|---|
-| 0 | Requisitos, ADRs, pendências, concluídos, CLAUDE.md | — | concluída em 2026-10-17 |
-| 1 | Fundação: Vite + shell + tokens + fontes, `spa.py`, sessão cifrada, CSRF por header, `uso.py`, `flags.py`, `sql/003-005`, Dockerfile multi-stage, vhost, testes de rotas | — | código concluído em 2026-10-17; no ar em minha.apm.org.br desde 2026-10-19 |
-| 2a | Perfil e carteirinha na área: cache do perfil, contato, e-mail com código, foto, carteirinha com QR, verificação pública, escopo `carteirinha` | — | código concluído em 2026-10-17; no ar em minha.apm.org.br desde 2026-10-19 |
-| 2b | mcp_hub com perfil, contato e foto no CRM (contrato em `docs/CONTRATO-HUB.md`) e troca de `HUB_MODE` para `real` | P-41, P-29, P-30, P-31 | no ar em leitura desde 2026-10-21; escrita depois da P-29 |
-| 3 | Solicitações: `sql/008`, máquina de estados, API, jobs de outbox e sincronização, tela | P-06 | próxima |
-| 4 | Benefícios: `sql/007` seed, ativações, TotalPass via hub + deep-link, home | P-04, P-10, P-22 | — |
-| 5 | Notícias e eventos: `portal_wp.py` só no job, caches, temas, salvos, inscrições, banner do Congresso | P-07, P-10, P-21 | — |
-| 6 | Comunidade, onboarding acadêmico e clube | P-11 | — |
-| 7 | ERP via hub `financeiro.*` atrás da flag `erp_financeiro` | P-04, P-08 | — |
-| 8 | Patrocínio, fatura de valor e wallet atrás de flags | P-12, P-13 | — |
+| Fase | Entrega | F da spec | Pendências que bloqueiam | Estado |
+|---|---|---|---|---|
+| 0 | Requisitos, ADRs, pendências, concluídos, CLAUDE.md; **levantamento da spec v2 (29/10)** | F0 | gate F0 parcial (catálogo e contratos de parceiro são externos: P-48, P-50) | concluída em 2026-10-17; levantamento em 2026-10-29 |
+| 1 | Fundação: Vite + shell + tokens + fontes, `spa.py`, sessão cifrada, CSRF por header, `uso.py`, `flags.py`, `sql/003-005`, Dockerfile multi-stage, vhost, testes de rotas | F1 | — | código concluído em 2026-10-17; no ar em minha.apm.org.br desde 2026-10-19 |
+| 2a | Perfil e carteirinha na área: cache do perfil, contato, e-mail com código, foto, carteirinha com QR, verificação pública, escopo `carteirinha` | F1 (P07, P13 parcial) | — | código concluído em 2026-10-17; no ar em minha.apm.org.br desde 2026-10-19 |
+| 2b | mcp_hub com perfil, contato e foto no CRM (contrato em `docs/CONTRATO-HUB.md`) e troca de `HUB_MODE` para `real` | F1 (INT-01) | P-41, P-29, P-30, P-31 | no ar em leitura desde 2026-10-21; escrita depois da P-29 |
+| 3 | Solicitações **ampliada**: `sql/008` com os 8 status da spec, `sql/009` `job_execucao`, serviço de jobs, API, P05, **P14 (FAQ + cancelamento como solicitação)**, outbox de comunicação e `notificacao` produzidas (envio desligado), transacionais A04/A05/A06, carteirinha em tempo quase real | F1 (P05, P14, SOL, A04–A06, A16) | P-06 só para o espelho; P-27 para e-mail real; P-41 para a situação na verificação | próxima |
+| 3b | P13 preferências, consentimentos versionados, baixar dados, pedir exclusão (anonimização), retenção; RD Station com stub | F1 (PER-02/03, LGPD) | P-54 (textos e prazos), P-46 (RD) | — |
+| 4 | Benefícios: `sql/010` catálogo como dado + `sql/011` valor (antecipado da 8), elegibilidade/carências, ativações por tipo, recomendação v1, home em blocos, TotalPass via hub + deep-link | F1 | P-04, P-48, P-49, P-22; DEC-03/14/15 | — |
+| 5 | Notícias e eventos: `portal_wp.py` só no job, caches, temas, salvos, inscrições (interesse), banner do Congresso | F2 (P10, P11) | P-07, P-21, P-51 | — |
+| 6 | Clube (link rastreado), trilha completa, comunidade (F3) | F1 link / F2 / F3 | P-11, P-51, P-55 | — |
+| 7 | Financeiro P08 via hub `financeiro.*` atrás de `erp_financeiro` (situação, mensalidades; 2.ª via só com fonte) | F1 condicional | P-04, P-08, P-58 | — |
+| 8 | Patrocínio (P17), wallet, "N vezes" com total pago — Meu valor v1 foi para a Fase 4 | F2/F3 | P-12, P-13, P-58 | — |
+| — | **Backoffice B01–B13** (sem fase; F1 na spec) | F1 | DEC-03, P-65, P-62, P-47 | a decidir |
