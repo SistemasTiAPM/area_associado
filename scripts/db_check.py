@@ -31,9 +31,15 @@ from dataclasses import dataclass, field
 # JÁ MIGRADAS: tabela nova entra aqui NO MESMO commit da migração que concede
 # o grant (ADR-0004 §2 e §6) — nunca antes, senão o item (b) acima vira ruído.
 #
-# `apm_area`        — processo web (sql/000): SELECT, INSERT, EXECUTE no schema;
-#                     UPDATE em `associado` (005), `associado_perfil` (006),
-#                     `email_verificacao` (007).
+# `apm_area`        — processo web e jobs (sql/000): SELECT, INSERT, EXECUTE no
+#                     schema; UPDATE em `associado` (005), `associado_perfil`
+#                     (006), `email_verificacao` (007) e, POR COLUNA (o GRANT
+#                     lista as colunas; aqui conta a tabela), `solicitacao`
+#                     (010), `comunicacao_evento` e `notificacao` (012) e
+#                     `job_execucao` (011, só as colunas que fecham a linha).
+#                     `parametro`, `faq`, `texto_sistema` (013) e as trilhas
+#                     `solicitacao_evento`, `comunicacao_envio`,
+#                     `comunicacao_supressao` e `fila_ligacao` ficam SEM UPDATE.
 # `apm_area_bo`     — backoffice (ADR-0022, Onda 6): UPDATE em catálogo e
 #                     configuração; a allowlist nasce com a migração dele.
 # `apm_area_painel` — painéis (ADR-0022): só SELECT em views `vw_*`, nada no
@@ -53,7 +59,12 @@ class Politica:
 POLITICAS: dict[str, Politica] = {
     "apm_area": Politica(
         privilegios_schema=frozenset({"SELECT", "INSERT", "EXECUTE"}),
-        tabelas_com_update=frozenset({"associado", "associado_perfil", "email_verificacao"}),
+        tabelas_com_update=frozenset({
+            "associado", "associado_perfil", "email_verificacao",          # 005–007
+            "solicitacao",                                                 # 010 (por coluna)
+            "job_execucao",                                                # 011 (por coluna)
+            "comunicacao_evento", "notificacao",                           # 012 (por coluna)
+        }),
     ),
     "apm_area_bo": Politica(
         privilegios_schema=frozenset({"SELECT", "INSERT", "EXECUTE"}),

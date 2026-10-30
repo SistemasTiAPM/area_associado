@@ -143,6 +143,79 @@ exige base64 válido, até 256 KiB, JPEG (SOI/EOI) de **512×512** lido do marca
 remove a foto. Saída `{"contact_id", "bytes"}`. Se o CRM guarda a imagem cheia ou só 144×144 é
 P-30 (homologação).
 
+## Solicitações (Onda 5, P-06)
+
+**Contrato proposto pela área em 2026-10-30 (frente C da Onda 2); as três ferramentas ainda NÃO existem
+no hub.** A área já tem cliente (`app/integracoes/hub.py`), simulado (`hub_stub.py`) e o serviço de jobs
+que as chama (`app/jobs/solicitacoes.py`) — **só com `JOBS_APLICAR=1`**. Até a P-06, uma chamada real
+recebe o 404 genérico do hub ("ferramenta inexistente/sem grant"), que vira `HubError("fonte_indisponivel")`:
+o job registra, recua (1, 2, 4 … 60 min) e não quebra. Implementação no hub = TI-50, com a P-06
+(entidade, mapeamento de status, campo de mensagem pública).
+
+Regras comuns:
+
+- Chave = `contact_id` (GUID) + `solicitacao_id` (UUID v4 gerado pela área, correlação e idempotência).
+  **Sem CPF** em entrada ou saída: o hub recusa (400) a chave `cpf` e texto com padrão de CPF em `campos`.
+- Entidade no CRM: **`task` regarding contact** (`regardingobjectid_contact@odata.bind`), com o
+  `solicitacao_id` gravado num atributo próprio (nome a definir na P-06, ex.: `alf_id_externo`, com
+  índice/alternate key). Credencial própria do hub com papel **só Create/Write em `task`** (nunca em contact).
+- Conta: o espelho e o sync rodam no serviço de jobs, conta **`area-associado-jobs`** (`.env.jobs`);
+  `espelhar`/`status_atualizar` exigem `ferramentas:escrever` nela (hoje só `ler`, M-8) e
+  `HUB_ESCRITA_HABILITADA=true` no `.env.jobs`. Grants exatos nas três (nunca `solicitacao.*`).
+- Escrita: mesmo pipeline das escritas da Fase 2b (intenção auditada antes, resultado depois, 1 retry só em
+  401/429/503, timeout de 25 s no hub; a área espera `HUB_TIMEOUT_ESCRITA`). 504 `escrita_indeterminada`
+  é seguro de repetir: as duas escritas são idempotentes pela chave.
+
+### `solicitacao.espelhar` (escrita)
+
+Entrada:
+
+| Campo | Tipo | Observação |
+|---|---|---|
+| `contact_id` | GUID | dono do pedido |
+| `solicitacao_id` | UUID v4 | chave de idempotência: se já existe `task` com ela, devolve a existente (`criada: false`) |
+| `tipo` | texto ou `null` | `tipo_servico` da área (`outro`, `declaracao_associado`, `alteracao_cadastro`, `cancelamento_associacao`, …); `null` quando vier de benefício |
+| `titulo` | texto ≤ 200 | `Minha APM: <rótulo do tipo>` → `subject` |
+| `status` | enum da área | status atual (`criada`, ou outro se mudou antes do espelho) |
+| `criada_em` | ISO UTC | `2026-10-30T12:00:00Z` |
+| `prazo_retorno_dias` | int 1–365 | → `scheduledend` = criação + prazo |
+| `campos` | objeto | o que o associado preencheu (allowlist do tipo na área; ≤ 16 kB; sem CPF) → `description` formatada pelo hub (rótulo: valor), nunca HTML |
+| `beneficio_id` / `parceiro_id` | texto | só em pedido nascido do catálogo (Fase 4) |
+
+Saída: **uma** linha `{"solicitacao_id", "crm_id": "<activityid>", "criada": bool}`. Sem `crm_id` GUID
+válido a área trata como resultado incerto e repete (idempotente).
+
+### `solicitacao.status_atualizar` (escrita)
+
+Entrada `{"contact_id", "solicitacao_id", "crm_id", "status", "mensagem_associado"?, "cancel_motivo"?}`.
+`status` é o status atual da área; `mensagem_associado` (≤ 2000) é a resposta do associado quando a última
+transição foi dele (`pendente_associado → em_atendimento`), gravada como nota/anotação na `task`;
+`cancel_motivo` (≤ 200) quando o associado cancelou. Mapeamento área → `task`: `cancelada` → `statecode=2`;
+`em_atendimento` → "Em andamento"; demais só anotação. Saída: uma linha `{"solicitacao_id", "crm_id"}`.
+Erros: 404 `nao_encontrado` se a `task` não existe ou não é daquele `contact_id`/`solicitacao_id` (a área
+marca `falhou` direto — permanente).
+
+### `solicitacao.alteracoes_consultar` (leitura)
+
+Entrada `{"cursor": "<opaco>" | null, "limite": 1..200}`. Devolve as `task`s **criadas pela área** (com
+`solicitacao_id`) alteradas depois do cursor, em ordem `modifiedon, activityid`; `null` = desde o início.
+O hub trata `odata.nextLink` por dentro. Cada linha:
+
+| Campo | Observação |
+|---|---|
+| `solicitacao_id`, `crm_id`, `contact_id` | a área confere os três contra o pedido local; divergência → `evento_log`, nada aplicado |
+| `situacao` | enum fechado: `nao_iniciada` \| `em_andamento` \| `aguardando_associado` \| `concluida` \| `nao_seguiu` \| `cancelada` |
+| `mensagem_publica` | texto ao associado (obrigatório em `aguardando_associado`); **nunca** a descrição interna da `task` (campo definido na P-06) |
+| `modificado_em` | ISO com fuso |
+| `cursor` | posição opaca **depois** desta linha (`[A-Za-z0-9_.:+=/-]{1,200}`); a área guarda a da última linha aplicada em `job_execucao.posicao` |
+
+Mapeamento na área (REQUISITOS §7.5): `nao_iniciada` → nada (a área não regride); `em_andamento` →
+`em_atendimento`; `aguardando_associado` → `pendente_associado` (via `em_atendimento` se preciso);
+`concluida` → `concluida_positiva`; `nao_seguiu` e `cancelada` → `concluida_negativa` (a P-06 ainda precisa
+distinguir "não seguiu" de "cancelada pela APM"). Transição fora da tabela da máquina, terminal local ou
+espelho local pendente → não aplica (o local prevalece; divergência em `evento_log`; cancelamento local é
+reenviado). Linha fora do contrato → a rodada para sem avançar o cursor.
+
 ## Erros
 
 | HTTP | `erro` | Quando | Área |

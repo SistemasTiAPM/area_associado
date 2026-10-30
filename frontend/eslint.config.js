@@ -21,6 +21,32 @@ const proibicoes = [
   },
 ];
 
+// TI-10 / P-40 (GHSA-wrjc-x8rr-h8h6): destino de navegação montado em tempo de execução
+// só passa por `destinoSeguro` (lib/navegacao.ts). Literal (`to="/perfil"`) continua livre.
+const navegacaoInsegura = {
+  selector:
+    "JSXOpeningElement[name.name=/^(Link|NavLink|Navigate)$/] > JSXAttribute[name.name='to'] > JSXExpressionContainer",
+  message:
+    'Destino variável em <Link>/<NavLink>/<Navigate> só por <LinkInterno> ou useNavegarSeguro (lib/navegacao.ts; TI-10, P-40).',
+};
+
+const SEM_ROUTER_6 = {
+  name: 'react-router-dom',
+  message: 'Use `react-router` 7 (P-40): o pacote react-router-dom saiu do projeto.',
+};
+
+const NAVEGACAO_PROGRAMATICA = {
+  name: 'react-router',
+  importNames: ['useNavigate', 'Navigate', 'redirect', 'redirectDocument', 'replace'],
+  message: 'Navegação programática só por useNavegarSeguro/navegarSeguro (lib/navegacao.ts; TI-10, P-40).',
+};
+
+/**
+ * Exceções da regra de navegação: o módulo seguro, o link seguro e o shell (menu,
+ * barra inferior e busca montam destinos a partir de `rotas.ts`, não de dado do usuário).
+ */
+const EXCECOES_NAVEGACAO = ['src/lib/navegacao.ts', 'src/components/LinkInterno.tsx', 'src/shell/**/*.{ts,tsx}'];
+
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results'] },
   js.configs.recommended,
@@ -32,7 +58,8 @@ export default tseslint.config(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
-      'no-restricted-syntax': ['error', ...proibicoes],
+      'no-restricted-syntax': ['error', ...proibicoes, navegacaoInsegura],
+      'no-restricted-imports': ['error', { paths: [SEM_ROUTER_6, NAVEGACAO_PROGRAMATICA] }],
       'no-restricted-globals': [
         'error',
         { name: 'localStorage', message: 'Nada de dado do associado no navegador (RNF-21).' },
@@ -49,6 +76,13 @@ export default tseslint.config(
       'no-console': ['error', { allow: ['error'] }],
       eqeqeq: ['error', 'always'],
       '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    files: EXCECOES_NAVEGACAO,
+    rules: {
+      'no-restricted-syntax': ['error', ...proibicoes],
+      'no-restricted-imports': ['error', { paths: [SEM_ROUTER_6] }],
     },
   },
   {

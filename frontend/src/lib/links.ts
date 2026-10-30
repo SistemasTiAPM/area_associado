@@ -34,3 +34,15 @@ export function urlWhatsapp(numero: string, mensagem: string): string | null {
   if (!/^[1-9][0-9]{9,14}$/.test(numero)) return null;
   return urlExternaSegura(`https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`);
 }
+
+/**
+ * Link de telefone (RF-AJ-02; `tel:` na allowlist de esquemas): só `tel:` seguido
+ * de `+` opcional e 8 a 15 dígitos (E.164 sem separadores). Aceita também só os
+ * dígitos. Qualquer outra coisa (letras, `;ext=`, parâmetros, `javascript:`) → `null`.
+ */
+export function urlTelefone(bruta: string): string | null {
+  const valor = bruta.trim();
+  const numero = valor.toLowerCase().startsWith('tel:') ? valor.slice(4) : valor;
+  if (!/^\+?[0-9]{8,15}$/.test(numero)) return null;
+  return `tel:${numero}`;
+}

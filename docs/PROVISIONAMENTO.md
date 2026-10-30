@@ -133,6 +133,106 @@ mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associ
 Antes de aplicar, a aplicação já conhece as chaves (`app/flags.py`) e as trata como desligadas; depois,
 ligar uma é `UPDATE feature_flag SET ligada = 1 WHERE chave = '...'` (vale em até `FLAGS_CACHE_TTL`).
 
+### 2.5 Onda 2 — `sql/010` a `sql/014` (2026-10-30)
+
+Cinco migrações, de três frentes, aplicadas **em ordem crescente** e cada uma uma única vez:
+
+| Migração | Frente que cria | Conteúdo | Grant novo para `apm_area` | Reaplicável |
+|---|---|---|---|---|
+| `010_solicitacao` | A (Atlas) | `solicitacao` (8 status da spec, marcador `sem_retorno_desde`, vínculos, prazo, avaliação, idempotência, `crm_*`) e `solicitacao_evento` (log append-only com ator/origem/justificativa/`conteudo_enviado`) — ADR-0018 | `UPDATE` **por coluna** em `solicitacao` (status, datas, avaliação, `crm_*`, marcador); nada em `solicitacao_evento` | sim |
+| `011_job_execucao` | C (Integrador/Estivador) | `job_execucao`: rastro de cada execução do serviço de jobs (nome com CHECK, início/fim, `status` executando/ok/erro/abortado, `modo` aplicar/simular, contagens, `erro_resumo` com CHECK anti-CPF/credencial, `posicao` do sync do CRM, `host`, `versao_app`) — ADR-0019 | `UPDATE` **por coluna** só no que fecha a linha (`terminado_em`, `status`, `itens_*`, `erro_resumo`, `posicao`) | sim |
+| `012_comunicacao_notificacao` | A (Atlas) | outbox `comunicacao_evento` (dedupe por gatilho+associado+referência+canal+destinatário), `comunicacao_envio` e `comunicacao_supressao` (append-only), `notificacao`, `fila_ligacao` (só INSERT; resultado é do backoffice) | `UPDATE` por coluna em `comunicacao_evento` (estado da entrega) e só `lida_em` em `notificacao` | sim |
+| `013_ajuda_parametro` | A (Atlas) | `faq`, `texto_sistema`, `parametro` com seed (`avaliacao_prazo_dias`=30, `prazo_retorno_padrao_dias`=10, `cancelamento_janela_horas`=24, `central_horario`/`central_telefone` vazios até a P-44) | **nenhum** — só leitura (ADR-0022); mudar valor é ato do operador | sim (o seed nunca sobrescreve `valor`) |
+| `014_carteirinha_revogacao` | B (Sentinela) | §2.5b abaixo | nenhum | **não** |
+
+sha256 esperados das migrações da frente A (ensaiadas em MySQL 8.4.11 descartável `mysql-ensaio-a` em
+2026-10-30: 000→013 em ordem, reaplicação de 010/012/013 sem erro, grants conferidos como `apm_area` —
+UPDATE só nas colunas concedidas, DELETE e UPDATE em trilha/configuração recusados —, `db_check`
+conforme e suíte `-m mysql` verde; a `011` da frente C no `mysql-ensaio-c`, 000→014 em ordem, reaplicação sem
+erro, UPDATE fora das colunas concedidas/DELETE recusados, CHECKs recusando, `db_check` conforme e suíte inteira
+verde com MySQL). Se o `sha256sum` divergir, o arquivo mudou depois do ensaio: **não aplique**.
+
+```
+16c9518e2b7a024651c84a4cd02ea0e8c87bdab81c1579f2b93bf2b5773ed659  sql/010_solicitacao.sql
+4e80bba866488d7cf4ded499ca4a5170e4c9aedf0aa3a87dcd0588209aedc6ff  sql/011_job_execucao.sql
+1477bd9676e7546418fcad4eb013bd56e8c0ae99fbaf3210b8029479294f7fc9  sql/012_comunicacao_notificacao.sql
+92fa92cd7c521e6b432327d8fa369b197d966778b62a255889a0701901273129  sql/013_ajuda_parametro.sql
+```
+
+Laço único (snapshot manual do RDS antes — `docs/OPERACAO.md` §6). Pula o que já está em
+`schema_migrations` (a `014` não é reaplicável), para no primeiro erro e recusa arquivo com hash
+diferente do esperado. A `014` tem o seu no §2.5b.
+
+```bash
+cd /home/ubuntu/area_associado
+MYSQL="mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado"
+declare -A ESPERADO=(
+  [010]=16c9518e2b7a024651c84a4cd02ea0e8c87bdab81c1579f2b93bf2b5773ed659
+  [011]=4e80bba866488d7cf4ded499ca4a5170e4c9aedf0aa3a87dcd0588209aedc6ff
+  [012]=1477bd9676e7546418fcad4eb013bd56e8c0ae99fbaf3210b8029479294f7fc9
+  [013]=92fa92cd7c521e6b432327d8fa369b197d966778b62a255889a0701901273129
+  [014]=9595dc359ed438489788c9bdec49f76603db02cf8a01fe98a2cdc38f035a6bab
+)
+for v in 010 011 012 013 014; do
+  f=$(ls sql/${v}_*.sql 2>/dev/null) || { echo "AUSENTE: sql/${v}_*.sql — parar"; break; }
+  if [ -n "$($MYSQL -N -e "SELECT versao FROM schema_migrations WHERE versao = '$v'")" ]; then
+    echo "já aplicada: $f"; continue
+  fi
+  h=$(sha256sum "$f" | cut -d' ' -f1)
+  [ "$h" = "${ESPERADO[$v]}" ] || { echo "HASH DIVERGENTE em $f ($h) — parar"; break; }
+  echo "aplicando $f"
+  $MYSQL < "$f" || { echo "ERRO em $f — parar"; break; }
+  $MYSQL -e "INSERT INTO schema_migrations (versao, arquivo, sha256) VALUES ('$v', '$(basename $f)', '$h') AS novo
+             ON DUPLICATE KEY UPDATE sha256 = novo.sha256;"
+done
+```
+
+Conferência:
+
+```bash
+$MYSQL -e "SELECT versao, arquivo, sha256 FROM schema_migrations WHERE versao >= '010' ORDER BY versao;
+           SELECT chave, valor, tipo FROM parametro ORDER BY chave;          -- 5 linhas
+           SHOW GRANTS FOR 'apm_area'@'%';"
+docker compose exec area-associado python -m scripts.db_check
+#  esperado: GRANT UPDATE (colunas) em solicitacao, job_execucao, comunicacao_evento e notificacao (lida_em);
+#  nada em solicitacao_evento, comunicacao_envio, comunicacao_supressao, fila_ligacao, faq,
+#  texto_sistema, parametro; "resultado : conforme".
+```
+
+Em até 60 s (cache da prontidão), `GET /api/v1/sessao` passa a devolver `recursos: {"solicitacoes": true,
+"ajuda": true}` e a SPA deixa de mostrar "em construção" nessas rotas.
+
+**Antes de aplicar**, a área segue no ar: `app/prontidao.py` verifica as tabelas (cache 60 s; falha de
+leitura = indisponível por 15 s), `GET /sessao` devolve `recursos {solicitacoes: false, ajuda: false}` e
+`solicitacoes_aguardando: 0`, e as rotas de solicitações/FAQ respondem `503 recurso_indisponivel` (o
+contato da Central funciona sem migração). **Depois de aplicar**, a Central passa a ter horário e
+telefone na Ajuda quando o operador preencher (P-44):
+
+```sql
+UPDATE parametro SET valor = '(11) 3188-6200' WHERE chave = 'central_telefone';
+UPDATE parametro SET valor = 'Segunda a sexta, das 8h às 18h' WHERE chave = 'central_horario';
+```
+
+**Serviço de jobs:** só depois das cinco migrações e do `db_check` conforme — `docs/JOBS.md` §1 (sobe em
+dry-run, `JOBS_APLICAR=0`). Sem a `011`, o serviço sobe e não executa nada (log `sql/011 ausente`).
+
+Sem DELETE em nenhuma tabela nova; desfazer é coluna de estado. O pedido de cancelamento
+(`POST /ajuda/cancelamento`) continua atrás da flag `cancelamento_online` (desligada no seed da `009`).
+
+### 2.5b Onda 2 — `sql/014_carteirinha_revogacao` (2026-10-30)
+
+`ALTER TABLE associado`: `carteirinha_revogada_em`, `situacao_consultada_em`, `situacao_normalizada`
+(`ativo|suspenso|cancelado|outro`), índice `ix_associado_situacao_consultada` e CHECK do par
+situação/data (TI-45). **Nenhum GRANT novo** (UPDATE em `associado` já vem da `005`). O CHECK obriga
+`ALGORITHM=COPY`: a tabela é reconstruída e o upsert do login espera alguns segundos — janela de pouco
+tráfego, snapshot antes. **Não reaplicável** (a segunda execução falha inteira com ERROR 3822; confira
+`schema_migrations` sem `014`). Ensaiada em MySQL 8.4.11 descartável em 2026-10-30 (000→009 e 014,
+UPDATE das colunas novas como `apm_area` ok, DELETE/ALTER recusados, CHECK do par recusa situação sem
+data, `db_check` conforme, suíte `-m mysql` verde). sha256 esperado:
+`9595dc359ed438489788c9bdec49f76603db02cf8a01fe98a2cdc38f035a6bab`. Mesmo laço do §2.4 com
+`sql/014_carteirinha_revogacao.sql` e `v=014`. Até ser aplicada, a verificação pública segue no
+comportamento anterior (só cache de perfil) e `GET /carteirinha` informa `revogada: false`.
+
 ## 3. Conferir
 
 ```bash

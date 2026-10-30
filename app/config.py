@@ -145,6 +145,40 @@ class Settings(BaseSettings):
     celular_exige_reauth: bool = Field(False, alias="CELULAR_EXIGE_REAUTH")
     foto_max_bytes: int = Field(5 * 1024 * 1024, alias="FOTO_MAX_BYTES")
     email_codigo_ttl: int = Field(600, alias="EMAIL_CODIGO_TTL")
+    # Verificação pública em tempo quase real (TI-45, DEC-09): a leitura de
+    # `associado.situacao` no hub vale VERIFICACAO_CACHE_TTL; vencida, a rota
+    # pública consulta o hub de novo, no máximo VERIFICACAO_HUB_POR_MINUTO
+    # vezes por minuto POR PROCESSO (2 workers → até 2×), para não esgotar a
+    # cota da conta no hub (P-41). Estourado, vale o cache (RF-CA-08).
+    verificacao_cache_ttl: int = Field(600, alias="VERIFICACAO_CACHE_TTL")
+    verificacao_hub_por_minuto: int = Field(60, alias="VERIFICACAO_HUB_POR_MINUTO")
+
+    # ------------------------------------------------------------------ #
+    # Serviço de jobs `area-associado-jobs` (ADR-0019; docs/JOBS.md).     #
+    # O web ignora estas chaves (só `CENTRAL_EMAIL` é lida pelo job de    #
+    # comunicação). Segredos SÓ de job (conta do hub `area-associado-jobs`)#
+    # vão em `.env.jobs`, que o compose carrega por cima do `.env`.        #
+    # ------------------------------------------------------------------ #
+    # Dry-run por padrão: com False, jobs com efeito EXTERNO (escrita no CRM,
+    # e-mail) só registram o que fariam. Jobs de efeito local rodam sempre.
+    jobs_aplicar: bool = Field(False, alias="JOBS_APLICAR")
+    jobs_heartbeat: str = Field("/tmp/jobs.heartbeat", alias="JOBS_HEARTBEAT")
+    # Intervalos (segundos) dos jobs periódicos; jitter de até 10% (≤ 30 s).
+    jobs_intervalo_espelho: int = Field(60, alias="JOBS_INTERVALO_ESPELHO")
+    jobs_intervalo_sync: int = Field(300, alias="JOBS_INTERVALO_SYNC")
+    jobs_intervalo_sem_retorno: int = Field(900, alias="JOBS_INTERVALO_SEM_RETORNO")
+    jobs_intervalo_comunicacao: int = Field(60, alias="JOBS_INTERVALO_COMUNICACAO")
+    # Itens por execução no espelho e na comunicação (disjuntor da cota do hub/SMTP).
+    jobs_lote: int = Field(50, alias="JOBS_LOTE")
+    # Situação das carteirinhas: diário às JOBS_SITUACAO_HORA (hora local,
+    # America/Sao_Paulo), lotes de até 200, pausa entre chamadas ao hub.
+    jobs_situacao_hora: int = Field(3, alias="JOBS_SITUACAO_HORA")
+    jobs_situacao_lote: int = Field(200, alias="JOBS_SITUACAO_LOTE")
+    jobs_situacao_rodadas: int = Field(5, alias="JOBS_SITUACAO_RODADAS")
+    jobs_situacao_pausa: float = Field(1.0, alias="JOBS_SITUACAO_PAUSA")
+    # Destino dos avisos internos (A05 equipe, A16 Central). Ausente = o
+    # aviso interno é suprimido (`sem_credencial`), nunca vai a outro lugar.
+    central_email: str | None = Field(None, alias="CENTRAL_EMAIL")
 
     # ------------------------------------------------------------------ #
     # Propriedades derivadas                                             #
@@ -269,6 +303,7 @@ class Settings(BaseSettings):
         if self.session_absolute_max < self.session_max_age:
             raise ValueError("SESSION_ABSOLUTE_MAX deve ser >= SESSION_MAX_AGE")
         self._validar_sessao_e_interface()
+        self._validar_jobs()
         return self
 
     def _validar_sessao_e_interface(self) -> None:
@@ -348,6 +383,42 @@ class Settings(BaseSettings):
             raise ValueError("FOTO_MAX_BYTES deve ficar entre 256 KiB e 10 MiB")
         if not 120 <= self.email_codigo_ttl <= 1800:
             raise ValueError("EMAIL_CODIGO_TTL deve ficar entre 120 e 1800 segundos")
+        if not 60 <= self.verificacao_cache_ttl <= 3600:
+            raise ValueError("VERIFICACAO_CACHE_TTL deve ficar entre 60 e 3600 segundos")
+        if not 1 <= self.verificacao_hub_por_minuto <= 600:
+            raise ValueError("VERIFICACAO_HUB_POR_MINUTO deve ficar entre 1 e 600")
+
+    def _validar_jobs(self) -> None:
+        """Serviço de jobs (ADR-0019). Efeito externo com integração simulada
+        só em development/test: em staging/production, `JOBS_APLICAR=1` com o
+        hub simulado gravaria `crm_id` falso em pedidos reais."""
+        caminho = self.jobs_heartbeat
+        if (not caminho.startswith("/") or ".." in caminho.split("/")
+                or not re.fullmatch(r"/[A-Za-z0-9._/-]{1,200}", caminho)):
+            raise ValueError("JOBS_HEARTBEAT deve ser um caminho absoluto simples (ex.: /tmp/jobs.heartbeat)")
+        for nome, valor, minimo, maximo in (
+            ("JOBS_INTERVALO_ESPELHO", self.jobs_intervalo_espelho, 30, 3600),
+            ("JOBS_INTERVALO_SYNC", self.jobs_intervalo_sync, 60, 3600),
+            ("JOBS_INTERVALO_SEM_RETORNO", self.jobs_intervalo_sem_retorno, 60, 86400),
+            ("JOBS_INTERVALO_COMUNICACAO", self.jobs_intervalo_comunicacao, 30, 3600),
+            ("JOBS_LOTE", self.jobs_lote, 1, 200),
+            ("JOBS_SITUACAO_HORA", self.jobs_situacao_hora, 0, 23),
+            ("JOBS_SITUACAO_LOTE", self.jobs_situacao_lote, 1, 200),
+            ("JOBS_SITUACAO_RODADAS", self.jobs_situacao_rodadas, 1, 50),
+        ):
+            if not minimo <= valor <= maximo:
+                raise ValueError(f"{nome} deve ficar entre {minimo} e {maximo}")
+        if not 0.1 <= self.jobs_situacao_pausa <= 10.0:
+            raise ValueError("JOBS_SITUACAO_PAUSA deve ficar entre 0.1 e 10 segundos")
+        if self.jobs_aplicar and self.app_env not in ("development", "test") and self.hub_mode == "stub":
+            raise ValueError("JOBS_APLICAR=1 com HUB_MODE=stub só em development/test")
+        if self.central_email is not None:
+            self.central_email = self.central_email.strip().lower() or None
+        if self.central_email is not None:
+            from .integracoes.email import email_valido  # import local: email.py importa config
+
+            if not email_valido(self.central_email):
+                raise ValueError("CENTRAL_EMAIL inválido (um endereço, sem nome nem vírgula)")
 
 
 @lru_cache

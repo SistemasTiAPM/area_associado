@@ -77,6 +77,8 @@
 }
 
 .dialogo-camada .scrim {
+  /* Dentro da camada (z 45) o scrim fica sob o painel (z 1); o z 40 do .scrim é do drawer. */
+  z-index: 0;
   pointer-events: auto;
 }
 
@@ -559,4 +561,182 @@
   display: grid;
   place-items: center;
   color: var(--ink-400);
+}
+
+/* ------------------------------------------------- StatusSolicitacao (P05) */
+/* Texto sempre (RF-SO-08); tons de REQUISITOS §3.12. Contrastes ≥ 4,5:1 (tokens com sufixo -texto). */
+.status-solicitacao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 11px;
+  border-radius: var(--raio-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.status-solicitacao--neutro {
+  background: var(--gray-100);
+  color: var(--ink-700);
+}
+
+.status-solicitacao--info {
+  background: var(--azul-100);
+  color: var(--azul-texto);
+}
+
+.status-solicitacao--atencao {
+  background: var(--amber-100);
+  color: var(--amber-texto);
+}
+
+.status-solicitacao--ok {
+  background: var(--mint-100);
+  color: var(--green-700);
+}
+
+.status-solicitacao--negativo {
+  background: var(--rose-100);
+  color: var(--rose-texto);
+}
+
+/* ---------------------------------------------------- LinhaDoTempo (P05) */
+.linha-tempo {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.linha-tempo__passo {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 12px;
+  padding-bottom: 18px;
+}
+
+.linha-tempo__passo:last-child {
+  padding-bottom: 0;
+}
+
+/* Trilho vertical entre marcadores (decorativo). */
+.linha-tempo__passo:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  left: 8px;
+  width: 2px;
+  background: var(--gray-200);
+}
+
+.linha-tempo__marcador {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 2px solid var(--ink-400);
+  border-radius: 50%;
+  background: var(--branco);
+}
+
+.linha-tempo__passo--atual .linha-tempo__marcador {
+  border-color: var(--green-700);
+  background: var(--green-700);
+  box-shadow: 0 0 0 4px var(--mint-100);
+}
+
+.linha-tempo__textos {
+  display: grid;
+  gap: 3px;
+}
+
+.linha-tempo__rotulo {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.linha-tempo__meta {
+  font-size: var(--fs-meta);
+  color: var(--ink-500);
+}
+
+.linha-tempo__mensagem {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: var(--raio-controle);
+  background: var(--vidro-fundo-forte);
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+  font-size: 13.5px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------- Avaliacao 0–10 */
+.avaliacao {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.avaliacao__escala {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+.avaliacao__item {
+  position: relative;
+}
+
+/* O rádio nativo fica sob o rótulo (focável, anunciado); o alvo visível é o rótulo de 44 × 44 px. */
+.avaliacao__entrada {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.avaliacao__nota {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  background: var(--vidro-fundo-forte);
+  box-shadow: inset 0 0 0 1px var(--ink-400);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-900);
+  pointer-events: none;
+}
+
+.avaliacao__entrada:checked + .avaliacao__nota {
+  background: var(--green-700);
+  box-shadow: inset 0 0 0 2px var(--green-700);
+  color: var(--branco);
+}
+
+.avaliacao__entrada:focus-visible + .avaliacao__nota {
+  outline: 3px solid var(--foco);
+  outline-offset: 2px;
+}
+
+.avaliacao--erro .avaliacao__nota {
+  box-shadow: inset 0 0 0 1px var(--erro-fg);
+}
+
+.avaliacao:disabled .avaliacao__nota {
+  opacity: 0.6;
 }

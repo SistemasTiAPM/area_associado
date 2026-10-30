@@ -43,7 +43,7 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 |--------|-----------|-------------|
 | **Linguagem** | Python 3.12 (`python:3.12-slim`) | Mesma base do `login_associado` e do `mcp_hub`. [atual] |
 | **Backend** | FastAPI 0.115 + Gunicorn 23 / workers Uvicorn | 2 workers, bind `0.0.0.0:8000`, `--timeout 60`. [atual] API JSON em `/api/v1` [atual: `sessao`, `uso`; demais recursos nas fases 2–8]. |
-| **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Visual dos mockups da agência (ADR-0017): fontes Sora e JetBrains Mono self-hosted (OFL), cards de vidro, trilho em pílula. Ícones SVG próprios. React Router `basename="/area"` com URLs reais (sem `localStorage` de rota). ADR-0001. |
+| **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Visual dos mockups da agência (ADR-0017): fontes Sora e JetBrains Mono self-hosted (OFL), cards de vidro, trilho em pílula. Ícones SVG próprios. React Router **7** (`react-router`), `basename="/area"` com URLs reais (sem `localStorage` de rota); navegação com destino dinâmico só por `lib/navegacao.ts` (ESLint). Modais em portal (`document.body`) com a raiz `inert`. ADR-0001. |
 | **Páginas Jinja2** | `/auth/*`, `stub_login` (só testes), `erro`, `/verificar/{token}` | [atual] Só as páginas fora da SPA; `/` não tem página (redireciona ao Login APM ou a `/area`). `/verificar/{token}` usa o visual do mockup (`entrada.css`, Sora). A página de entrada (`entrada.html`) fica **guardada sem rota** desde 2026-10-20, por decisão do usuário. `boot.js` removido. Stub e erro no visual antigo (Neo Sans) até P-24. |
 | **Autenticação** | OIDC Authorization Code + PKCE S256, client **confidencial** (`client_secret_basic`) | [atual] `app/oidc.py` com `httpx` + `pyjwt` (RS256 fixo, `iss`/`aud`/`nonce`/`exp`/`auth_time` obrigatórios). **Sem refresh token**: sessão própria; expirou → SSO silencioso no IdP. [atual] Escopo `carteirinha` (tipo, situação, CRM, UF, filiação); sem tipo ou situação o login é recusado (ADR-0016). O client do IdP precisa permitir o escopo (P-09). |
 | **Back-channel IdP** | `http://login_associado:8000` na `rede_publica`, header `Host: login.apm.org.br` | [atual] Evita hairpin via Cloudflare e a zona `oauth_token` (3 r/s) do edge. `iss` continua `https://login.apm.org.br`. |
@@ -51,7 +51,7 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 | **CSRF** | [atual] Form field `csrf` (`/auth/*`); na API, `X-CSRF-Token` + `Sec-Fetch-Site: same-origin` (ou `Origin` = `PUBLIC_BASE_URL`) + `Content-Type` JSON/multipart | `app/csrf.py` (`exigir_csrf`). Token entregue em `GET /api/v1/sessao`. Recusa vai para `evento_log` (`csrf_recusado`). |
 | **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials` com `ferramentas:ler` (+ `ferramentas:escrever` só com `HUB_ESCRITA_HABILITADA=true`, depois da P-29), REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`, implementado no hub na Fase 2b (`SistemasTiAPM/mcp_hub` `8bb3c43`; provisão P-02, P-05, P-29). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Escrita desligada = perfil só de leitura e rotas de escrita em 404 `recurso_desligado` sem chamar o hub. Token do hub só em memória de processo. Timeouts `HUB_TIMEOUT` (leitura) e `HUB_TIMEOUT_ESCRITA` (30 s). `HUB_MODE=real\|stub` (stub proibido em produção). Smoke: `scripts/check_hub.py`. ADR-0002. |
 | **Site WordPress** | MySQL `portal_apm` (Locaweb), usuário somente leitura próprio | [alvo Fase 5] `app/integracoes/portal_wp.py`, **só no serviço de jobs**; o processo web nunca conecta na Locaweb. Cache em `noticia_cache`/`evento_cache`. ADR-0006, P-07. |
-| **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [alvo Onda 2 / Fase 3] Agendador in-process, `GET_LOCK` por job, `job_execucao`, `JOBS_APLICAR` (dry-run por padrão), conta própria no hub (ADR-0019). Outbox de solicitações e de comunicação, `sem_retorno`, carência, sincronização do portal, cache de perfil. |
+| **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [atual desde 30/10, profile `jobs`, dry-run por padrão] Agendador in-process, `GET_LOCK` por job, `job_execucao`, `JOBS_APLICAR` (dry-run por padrão), conta própria no hub (ADR-0019). Outbox de solicitações e de comunicação, `sem_retorno`, carência, sincronização do portal, cache de perfil. |
 | **Imagens** | Pillow 13 (foto de perfil), segno (QR em SVG) | [atual] Em memória, magic bytes, `MAX_IMAGE_PIXELS`, 512×512 para o CRM (`entityimage`), miniatura 128×128 local. ADR-0005. |
 | **E-mail** | SMTP com STARTTLS (`app/integracoes/email.py`), `SMTP_MODE=real\|stub` | [atual] Código de troca de e-mail e aviso ao endereço antigo (ADR-0015). Stub proibido em produção; credencial própria pendente (P-27). |
 | **ORM / Driver** | SQLAlchemy 2.0 + PyMySQL 1.1 | [atual] `ssl_ca=/etc/ssl/rds/global-bundle.pem`, `ssl_verify_cert`, `ssl_verify_identity`. Bundle baixado no `Dockerfile`. |
@@ -90,7 +90,9 @@ app/
 frontend/          # Vite + React + TS: src/{styles,api,shell,components,pages,state,lib,test}, e2e/ (Playwright)
 scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py, check_hub.py
 sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado, 006 associado_perfil,
-                   # 007 email_verificacao (UPDATE só em 005, 006, 007)
+                   # 007 email_verificacao, 008 partições, 009 flags v2, 010 solicitação, 011 job_execucao,
+                   # 012 comunicação/notificação, 013 ajuda/parâmetros, 014 revogação da carteirinha
+                   # (UPDATE por tabela ou por coluna; allowlist em scripts/db_check.py; 015+ reservadas, REQUISITOS §6.2)
 tests/             # unidades sem rede/banco + integração com MySQL real (marcador `mysql`, TESTE_DB_*)
 deploy/nginx_porteiro/
 docs/              # SPEC, REQUISITOS, PENDENCIAS, CONCLUIDO, adr/, PROVISIONAMENTO, CUTOVER, ACESSO-CONSTRUCAO
@@ -117,7 +119,9 @@ reais (P-02, P-05, P-27, P-29) e P-01 (certificado de origem).
 `GET /auth/callback`, `GET /area` e `GET /area/{caminho}` (SPA, exige sessão), `GET /api/v1/sessao`,
 `POST /api/v1/uso` (CSRF), `GET /api/v1/perfil`, `PUT /api/v1/perfil/contato`, `POST /api/v1/perfil/email`
 e `/perfil/email/confirmar`, `GET|POST|DELETE /api/v1/perfil/foto`, `GET /api/v1/carteirinha`,
-`GET /api/v1/carteirinha/qr.svg`, `POST /api/v1/carteirinha/compartilhar`, `GET /verificar/{token}`
+`GET /api/v1/carteirinha/qr.svg`, `GET /api/v1/carteirinha/imagem.png` e `/documento.pdf`, `POST /api/v1/carteirinha/compartilhar`,
+`GET|POST /api/v1/solicitacoes` e `/solicitacoes/{id}[/cancelar|/responder|/avaliar]`, `GET /api/v1/ajuda/faq`, `/ajuda/contato`,
+`POST /api/v1/ajuda/formulario` e `/ajuda/cancelamento` (flag `cancelamento_online`, step-up), `GET /verificar/{token}`
 (público: só nome, situação e "verificado em"), `POST /auth/logout` (CSRF → `/oauth/logout` do IdP), `GET /health`;
 internos (403 no edge): `GET /db-health` (inclui `uso_falhas` e presença da SPA), `GET /auth-health`.
 Erro único da API `{"erro", "mensagem", "request_id", "detalhes"?}`; sem sessão em `/api/` → 401
@@ -231,5 +235,5 @@ Invariantes: código pronto para produção (erros, bordas, segurança, desempen
 **Sentinela tem precedência**; mudança fora do escopo aprovado exige novo plano.
 
 ---
-*Criado em 2026-10-01. Revisado em 2026-10-30 (plano de execução em 7 ondas; ADR-0018..0022; Onda 1 executada). Revisado em 2026-10-29 (spec v2 da agência e levantamento técnico como documentos que governam; skills de prontidão em `.claude/skills/`). Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
+*Criado em 2026-10-01. Revisado em 2026-10-30 (plano de execução em 7 ondas; ADR-0018..0022; Ondas 1 e 2 executadas: solicitações, Ajuda, carteirinha com revogação, jobs, React Router 7). Revisado em 2026-10-29 (spec v2 da agência e levantamento técnico como documentos que governam; skills de prontidão em `.claude/skills/`). Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
 regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Revisado em 2026-10-19 (Fase 2b: hub implementado, regra 21 com o endereço e a escrita incerta). Revisado em 2026-10-20 (landing de entrada; visual dos mockups da agência, ADR-0017, regra 13). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*

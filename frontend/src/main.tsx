@@ -17,7 +17,7 @@ import './styles/motion.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import { App } from './App';
 import { instalarEnvioAoSair } from './lib/analytics';
 import { capturarCampanha } from './lib/campanha';
@@ -31,7 +31,7 @@ capturarCampanha();
 instalarEnvioAoSair();
 createRoot(raiz).render(
   <StrictMode>
-    <BrowserRouter basename="/area" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter basename="/area">
       <App />
     </BrowserRouter>
   </StrictMode>,

@@ -15,6 +15,9 @@ Cloudflare. Nada é executado pela área nem pelo processo web. Criado em 2026-1
 | 7 | Partições de `evento_log`/`evento_uso` (criar futuras, expurgar) | TI-02 / P-15 | migração pronta; aplicação **[pendente]** |
 | 8 | Segredos e rotação de chaves | TI-12 | runbook; rotação só quando houver motivo |
 | 9 | Alertas (`scripts/alertas.sh`) | TI-75 | pronto sem envio (P-27/P-61) |
+| 10 | mcp_hub — deploy e grant das ferramentas de situação | TI-47 / M-7 | runbook |
+| 11 | Porteiro: zonas da Onda 2 (solicitações, Ajuda, downloads) | TI-08 | arquivo pronto; aplicação **[pendente]** |
+| — | Serviço de jobs (ligar, dry-run, reprocessar) | TI-01 | runbook em `docs/JOBS.md` |
 
 Convenções: `~/.rds-admin.cnf` (0600) é a credencial administrativa do RDS; o `.env` do projeto tem só
 a credencial limitada `apm_area`. Toda ação aqui que muda estado ganha linha em `docs/CONCLUIDO.md`
@@ -261,7 +264,9 @@ Sinais: 5xx e Tracebacks da área (`docker logs`), 5xx/429/444 do porteiro (todo
 `log_format main` não traz o host), saúde dos containers `area_associado`/`mcp_hub`/`nginx_porteiro`,
 `/db-health` pela rede interna (`status`, `uso_falhas`, SPA, TLS), validade e emissor do certificado
 de origem (< 30 dias), `.env` × cofre (quando houver `GetSecretValue`; hoje imprime "não verificável") e
-`.env.bak-*` no disco, `job_execucao` com erro (n/a até a tabela existir). **Não envia nada**: `--email`
+`.env.bak-*` no disco, jobs (seção `job_execucao`: execuções com erro/abortadas em 24 h, job parado além do
+atraso máximo quando o serviço está ligado, saúde do container `area_associado_jobs` se ele existir — n/a
+até a `sql/011`; ver `docs/JOBS.md` §6). **Não envia nada**: `--email`
 só avisa que depende da P-27. Quando houver canal: cron `5 7 * * *` conforme o cabeçalho do script.
 
 
@@ -291,3 +296,36 @@ teste>` → `situacao : ok`, `campos : 12/12`, `sem cpf : ok`.
 **Conta de jobs (M-8, Onda 2):** `area-associado-jobs`, `client_credentials` próprio, só `ferramentas:ler`,
 grants exatos em `associado.situacao` e `associado.perfil_consultar`, mesma allowlist de rede, 300/min e
 15.000 PII/dia (P-41). Credencial no `.env.jobs` do serviço de jobs.
+
+
+## 11. Porteiro: zonas da Onda 2 — TI-08
+
+O exemplo versionado (`deploy/nginx_porteiro/area_associado.conf.example`) ganhou, além das zonas da
+Fase 1:
+
+| Zona | Chave | Taxa | Onde | Por quê |
+|---|---|---|---|---|
+| `area_solicitacoes` | IP, **só POST** (`map $request_method $area_chave_escrita`; GET tem chave vazia = fora da zona) | 5 r/s, burst 10 | `^~ /api/v1/solicitacoes`, `^~ /api/v1/ajuda/` (somada à `area_api`) | criar/cancelar/responder/avaliar e formulário/cancelamento gravam pedido, outbox e notificação |
+| `area_download` | IP | 30 r/min, burst 5 | `= /api/v1/carteirinha/imagem.png`, `= /api/v1/carteirinha/documento.pdf` | PNG/PDF renderizados em memória (a app limita 10/h por associado) |
+
+Ensaiado em 2026-10-30 num nginx 1.31.0 descartável com os includes simulados: `nginx -t` ok; 30 POST
+seguidos em `/api/v1/solicitacoes` → 11 passam e o resto é 429; 30 GET → nenhum 429; downloads → 6
+passam e o resto é 429. **Aplicar no porteiro real** (janela calma; nada muda para quem só lê):
+
+```bash
+cd /home/ubuntu/nginx-proxy/sites-enabled
+cp area_associado.conf area_associado.conf.bak-$(date +%Y%m%d)        # rollback
+diff -u area_associado.conf /home/ubuntu/area_associado/deploy/nginx_porteiro/area_associado.conf.example
+# Conferir no diff: só as zonas/map novos no topo e os 4 blocos location novos; o restante igual ao
+# arquivo em produção (se o arquivo real divergiu do exemplo, copiar só esses trechos à mão).
+cp /home/ubuntu/area_associado/deploy/nginx_porteiro/area_associado.conf.example area_associado.conf
+docker exec nginx_porteiro nginx -t && docker exec nginx_porteiro nginx -s reload
+# Prova (fora da rede Docker): GET continua 200/401; rajada de POST chega a 429.
+for i in $(seq 1 15); do curl -s -o /dev/null -w '%{http_code} ' -X POST https://minha.apm.org.br/api/v1/solicitacoes; done; echo
+```
+
+Rollback: `cp area_associado.conf.bak-AAAAMMDD area_associado.conf && docker exec nginx_porteiro nginx -t && docker
+exec nginx_porteiro nginx -s reload`. Os nomes `area_solicitacoes`, `area_download` e a variável
+`$area_chave_escrita` são globais no nginx: conferir com `docker exec nginx_porteiro nginx -T | grep -n
+"area_solicitacoes\|area_download\|area_chave_escrita"` que não existem em outro vhost antes do reload.
+

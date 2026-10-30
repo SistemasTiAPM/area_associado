@@ -374,7 +374,7 @@ memória por processo (`app/limites.py`). Sem Redis. Notação nos RFs: `[L:n/ja
 
 **RF-SH-14 — Busca sem resultado (ajuste de catálogo)**
 - **Descrição:** quando `GET /busca` devolve `total = 0`, o servidor grava o termo normalizado (≤ 48 caracteres, só letras, dígitos e espaço) em `busca_sem_resultado` **sem `contact_id`, sem `request_id` e sem `sub_hash`** — é insumo para "busca sem resultado vira ajuste de catálogo" (spec:§6 P03 "Casos especiais"; §11.2 `busca`), não analytics por pessoa. A resposta sugere categorias.
-- **Fonte:** `busca_sem_resultado` (append-only, `sql/012`) · **Endpoint:** `GET /busca` · **Evento:** `busca_global` (ui; `resultados=0`, sem termo) · **Flag:** — · **Fase:** 4
+- **Fonte:** `busca_sem_resultado` (append-only, `sql/015`) · **Endpoint:** `GET /busca` · **Evento:** `busca_global` (ui; `resultados=0`, sem termo) · **Flag:** — · **Fase:** 4
 - **UI:** estado vazio com as 8 categorias como atalhos (RF-BE-06).
 - **Aceite:** teste de contrato garante que a linha gravada não tem coluna de identidade; termo com CPF ou e-mail é recusado pela allowlist de caracteres antes do INSERT; purga por retenção (P-15/P-54). Divergência com RNF-16 aceita e registrada (DIV-14, DEC-34).
 
@@ -613,7 +613,7 @@ memória por processo (`app/limites.py`). Sem Redis. Notação nos RFs: `[L:n/ja
 
 **RF-BE-16 — Catálogo como dado (ficha B03)**
 - **Descrição:** a ficha do benefício é registro em `beneficio` com nome, categoria, parceiro, descrição curta e longa, condição, preço de referência e regra de cálculo (`valor_referencia`), elegibilidade (categorias permitidas via `beneficio_categoria_associado`, `carencia_meses` 0–12, `exige_adimplencia`, `regional`), `tipo_ativacao` e destino, `prazo_retorno_dias`, selos (`novo`, `patrocinado`), imagens, FAQ (`beneficio_faq`), contatos, vigência, ordem, afinidade por segmento (`beneficio_afinidade`), `modalidade_mensuracao` (api_acesso_unico | relatorio_padrao | encaminhamento_sem_retorno), `sigiloso`; ciclo **rascunho → aprovado → publicado → encerrado** com histórico em `beneficio_versao` (spec:§9.2 B03, §10.1). A área (web) **só lê**; escrita pelo backoffice com `apm_area_bo` (D-19) ou, até lá, por script administrativo do operador.
-- **Fonte:** `sql/012` · **Endpoint:** `GET /beneficios`, `GET /beneficios/{slug}` (só `publicado` e vigente) · **Evento:** — · **Flag:** — · **Fase:** 4 (TI-29); seed real só com P-48
+- **Fonte:** `sql/015` · **Endpoint:** `GET /beneficios`, `GET /beneficios/{slug}` (só `publicado` e vigente) · **Evento:** — · **Flag:** — · **Fase:** 4 (TI-29); seed real só com P-48
 - **UI:** —
 - **Aceite:** `db_check` falha se `apm_area` tiver `UPDATE` em `beneficio`; benefício vencido some do catálogo na data; quem o tinha ativo recebe aviso (A15/outbox, F2); fixture de catálogo de teste para e2e, nunca publicada em produção.
 
@@ -658,7 +658,7 @@ memória por processo (`app/limites.py`). Sem Redis. Notação nos RFs: `[L:n/ja
 
 **RF-CL-06 — Encaminhamento rastreado ao clube (tipo 6, F1)**
 - **Descrição:** na F1 o acesso ao clube é um **encaminhamento rastreado** que não promete login único nem retorno de economia (spec:§6 P09). "Usar agora"/"Usar"/"Ver todas as ofertas" passam pelo servidor (`POST /clube/ofertas/{id}/abrir [C]` → `{url_externa}` ou redirecionador RF-BE-15), que grava o resgate iniciado. Vitrine com 30–40 ofertas curadas (seed `oferta_clube`, curadoria B10 na F2), oferta da semana e categorias; "economia no clube no ano" só quando houver dado de resgate (`uso_valor fonte=clube`, F2).
-- **Fonte:** `oferta_clube` (`sql/017`), allowlist `PARCEIROS_HOSTS` (ADR-0009) · **Endpoint:** `GET /clube`, `POST /clube/ofertas/{id}/abrir [C]` · **Evento:** `clube_oferta_usar` (servidor; `detalhes.origem`) · **Flag:** `clube_economia` (economia e cashback) · **Fase:** 6 (TI-88); F2 para resgate com retorno
+- **Fonte:** `oferta_clube` (`sql/019`), allowlist `PARCEIROS_HOSTS` (ADR-0009) · **Endpoint:** `GET /clube`, `POST /clube/ofertas/{id}/abrir [C]` · **Evento:** `clube_oferta_usar` (servidor; `detalhes.origem`) · **Flag:** `clube_economia` (economia e cashback) · **Fase:** 6 (TI-88); F2 para resgate com retorno
 - **UI:** chamada do clube sem a palavra "cashback" (P17 só com contrato; TI-61).
 - **Aceite:** URL externa só do seed; nenhum valor de economia sem `uso_valor`; evento gravado antes do `302`.
 ---
@@ -776,7 +776,7 @@ memória por processo (`app/limites.py`). Sem Redis. Notação nos RFs: `[L:n/ja
 
 **RF-FA-09 — Registro de uso e valor (`uso_valor`)**
 - **Descrição:** toda evidência de uso com valor entra como linha **append-only** em `uso_valor` (`contact_id`, `beneficio_id`, `parceiro_id?`, `solicitacao_id?`, `importacao_linha_id?`, `data_evento`, `modalidade` ∈ {economia_uso, desconto_parceiro, servico_apm, protecao_incluida, estimado}, `nivel_evidencia` 1–4, `valor_referencia`, `valor_pago`, `economia`, `fonte` ∈ {apm, parceiro_api, importacao, clube, solicitacao}, `validado_em`); estorno é linha nova com `estorna_id`; validação do Financeiro é linha nova de nível 4 apontando a de nível 3 (`valida_id`). Níveis por origem (spec:§11.2.1): 1 visibilidade (`evento_uso`), 2 interesse/solicitação, 3 uso confirmado (solicitação `concluida_positiva`, importação sem validação), 4 valor comprovado (validado pelo Financeiro) — **só o 4 compõe a economia comprovada**.
-- **Fonte:** `uso_valor`, `valor_referencia` (`sql/013`) · **Endpoint:** — (gravado por transição de solicitação, confirmação de importação, retorno do clube F2) · **Evento:** `uso_registrar` (servidor/job; `entidade_id` = `uso_valor.id`; `detalhes.fonte`, `nivel`; **sem valores** — dinheiro vive em `uso_valor`) · **Flag:** — · **Fase:** 4 (TI-35)
+- **Fonte:** `uso_valor`, `valor_referencia` (`sql/016`) · **Endpoint:** — (gravado por transição de solicitação, confirmação de importação, retorno do clube F2) · **Evento:** `uso_registrar` (servidor/job; `entidade_id` = `uso_valor.id`; `detalhes.fonte`, `nivel`; **sem valores** — dinheiro vive em `uso_valor`) · **Flag:** — · **Fase:** 4 (TI-35)
 - **UI:** —
 - **Aceite:** CHECK `economia = valor_referencia − valor_pago` quando os três existem; CHECK `nivel_evidencia = 4 ⇒ validado_em NOT NULL`; `db_check` confirma ausência de `UPDATE`/`DELETE` na tabela.
 ---
@@ -889,7 +889,7 @@ memória por processo (`app/limites.py`). Sem Redis. Notação nos RFs: `[L:n/ja
 
 **RF-CA-03 — Verificação pública `/verificar/{token}`**
 - **Descrição:** página HTML pública (Jinja2 `verificar.html`, sem SPA) que mostra **apenas** nome, status e validade (enquanto LA-04 aberta: status + "verificado em DD/MM/AAAA HH:MM"). Token desconhecido → página "Carteirinha não encontrada" (proposta) com 404.
-- **Fonte:** `associado` + `associado_perfil` (status); cache > 24 h → tenta hub; hub fora → página "Verificação indisponível no momento" com 503 (fail-closed: nunca "Ativo" a partir de cache vencido) · **Endpoint:** `GET /verificar/{token}` · **Evento:** `carteirinha_verificar` (publico, `contact_id` do titular; sem dado do visitante) · **Flag:** — · **Fase:** 2
+- **Fonte:** `associado` (revogação e situação consultada) + `associado_perfil` (status); situação mais velha que `VERIFICACAO_CACHE_TTL` (600 s) → `associado.situacao` no hub com limite global de `VERIFICACAO_HUB_POR_MINUTO` (60) por processo; hub fora, sem grant ou limite → **fallback para o cache** e, passadas 24 h, página com "situação não confirmada no momento" (fail-closed no conteúdo: nunca "Ativo" a partir de cache vencido; **sem 503**, decisão da Onda 2 de 30/10); revogada → "carteirinha sem validade", sem motivo · **Endpoint:** `GET /verificar/{token}` · **Evento:** `carteirinha_verificar` (publico, `contact_id` do titular; sem dado do visitante) · **Flag:** — · **Fase:** 2
 - **UI:** `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
 - **Aceite:** vhost `limit_req` 2 r/s; resposta idêntica em tempo para token inexistente e válido (sem oráculo de enumeração além do status HTTP); nenhum CRM, CPF, e-mail, foto ou data de nascimento na página.
 
@@ -912,10 +912,10 @@ memória por processo (`app/limites.py`). Sem Redis. Notação nos RFs: `[L:n/ja
 - **Aceite:** literal da spec com concordância aplicada.
 
 **RF-CA-07 — Baixar carteirinha e número de associado**
-- **Descrição:** o cartão passa a exibir o **número de associado** (`num_contato`, já entregue pela API e não renderizado — DIV-45) e a palavra "Associado" no lugar do selo "Membro" (spec:§6 P07, §3.3). Botões "Baixar imagem" (`GET /carteirinha/imagem.png`) e "Baixar PDF" (`GET /carteirinha/pdf`), gerados no servidor (Pillow/segno), `ETag`, `no-store`, `[L:10/h]`; a imagem salva continua honesta porque o QR consulta a situação na leitura (RF-CA-08).
-- **Fonte:** `associado_perfil`, `associado.carteirinha_token` · **Endpoint:** `GET /carteirinha/imagem.png`, `GET /carteirinha/pdf` · **Evento:** `carteirinha_baixar` (servidor; `detalhes.formato` ∈ {png, pdf}) · **Flag:** — · **Fase:** 3 (TI-46)
+- **Descrição:** o cartão passa a exibir o **número de associado** (`num_contato`, já entregue pela API e não renderizado — DIV-45) e a palavra "Associado" no lugar do selo "Membro" (spec:§6 P07, §3.3). Botões "Baixar imagem" (`GET /carteirinha/imagem.png`, 1012×638, 300 dpi) e "Baixar PDF" (`GET /carteirinha/documento.pdf`, 85,6 × 54 mm), gerados no servidor (Pillow/segno, fonte Sora), `no-store` e `Content-Disposition: attachment`, `[L:10/h]` somando os dois formatos, `409 carteirinha_revogada` quando revogada; a imagem salva continua honesta porque o QR consulta a situação na leitura (RF-CA-08).
+- **Fonte:** `associado_perfil`, `associado.carteirinha_token` · **Endpoint:** `GET /carteirinha/imagem.png`, `GET /carteirinha/documento.pdf` · **Evento:** `carteirinha_baixar` (servidor; `detalhes.formato` ∈ {png, pdf}) · **Flag:** — · **Fase:** 3 (TI-46)
 - **UI:** botões com verbo; carteirinha "a um toque de qualquer tela" (atalho no topo da home).
-- **Aceite:** arquivo sem CPF, e-mail ou telefone; `If-None-Match` → `304`; só o dono baixa.
+- **Aceite:** arquivo sem CPF, e-mail ou telefone (PNG sem chunks de texto/EXIF/ICC; PDF com `/Info` genérico); só o dono baixa; sem `ETag`/`304` — cada download é gerado de novo e o QR consulta a situação na leitura (decisão da Onda 2).
 
 **RF-CA-08 — Situação em tempo quase real e revogação**
 - **Descrição:** a validação pública consulta a **situação no momento da leitura** e a filiação cancelada **revoga** a carteirinha (spec:§6 P07). `GET /verificar/{token}` passa a chamar `associado.situacao(contact_id)` no hub com cache curto (`VERIFICACAO_CACHE_TTL`, 5–15 min), limite global de chamadas a partir da rota pública (60/min por processo) e fallback "situação não confirmada" quando o hub não responde (fail-closed: nunca "Ativo" a partir de cache vencido). Job noturno de situação em lote preenche `associado.carteirinha_revogada_em` e rotaciona o token na reemissão; `GET /carteirinha` devolve `revogada` e `POST /carteirinha/compartilhar` responde `409` quando revogada. A página pública continua mostrando **só nome e situação** — sem categoria (DEC-36, DIV-07).
@@ -1005,7 +1005,7 @@ memória por processo (`app/limites.py`). Sem Redis. Notação nos RFs: `[L:n/ja
 
 **RF-ON-12 — Trilha por evento real (`GET /trilha`)**
 - **Descrição:** `GET /trilha` devolve `{ativa, expira_em, passos[{slug, titulo, libera, libera_em, concluido_em, valor_referencia}], proximo}`; `ativa` = `data_filiacao + 90 d > hoje` e há passo pendente (ou categoria Acadêmico); `expira_em` = filiação + 90 dias (DEC-21). Passos vêm de `trilha_passo` (seed por categoria, com `evento_conclusao` e `carencia_meses` para "libera em"); a conclusão é gravada em `trilha_progresso` (append-only) por `trilha.avaliar(contact_id, acao, entidade_id)`, chamado **depois** de `uso.registrar` das ações mapeadas (`perfil_contato_atualizar`, `beneficio_ativar`/`beneficio_acessar`, `totalpass_abrir`, `pagina_ver(carteirinha)`/`carteirinha_baixar`, `evento_inscrever`, `solicitacao_criar`). O passo "perfil" vem concluído quando o cadastro está completo.
-- **Fonte:** `trilha_passo`, `trilha_progresso` (`sql/017`) · **Endpoint:** `GET /trilha` (sem `POST concluir`) · **Evento:** `onboarding_passo_concluir` (servidor; `detalhes.dia_jornada`) — equivale a `trilha_passo` da spec · **Flag:** — · **Fase:** 4 (bloco) / 6 (completa) (TI-43)
+- **Fonte:** `trilha_passo`, `trilha_progresso` (`sql/019`) · **Endpoint:** `GET /trilha` (sem `POST concluir`) · **Evento:** `onboarding_passo_concluir` (servidor; `detalhes.dia_jornada`) — equivale a `trilha_passo` da spec · **Flag:** — · **Fase:** 4 (bloco) / 6 (completa) (TI-43)
 - **UI:** `BarraProgresso` (`role="progressbar"`), `PassoTrilha` com "o que libera" e data de carência; bloco 3 da home mostra o passo de maior valor pendente (RF-HO-14).
 - **Aceite:** ativar um benefício mapeado marca o passo sem ação da UI; trilha some no dia 90 ou ao concluir; teste garante ausência de rota `POST /onboarding/passos/*/concluir`.
 
@@ -1085,7 +1085,7 @@ Layout: composto por componentes da spec (`HeroPanel` compacto com avatar 56 px,
 
 **RF-PE-10 — Perfil declarado (preferências)**
 - **Descrição:** campos que **não** vêm do CRM e vivem na área: tratamento ("como prefere ser chamado": padrão neutro; opções Dra./Dr./só o nome — DEC-26), área de atuação (consultório próprio, hospital, plantão, pesquisa, gestão, docência), região de interesse, temas (reusa `associado_tema`), canais preferidos (e-mail; WhatsApp e SMS **só quando existirem**, P-64 — regra 19) e frequência. Enums fechados; nenhum texto livre além do tratamento (≤ 40 caracteres, sem HTML).
-- **Fonte:** `perfil_declarado`, `preferencia_canal` (`sql/015`) · **Endpoint:** `GET /perfil/preferencias`, `PUT /perfil/preferencias [C]` · **Evento:** `perfil_declarado_atualizar` (servidor; `detalhes.campos[]` = nomes, nunca valores) · **Flag:** `lgpd_consentimentos` (seção inteira) · **Fase:** 3b (TI-25, TI-26, TI-27)
+- **Fonte:** `perfil_declarado`, `preferencia_canal` (`sql/018`) · **Endpoint:** `GET /perfil/preferencias`, `PUT /perfil/preferencias [C]` · **Evento:** `perfil_declarado_atualizar` (servidor; `detalhes.campos[]` = nomes, nunca valores) · **Flag:** `lgpd_consentimentos` (seção inteira) · **Fase:** 3b (TI-25, TI-26, TI-27)
 - **UI:** "Complete seu perfil" dizendo o que melhora ("recomendações para a sua especialidade"); especialidade do CRM, quando o hub entregar (P-56), aparece como somente leitura ao lado da declarada.
 - **Aceite:** valor fora do enum → `400 entrada_invalida`; `GET /sessao` passa a devolver `tratamento` para a saudação.
 
@@ -1097,7 +1097,7 @@ Layout: composto por componentes da spec (`HeroPanel` compacto com avatar 56 px,
 
 **RF-PE-12 — Consentimentos por finalidade, versionados**
 - **Descrição:** consentimento por **finalidade e canal** (ofertas de parceiros; WhatsApp de relacionamento; demais finalidades por P-54), com **versão do texto obrigatória** e histórico completo (spec:§11.6 "consentimento versionado"). Mensagens transacionais seguem a execução do contrato de associação e não dependem de consentimento. Descadastro em um toque, refletido no RD na hora (RF-CM-03).
-- **Fonte:** `consentimento_texto` (texto novo = linha nova, nunca editar) e `consentimento` (**append-only**; estado atual = última linha por finalidade × canal, `vw_consentimento_atual`) (`sql/015`) · **Endpoint:** `GET /perfil/consentimentos` (histórico + vigentes), `POST /perfil/consentimentos [C]` `{finalidade, canal, valor, versao_texto}` · **Evento:** `consentimento_alterar` (servidor; `detalhes.finalidade`, `canal`, `valor`, `versao`) · **Flag:** `lgpd_consentimentos` · **Fase:** 3b
+- **Fonte:** `consentimento_texto` (texto novo = linha nova, nunca editar) e `consentimento` (**append-only**; estado atual = última linha por finalidade × canal, `vw_consentimento_atual`) (`sql/018`) · **Endpoint:** `GET /perfil/consentimentos` (histórico + vigentes), `POST /perfil/consentimentos [C]` `{finalidade, canal, valor, versao_texto}` · **Evento:** `consentimento_alterar` (servidor; `detalhes.finalidade`, `canal`, `valor`, `versao`) · **Flag:** `lgpd_consentimentos` · **Fase:** 3b
 - **UI:** switch com a versão do texto e link "ver histórico"; texto v0 provisório até P-54.
 - **Aceite:** `versao_texto` ausente ou diferente da vigente → `409 versao_desatualizada`; nenhum `UPDATE`/`DELETE` em `consentimento` (`db_check`); retirar o consentimento suprime a outbox daquele canal na mesma transação.
 
@@ -1124,6 +1124,11 @@ Layout: composto por componentes da spec (`HeroPanel` compacto com avatar 56 px,
 > SO-04 cancela em `criada`, `enviada` e `pendente_associado`, **nunca em `em_atendimento`**
 > (RF-SO-12); SO-05 responde em `pendente_associado`; SO-06 continua válida — a **falha** do espelho
 > é invisível, mas `enviada` vira status de negócio visível; SO-07 conta `pendente_associado`.
+
+> **Contrato efetivo da Onda 2 (30/10):** `situacao` é opcional (ausente = todas); chave de idempotência
+> reusada em outro tipo → `409 estado_invalido`; `409 nao_elegivel` traz a data em
+> `detalhes[{campo: "libera_em", mensagem: "AAAA-MM-DD"}]` (o schema de erro é fechado); o `UPDATE` em
+> `solicitacao` e `comunicacao_evento` é concedido **por coluna** (`sql/010`, `sql/012`).
 
 **RF-SO-01 — Lista**
 - **Descrição:** lista das solicitações do associado, ordenadas por última atualização (desc), com tipo (rótulo pt-BR), status pt-BR (seção 7), data de abertura e última atualização; abas "Em andamento" (não terminais) e "Encerradas" (proposta). Paginação por cursor (20).
@@ -1207,7 +1212,7 @@ Layout: composto por componentes da spec (`HeroPanel` compacto com avatar 56 px,
 - **Descrição:** além dos 7 tipos da v0.1 (§7.4), entram `declaracao_associado` (RF-FI-04; inclui "AMB para prova de título" com carência de 1 mês), `cancelamento_associacao` (RF-AJ-04) e `exclusao_dados` (RF-PE-14). Com o catálogo como dado (Fase 4), serviços da APM viram entradas do catálogo com `tipo_ativacao=3`; até lá continuam como `tipo_servico`.
 - **Fonte:** `solicitacao.tipo_servico` ENUM; schemas por tipo com allowlist de campos (`beneficio.sigiloso` ⇒ `dados={}`; nunca dado de saúde) · **Endpoint:** `POST /solicitacoes [C]` `{tipo_servico, campos, chave_idempotencia}` · **Evento:** `solicitacao_criar` · **Flag:** `cancelamento_online` só para `cancelamento_associacao` · **Fase:** 3 (TI-15)
 - **UI:** formulários por tipo.
-- **Aceite:** campo fora da allowlist do tipo → `400 entrada_invalida`; `outro` limitado a 5/dia por contagem no banco (D-17).
+- **Aceite:** campo fora da allowlist do tipo → `400 entrada_invalida`; `outro` limitado a 5 em 24 h móveis por contagem no banco (D-17).
 
 **RF-SO-15 — Prazo e contato na lista**
 - **Descrição:** cada item mostra data, status, **prazo** (`prazo_em = enviada_em + prazo_retorno_dias`, ou "prazo informado após o envio") e **contato** (canal da Central ou do parceiro, do catálogo), conforme spec:§6 P05 "lista com benefício, data, status, prazo e contato".
@@ -1231,7 +1236,7 @@ Layout: composto por componentes da spec (`HeroPanel` compacto com avatar 56 px,
 - **Aceite:** teste: `fetch` sem cookie recebe 401 JSON.
 
 **RF-AU-03 — `GET /api/v1/sessao`**
-- **Descrição:** devolve: nome de exibição, iniciais, `tipo`, `status`, `tem_foto`, `csrf`, `rota_inicial`, `flags`, `config` (`whatsapp`, `show_whatsapp`, `animations`), `stub` (bool), `solicitacoes_aguardando`. Nunca CPF, `cpf_mask`, e-mail completo, `sub` ou `contact_id`.
+- **Descrição:** devolve: nome de exibição, iniciais, `tipo`, `status`, `tem_foto`, `csrf`, `rota_inicial`, `flags`, `config` (`whatsapp`, `show_whatsapp`, `animations`), `stub` (bool), `solicitacoes_aguardando` (contagem real de `pendente_associado`; 0 se a tabela não existe), `recursos` (`{solicitacoes, ajuda}`: tabelas presentes, `app/prontidao.py`, cache 60 s; a SPA mostra "em construção" quando falso — Onda 2). Nunca CPF, `cpf_mask`, e-mail completo, `sub` ou `contact_id`.
 - **Fonte:** sessão + `feature_flag` + `solicitacao` · **Endpoint:** `GET /sessao` · **Evento:** — · **Flag:** — · **Fase:** 1
 - **UI:** primeira chamada da SPA; falha → tela de erro do shell com "Tentar novamente".
 - **Aceite:** `Cache-Control: no-store`; teste de contrato de chaves proibidas.
@@ -1334,7 +1339,7 @@ F1 na spec (AJU-01/02); sem fase na v0.1 → **Fase 3** (DIV-27): são uma tabel
 
 **RF-AJ-01 — Perguntas frequentes com busca**
 - **Descrição:** FAQ editável (B07) com busca normalizada sem acento, agrupada por categoria; sugere categorias quando não encontra.
-- **Fonte:** `faq` (`sql/012`; só publicadas) · **Endpoint:** `GET /ajuda/faq?q=&categoria=` · **Evento:** `pagina_ver`; `busca_global` quando via busca do shell (a FAQ é uma das 5 fontes, RF-SH-04) · **Flag:** — · **Fase:** 3 (TI-20, TI-22)
+- **Fonte:** `faq` (`sql/013`; só publicadas) · **Endpoint:** `GET /ajuda/faq?q=&categoria=` · **Evento:** `pagina_ver`; `busca_global` quando via busca do shell (a FAQ é uma das 5 fontes, RF-SH-04) · **Flag:** — · **Fase:** 3 (TI-20, TI-22)
 - **UI:** `BuscaFaq` + `Accordion`; conteúdo inicial (≥ 20 perguntas) por P-44.
 - **Aceite:** FAQ despublicada some sem deploy; `q` ≤ 80.
 
@@ -1348,7 +1353,7 @@ F1 na spec (AJU-01/02); sem fase na v0.1 → **Fase 3** (DIV-27): são uma tabel
 - **Descrição:** `POST /ajuda/formulario [C]` cria solicitação `outro` (assunto + mensagem) — mesmo caminho de RF-SO-03; e-mail transacional de confirmação (A04).
 - **Fonte:** `solicitacao` · **Endpoint:** `POST /ajuda/formulario` (atalho para `POST /solicitacoes`) · **Evento:** `solicitacao_criar` · **Flag:** — · **Fase:** 3
 - **UI:** `assunto` em lista curta (pedidos comuns) + "outro".
-- **Aceite:** 5/dia por contagem no banco (D-17); texto sem HTML, filtro anti-CPF.
+- **Aceite:** 5 em 24 h móveis por contagem no banco (D-17); texto sem HTML, filtro anti-CPF.
 
 **RF-AJ-04 — Pedido de cancelamento da associação (A16)**
 - **Descrição:** acessível sem labirinto; **motivo obrigatório** em lista curta (`nao_uso`, `preco`, `mudanca` — cidade ou fase —, `insatisfacao_servico`, `outro`), oferta de conversa opcional, comentário ≤ 500. Cria solicitação `cancelamento_associacao` (RF-SO-14) com **step-up** (RF-AU-11), confirmação por e-mail e janela de arrependimento; **nunca altera a situação no CRM** — quem cancela é a APM (DEC-08 do Maestro; spec:§6 P14 "o pedido vai para a Central"). Dispara outbox A16 (fluxo 6 da régua), espelho no CRM e SMTP à Central; suprime fluxos de efetivo.
@@ -1370,7 +1375,7 @@ Decisão: in-app + e-mail transacional; **sino só com aceite visual** da agênc
 
 **RF-NO-01 — Lista de notificações**
 - **Descrição:** tipos: solicitação atualizada, benefício liberado, evento, pagamento, novidade para o perfil; lida/não lida; atalho para preferências de canal (RF-PE-10).
-- **Fonte:** `notificacao` (`sql/016`; `UPDATE` só em `lida_em`) · **Endpoint:** `GET /notificacoes?cursor=` `[F:notificacoes]` → `{itens[{id, tipo, titulo, corpo, link, criada_em, lida}]}` · **Evento:** `notificacao_abrir` (ui; `detalhes.tipo`) · **Flag:** `notificacoes` · **Fase:** F2 (TI-85)
+- **Fonte:** `notificacao` (`sql/012`; `UPDATE` só em `lida_em`) · **Endpoint:** `GET /notificacoes?cursor=` `[F:notificacoes]` → `{itens[{id, tipo, titulo, corpo, link, criada_em, lida}]}` · **Evento:** `notificacao_abrir` (ui; `detalhes.tipo`) · **Flag:** `notificacoes` · **Fase:** F2 (TI-85)
 - **UI:** lista com `aria-live` discreto; link interno validado.
 - **Aceite:** flag desligada → `404 recurso_desligado`; só as do próprio `contact_id`.
 
@@ -1406,7 +1411,7 @@ Arquitetura (DEC-18): a área **emite** campos e eventos (outbox produzida na tr
 
 **RF-CM-01 — Outbox de comunicação**
 - **Descrição:** `comunicacao_evento` (gatilho ∈ A01..A20, `contact_id`, referência tipo/id, canal sugerido, `enviar_apos`, status `pendente|enviado|suprimido|erro|falhou`, tentativas, `rd_evento_id`; **único `(gatilho, contact_id, referencia_id)`**) produzida **na mesma transação** da transição de negócio; `comunicacao_envio` (append; entregue/aberto/clicado por retorno do RD ou UTM) e `comunicacao_supressao` (append; motivo ∈ {limite_semana, financeiro, cancelamento, sem_consentimento, recomendado_recente}). Payload **sem CPF nem e-mail**. Gatilhos que a área emite na F1: **A03, A04, A05, A06, A16** (`LEVANTAMENTO §7`); A01/A02/A13 por jobs de diferença (TI-55); A09 só com cobrança; A17/A18 fora da área.
-- **Fonte:** `sql/016` · **Endpoint:** — · **Evento:** — (a outbox não é `evento_uso`) · **Flag:** `comunicacao_outbox` governa o **envio** (job `outbox_rd`); a produção é sempre ligada · **Fase:** 3 (TI-18); envio 3b (TI-53) com P-46
+- **Fonte:** `sql/012` · **Endpoint:** — · **Evento:** — (a outbox não é `evento_uso`) · **Flag:** `comunicacao_outbox` governa o **envio** (job `outbox_rd`); a produção é sempre ligada · **Fase:** 3 (TI-18); envio 3b (TI-53) com P-46
 - **UI:** log visível no backoffice (B09, RF-BO-11).
 - **Aceite:** sem credencial do RD o job marca `suprimido: sem_credencial` e nada sai; índice único impede disparo duplo pela mesma causa; `GET_LOCK` no job.
 
@@ -1450,7 +1455,7 @@ expõe** por módulo, no namespace `/api/interno/v1`, autenticado por **token de
 
 **RF-BO-01 — Namespace, autenticação e auditoria da API interna**
 - **Descrição:** `/api/interno/v1/*` fora do `require_associado`; autenticação por token de serviço (segredo em `Settings`, comparação em tempo constante, rotação documentada) ou, na Onda 6, OIDC corporativo; toda escrita grava `backoffice_auditoria` (`usuario_id`, ação, tabela, registro, valor anterior/novo em JSON com CHECK anti-segredo/CPF, justificativa, `request_id`) — **append-only**; toda leitura de dado pessoal individual grava `acesso_dado_pessoal` (quem, qual `contact_id`, quais campos). Perfis Diretoria e Regional só veem agregados (k ≥ 20); Parceiro (PAR-01, F2) só as próprias solicitações, nunca CPF.
-- **Fonte:** `usuario_interno` (sem senha; identidade externa), `backoffice_auditoria`, `acesso_dado_pessoal` (`sql/018`) · **Endpoint:** `/api/interno/v1/*` · **Evento:** — (trilhas próprias) · **Flag:** — · **Fase:** BO (TI-58; após DEC-03)
+- **Fonte:** `usuario_interno` (sem senha; identidade externa), `backoffice_auditoria`, `acesso_dado_pessoal` (`sql/020`) · **Endpoint:** `/api/interno/v1/*` · **Evento:** — (trilhas próprias) · **Flag:** — · **Fase:** BO (TI-58; após DEC-03)
 - **UI:** fora desta área.
 - **Aceite:** vhost devolve `403` para `/api/interno/` até o consumidor existir; `db_check` valida `apm_area_bo` com allowlist própria e `apm_area` sem `UPDATE` em catálogo.
 
@@ -1462,7 +1467,7 @@ expõe** por módulo, no namespace `/api/interno/v1`, autenticado por **token de
 
 **RF-BO-03 — B06 Importações (CSV do plano B)**
 - **Descrição:** upload (canal DEC-05: upload no backoffice na F1; S3 presigned ou módulo no `apm-parceiros` depois; nunca SFTP novo nem e-mail) → o CSV vai **ao hub** (`importacao.resolver_lote`), que resolve CPF → `contact_id`/`nao_encontrado` e cria o lead no RD/CRM; a área recebe e guarda `importacao` (cabeçalho, sha256, contagens, status `recebida|validada|confirmada|devolvida`) e `importacao_linha` **sem CPF** (único `(parceiro_id, id_externo)`; `erro_codigo` por linha; CHECK anti-CPF em `observacao`). Prévia com erros por linha → confirmar (INSERT em `uso_valor` nível 3; nível 4 após validação do Financeiro; fecha solicitações por `id_externo`) → devolução de erros ao parceiro por SMTP sem dado pessoal. Processamento no **serviço de jobs**, nunca no processo web; CPF só em memória, descartado.
-- **Fonte:** `importacao`, `importacao_linha` (`sql/013`); hub TI-51 · **Endpoint:** `POST /importacoes`, `GET /importacoes/{id}/previa`, `POST /importacoes/{id}/confirmar`, `GET /importacoes/{id}/devolucao.csv` · **Evento:** `uso_registrar` (job) · **Flag:** — · **Fase:** BO/4 (TI-54, TI-81; DEC-05 aceita só quanto ao hub)
+- **Fonte:** `importacao`, `importacao_linha` (`sql/016`); hub TI-51 · **Endpoint:** `POST /importacoes`, `GET /importacoes/{id}/previa`, `POST /importacoes/{id}/confirmar`, `GET /importacoes/{id}/devolucao.csv` · **Evento:** `uso_registrar` (job) · **Flag:** — · **Fase:** BO/4 (TI-54, TI-81; DEC-05 aceita só quanto ao hub)
 - **UI:** —
 - **Aceite:** teste de contrato recusa coluna `cpf` em qualquer corpo da **área**; reenvio do mesmo arquivo não duplica (`id_externo`); linha com CPF em `observacao` é rejeitada.
 
@@ -1486,19 +1491,19 @@ expõe** por módulo, no namespace `/api/interno/v1`, autenticado por **token de
 
 **RF-BO-07 — B03/B04 Catálogo e parceiros**
 - **Descrição:** CRUD da ficha do benefício (RF-BE-16) com rascunho → aprovação → publicação agendada, histórico em `beneficio_versao`, prévia "ver como associado" (chama `inicio.montar`/elegibilidade com o perfil alvo); cadastro mínimo de `parceiro` (código APM `PAR017` como chave de conciliação com o CSV, requisito técnico `api|relatorio|portal|email`, prazo de retorno, vigência, contatos sem CPF). `apm-parceiros` continua outro sistema (DEC-10 do Maestro).
-- **Fonte:** `beneficio`, `beneficio_versao`, `beneficio_faq`, `beneficio_afinidade`, `parceiro` (`sql/012`) · **Endpoint:** CRUD em `/beneficios`, `/parceiros`; `GET /previa?contact_id=` · **Evento:** `backoffice_auditoria` · **Flag:** — · **Fase:** BO (Fase 4 para os dados)
+- **Fonte:** `beneficio`, `beneficio_versao`, `beneficio_faq`, `beneficio_afinidade`, `parceiro` (`sql/015`) · **Endpoint:** CRUD em `/beneficios`, `/parceiros`; `GET /previa?contact_id=` · **Evento:** `backoffice_auditoria` · **Flag:** — · **Fase:** BO (Fase 4 para os dados)
 - **UI:** —
 - **Aceite:** publicar sem `valor_referencia` aprovada é recusado quando a ficha tem valor; vigência vencida encerra sem ação manual.
 
 **RF-BO-08 — B12 Painéis e relatórios**
 - **Descrição:** views `vw_ind_01..14` (indicadores spec:§11.3), `vw_qualidade_parceiro_mes` e `base_ativa_mensal` (denominadores por categoria/regional gravados por job); **k-anonimato ≥ 20** embutido em qualquer recorte que saia para parceiro, patrocinador ou regional (função única `agregar(min_n=20)`); usuário `apm_area_painel` só `SELECT` nas views; exportação só agregada; ferramenta por DEC-16 (nunca script de terceiro na SPA).
-- **Fonte:** `sql/022` (views), `sql/021` (`base_ativa_mensal`) · **Endpoint:** consultas agregadas via ferramenta/`/api/interno/v1/paineis/*` · **Evento:** — · **Flag:** — · **Fase:** BO/4 (TI-44; definições das views já)
+- **Fonte:** `sql/024` (views), `sql/023` (`base_ativa_mensal`) · **Endpoint:** consultas agregadas via ferramenta/`/api/interno/v1/paineis/*` · **Evento:** — · **Flag:** — · **Fase:** BO/4 (TI-44; definições das views já)
 - **UI:** —
 - **Aceite:** recorte com < 20 pessoas devolve vazio; indicadores com denominador externo (1, 2, 4, 9, 11) rotulados "só numerador" até a fonte.
 
 **RF-BO-09 — B07/B08 Conteúdo e segmentos**
 - **Descrição:** `destaque_editorial` (ADM-05), `faq`, `trilha_passo`, `texto_sistema` (estados vazios e de erro editáveis), `segmento` (regras) e `beneficio_afinidade` (matriz), com prévia por perfil.
-- **Fonte:** `sql/012`, `sql/017` · **Endpoint:** CRUD · **Evento:** `backoffice_auditoria` · **Flag:** — · **Fase:** BO (Fase 3 para `faq`/`texto_sistema`)
+- **Fonte:** `sql/013` (`faq`, `texto_sistema`, `parametro`), `sql/015`, `sql/019` · **Endpoint:** CRUD · **Evento:** `backoffice_auditoria` · **Flag:** — · **Fase:** BO (Onda 2 para `faq`/`texto_sistema`/`parametro` por SQL do operador)
 - **UI:** —
 - **Aceite:** texto publicado aparece na API da área em ≤ 60 s (cache).
 
@@ -1510,7 +1515,7 @@ expõe** por módulo, no namespace `/api/interno/v1`, autenticado por **token de
 
 **RF-BO-11 — Fila de ligações da Central (§10.5)**
 - **Descrição:** job diário às 8h (`TZ=America/Sao_Paulo`) gera `fila_ligacao` na ordem da régua: renovação (⛔ fonte), passagem para efetivo, novo associado no 3.º mês, interesse, ex-associado (fora da área), `sem_retorno_2`; F2 acrescenta score < 30 (A12). Resultado da ligação registrado pelo atendente; 3 tentativas sem resposta ⇒ sai por 30 dias. Sem backoffice: entrega à Central por CSV interno via SMTP ou view RO no portal do hub (TI-59, provisório).
-- **Fonte:** `fila_ligacao` (`sql/016`) · **Endpoint:** `GET /fila-ligacoes`, `POST /fila-ligacoes/{id}/resultado` · **Evento:** — · **Flag:** — · **Fase:** 3b (provisório) / BO
+- **Fonte:** `fila_ligacao` (`sql/012`) · **Endpoint:** `GET /fila-ligacoes`, `POST /fila-ligacoes/{id}/resultado` · **Evento:** — · **Flag:** — · **Fase:** 3b (provisório) / BO
 - **UI:** —
 - **Aceite:** fila sem CPF (nome, número, canal preferido); itens só com consentimento/transacional conforme finalidade.
 
@@ -1548,7 +1553,7 @@ expõe** por módulo, no namespace `/api/interno/v1`, autenticado por **token de
 | RNF-26 | Backup e restauração | RDS `mysql-producao`: snapshots diários + PITR, retenção 7 → **14 dias** (DEC-33); **snapshot manual antes de cada `sql/NNN` e do cutover**; **teste de restauração** trimestral em instância temporária (`db_check`, contagens, `schema_migrations`) com evidência datada em `docs/CONCLUIDO.md` (spec:§14 "cópia de segurança diária com teste de restauração"; DIV-21); `.env` replicado no Secrets Manager e conferido por `scripts/env_check.sh` (P-36); opcional export de `evento_log` para S3 Object Lock. SLO declarado 99,5 % (Single-AZ). | runbook (TI-76); P-59, P-60 |
 | RNF-27 | Disponibilidade e monitoramento | Monitor externo de `/health` nos hosts (P-61); alerta diário/horário (5xx do porteiro, Tracebacks, `uso_falhas`, `job_execucao` com erro, 429 anormais, certificado < 30 dias, `.env` ≠ cofre) no padrão `login_associado/deploy/alertas.sh`; logs persistentes (`awslogs`/`journald`) para não perder `docker logs` na recriação; página de manutenção no vhost; critério de "go" do cutover pelo indicador 14 (spec:§11.3). | TI-75, TI-84; `verificar-pos-reboot.sh` |
 | RNF-28 | Auditoria · log imutável | Solicitações (`solicitacao_evento`), consentimentos, uso/valor, ações do backoffice (`backoffice_auditoria` com valor anterior/novo e justificativa) e leituras de dado pessoal pelo staff (`acesso_dado_pessoal`) são tabelas **só `INSERT`** por privilégio, com CHECK anti-segredo/CPF (spec:§14 "Auditoria", "LGPD"); retenção por tabela em `docs/RETENCAO.md` com prazos do jurídico (P-54) e expurgo só por partição mensal (`evento_uso`, `evento_log`, `comunicacao_envio`, `score_engajamento`) ou procedimento do operador. | `db_check` (grants); `docs/PROVISIONAMENTO.md` |
-| RNF-29 | Conteúdo editável sem publicação | Tudo o que muda com frequência é **dado**, não código (spec:§3 item 8, §14): ficha de benefício, carências, parâmetros, valores de referência, FAQ, destaques, textos de sistema (estados vazios/erro), passos da trilha, matriz de afinidade, textos de consentimento — editados pelo backoffice com `apm_area_bo` (D-19) ou, até ele existir, por script administrativo do operador com histórico (`beneficio_versao`, `backoffice_auditoria`); leitura pela área com cache ≤ 60 s. `app/dominio/catalogo.py` (conteúdo editorial em código) é transitório e migra para `sql/012`/`sql/017`. | teste: alteração no banco reflete sem deploy |
+| RNF-29 | Conteúdo editável sem publicação | Tudo o que muda com frequência é **dado**, não código (spec:§3 item 8, §14): ficha de benefício, carências, parâmetros, valores de referência, FAQ, destaques, textos de sistema (estados vazios/erro), passos da trilha, matriz de afinidade, textos de consentimento — editados pelo backoffice com `apm_area_bo` (D-19) ou, até ele existir, por script administrativo do operador com histórico (`beneficio_versao`, `backoffice_auditoria`); leitura pela área com cache ≤ 60 s. `app/dominio/catalogo.py` (conteúdo editorial em código) é transitório e migra para `sql/015`/`sql/019`. | teste: alteração no banco reflete sem deploy |
 | RNF-30 | Identidade visual | Paleta e tipografia seguem os **mockups da agência** (ADR-0017: Sora, cards de vidro, trilho em pílula) — decisão do usuário mantida frente ao §14 da spec (Verdana; `#004165`, `#009581`, `#00675A`, `#616365`; botão principal verde): divergência formal registrada para Marketing/agência (DIV-34, DIV-37, DIV-43; P-43). Um botão principal por bloco; selos sempre com texto; conteúdo patrocinado sempre sinalizado (spec:§3.2). | revisão visual da agência (P-39, P-42) |
 
 ---
@@ -1612,7 +1617,7 @@ expõe** por módulo, no namespace `/api/interno/v1`, autenticado por **token de
 
 - **Limite:** 6.000 requisições / 5 min por usuário de aplicação (compartilhado com o hub) — perfil em cache, sync incremental por cursor.
 - **Flows:** disparam em create; criar `task` pode acionar flows existentes (e-mails, atribuições) — verificar em P-06 antes da Fase 3.
-- **Paginação:** `dataverse.py` do hub só faz GET e não segue `@odata.nextLink` — corrigir na extensão para `solicitacao.alteracoes_consultar`.
+- **Paginação:** `dataverse.py` do hub só faz GET e não segue `odata.nextLink` — corrigir na extensão para `solicitacao.alteracoes_consultar`.
 
 ### 5.5 ERP Dynamics 365 F&O — somente leitura
 
@@ -1628,7 +1633,7 @@ expõe** por módulo, no namespace `/api/interno/v1`, autenticado por **token de
 - **Escrevemos:** nada.
 - **Chave:** `ID` do post → `noticia_cache.portal_id` / `evento_cache.portal_id`.
 - **Frequência:** a cada 15 min; upsert por `portal_id` + `post_modified`; itens despublicados marcados inativos (sem `DELETE`).
-- **Segurança:** usuário novo somente leitura (SELECT nas 6 tabelas), rotação e revogação de `portal_apm@%` (credencial vazada, grant aberto), TLS se a Locaweb suportar (senão: ADR-0006 registra o risco aceito), host de imagens validado contra `CSP_IMG_HOSTS` (fora → placeholder), HTML do conteúdo **não** é renderizado na SPA (só título, resumo em texto puro e link).
+- **Segurança:** usuário novo somente leitura (SELECT nas 6 tabelas), rotação e revogação de `portal_apm%` (credencial vazada, grant aberto), TLS se a Locaweb suportar (senão: ADR-0006 registra o risco aceito), host de imagens validado contra `CSP_IMG_HOSTS` (fora → placeholder), HTML do conteúdo **não** é renderizado na SPA (só título, resumo em texto puro e link).
 - **Falha e degradação:** job falha → `job_execucao` com erro, cache anterior continua servido, "atualizado em DD/MM" (RF-NE-01).
 - **Pendências:** P-07, P-16 (appapm migrar para o usuário RO).
 
@@ -1720,7 +1725,7 @@ diferença** ≤ 24 h (DIV-30, TI-55). Ferramentas a criar/conceder (repositóri
 | `associado.perfil_consultar` ampliada: `faixa_carreira` (derivada da data de nascimento **no hub**; a data nunca sai), `nome_social`, `especialidades`, `regional_cod`, `isento_remido`, situação normalizada (`ativo\|suspenso\|cancelado\|outro`) | personalização §7.1, elegibilidade por região, tratamento | Fase 4 (TI-48) | atributos no CRM (P-56) |
 | `associado.alterados_desde(cursor)` | jobs de diferença (A01, A13, `atualizar_perfis` só de quem acessou em 90 d) | Fase 4 (TI-51, TI-55) | cota P-41 |
 | `financeiro.situacao_consultar(contact_id)` → `{situacao, dias_atraso}` · `financeiro.faturas_listar(contact_id)` · `financeiro.vencidas_desde(cursor)` | RF-FI-01/02/05, estado "Suspenso", A09 | Fase 7 (TI-49) | P-04, P-08, P-58 |
-| `solicitacao.espelhar` / `solicitacao.status_atualizar` / `solicitacao.alteracoes_consultar(cursor)` (credencial só Create/Write em `task`; idempotência por `uuid`; `@odata.nextLink` tratado no hub) | §7.5 | Fase 3 (TI-50; contrato + stub); real com P-06 | P-06 |
+| `solicitacao.espelhar` / `solicitacao.status_atualizar` / `solicitacao.alteracoes_consultar(cursor)` (credencial só Create/Write em `task`; idempotência por `uuid`; `odata.nextLink` tratado no hub) | §7.5 | Fase 3 (TI-50; contrato + stub); real com P-06 | P-06 |
 | `importacao.resolver_lote(csv)` → linhas com `contact_id` ou `nao_encontrado`; lead → RD/CRM | §5.10, RF-BO-03 | Fase 4 (TI-51) | P-04 ampliada |
 | `associado.visao_360(contact_id)` (sensível; grant só ao backoffice) | RF-BO-06 | BO | DEC-03 |
 | `totalpass.adesao_consultar(contact_id)` | RF-BE-10 | Fase 4 | P-04 |
@@ -1787,7 +1792,14 @@ partição e as flags entram antes); o número definitivo é o da migração apr
 | `006` | `associado_perfil` | cache do `contact` exibido + `foto_miniatura` + ETag | SELECT, INSERT, UPDATE |
 | `007` | `email_verificacao` | troca de e-mail por código (ADR-0015) | SELECT, INSERT, UPDATE |
 
-### 6.2 Migrações planejadas (`sql/008–022`)
+### 6.2 Migrações planejadas (`sql/008–024`)
+
+> **Renumeração de 2026-10-30 (Onda 2):** a numeração segue a **ordem de criação**, para o operador
+> aplicar sempre em ordem crescente. A Onda 2 precisou de comunicação, ajuda/parâmetros e revogação da
+> carteirinha antes do catálogo: `012` comunicação (era 016), `013` ajuda e parâmetros (saiu do
+> catálogo), `014` revogação da carteirinha (nova); as reservas seguintes deslocaram (catálogo 015,
+> valor 016, portal 017, LGPD 018, trilha/clube 019, backoffice 020, financeiro 021, score 022, base
+> ativa 023, views 024).
 
 Coluna "UPDATE" = quem recebe o grant: `web` = `apm_area`; `bo` = `apm_area_bo` (D-19; até o
 backoffice existir, operador por SQL); `—` = ninguém (append-only ou só leitura). "Spec" = entidade
@@ -1799,23 +1811,25 @@ de spec:§11.1 que a tabela realiza.
 | **`009`** | `feature_flag` → seed das 7 chaves novas desligadas (seção 10; D-18) | — | — | — | Onda 1 (TI-13) |
 | **`010`** | `solicitacao` (8 status; `beneficio_id`, `parceiro_id`, `tipo_ativacao`, `tipo_servico`, `canal_envio`, `prazo_retorno_dias`, `enviada_em`, `sem_retorno_desde`, `responsavel`, `resultado JSON`, `avaliacao_nota/comentario`, `avaliada_em`, `cancel_motivo`, `chave_idempotencia`, `crm_id`, `crm_sync`, `crm_tentativas`, `crm_proxima_em`, `dados JSON ≤ 16 kB`) · `solicitacao_evento` (`de_status`, `para_status`, `ator`, `origem`, `usuario_interno`, `justificativa` — CHECK obrigatória quando `origem='backoffice'` —, `mensagem_publica`, `conteudo_enviado` = campos + sha256 + destino, `request_id`) | Solicitação · Log de status | `solicitacao`: web (transição condicional, outbox CRM, marcador, avaliação) e bo (status com justificativa) | `solicitacao_evento` | **3** (TI-14; D-15) |
 | **`011`** | `job_execucao` (`job` com CHECK regex, `iniciado_em`, `terminado_em`, `status ∈ executando\|ok\|erro\|abortado`, `itens_lidos/gravados/erro`, `erro_resumo` com CHECK anti-segredo, `host`, `versao_app`) | — (RNF-17) | web/jobs (fechar a linha aberta no início) | — | 3 (TI-01; D-16) |
-| **`012`** | **Catálogo como dado:** `parceiro` (código APM `PAR017`, `requisito ∈ api\|relatorio\|portal\|email`, `prazo_retorno_dias`, vigência, `contato JSON` sem CPF, `host`), `beneficio_categoria` (8 da spec), `beneficio` (ficha B03: textos, `tipo_ativacao` 1–6, `destino`/`url_acesso`, `carencia_meses` 0–12, `exige_adimplencia`, `regional`, `modalidade_mensuracao`, `prazo_retorno_dias`, vigência, `status ∈ rascunho\|aprovado\|publicado\|encerrado`, `patrocinado`, `sigiloso`, `ordem`), `beneficio_versao` (snapshot JSON), `beneficio_faq`, `beneficio_categoria_associado` (matriz × categoria), `beneficio_afinidade` (segmento, pontos 0–3), `beneficio_ativacao` (tipo 1; `ativo`, `ativado_em`, `desativado_em`), `recomendacao_dispensa`, `recomendacao_exposicao`, `parametro` (chave, valor, tipo, CHECK regex como `feature_flag`), `associado_categoria_hist`, `ALTER associado_perfil` (+`faixa_carreira`, `especialidade_cod`, `regional_cod`, `nome_social`, `isento_remido`), `destaque_editorial` (`UNIQUE (segmento, vigência)`), `faq`, `texto_sistema`, `busca_sem_resultado` (sem identidade), `categoria_associado` (de-para rótulo → código, TI-92) | Benefício · Parceiro e contrato · Segmento e bloco · Filiação (hist.) | catálogo/configuração/editorial: **bo**; `beneficio_ativacao`, `recomendacao_exposicao`: web | `beneficio_versao`, `recomendacao_dispensa`, `associado_categoria_hist`, `busca_sem_resultado` | **4** (TI-29); seed real só com P-48 |
-| **`013`** | **Valor e importação:** `valor_referencia` (valor, `base ∈ anual\|por_uso`, fonte, `data_fonte`, `aprovado_por`, `aprovado_em`, vigência, `revisao_prevista_em`; vigente = última aprovada ≤ hoje), `uso_valor` (RF-FA-09; CHECK `economia = referencia − pago`; CHECK nível 4 ⇒ `validado_em`; `estorna_id`, `valida_id`), `importacao` (cabeçalho: parceiro, competência, `arquivo_sha256`, contagens, `status ∈ recebida\|validada\|confirmada\|devolvida`, usuário), `importacao_linha` (**sem CPF**; `contact_id` ou `sem_associado`; único `(parceiro_id, id_externo)`; `erro_codigo`; CHECK anti-CPF em `observacao`), view `vw_meu_valor_ano` | Uso e valor · Importação | `importacao`: bo (status, contagens) | `valor_referencia`, `uso_valor`, `importacao_linha` | 4 (TI-35, TI-54; antecipada da 8) |
-| **`014`** | **Conteúdo do portal:** `noticia_cache`, `evento_cache` (+ `categoria_carencia`), `tema`, `associado_tema`, `noticia_salva`, `evento_inscricao` (+ `perfil_preco`, `status ∈ interesse\|inscrito`) | Conteúdo e evento | web (cache por upsert; "desfazer" por coluna) | — | 5 (TI-56; ADR-0006) |
-| **`015`** | **LGPD e preferências:** `consentimento_texto` (finalidade, canal, versão, texto; texto novo = linha nova), `consentimento` (append; `vw_consentimento_atual`), `preferencia_canal`, `perfil_declarado` (tratamento, área de atuação, região, temas), `pergunta_perfil` (catálogo), `titular_pedido` (`tipo ∈ exportacao\|exclusao`, status, protocolo), colunas `anonimizado_em` em `associado_perfil`/`perfil_declarado` | Perfil declarado · Consentimento | `preferencia_canal`, `perfil_declarado`: web; `titular_pedido`: web (abrir) e bo (fechar) | `consentimento_texto`, `consentimento` | **3b** (TI-25) |
-| **`016`** | **Comunicação:** `comunicacao_evento` (outbox; único `(gatilho, contact_id, referencia_id)`; `(status, enviar_apos)`), `comunicacao_envio` (particionada), `comunicacao_supressao`, `notificacao` (UPDATE só `lida_em`), `fila_ligacao` | Comunicação | `comunicacao_evento`: jobs (status, tentativas); `notificacao`: web (`lida_em`); `fila_ligacao`: bo (resultado) | `comunicacao_envio`, `comunicacao_supressao` | 3 (TI-18; produção) / 3b (envio) |
-| **`017`** | **Trilha, comunidade, clube:** `trilha_passo` (por categoria; `evento_conclusao`, `carencia_meses`, `valor_referencia`), `trilha_progresso` (append), `comunidade`, `comunidade_adesao`, `oferta_clube` | Conteúdo e evento | `comunidade_adesao`: web; `oferta_clube`, `trilha_passo`, `comunidade`: bo | `trilha_progresso` | 4 (trilha) / 6 (comunidade, clube) |
-| **`018`** | **Backoffice:** `usuario_interno` (e-mail, nome, `perfil ENUM(8)`, ativo; **sem senha** — identidade externa), `backoffice_auditoria` (valor anterior/novo JSON, justificativa; CHECK anti-segredo/CPF), `acesso_dado_pessoal` (quem, `contact_id` alvo, campos); criação do usuário `apm_area_bo` e `GRANT UPDATE` nas tabelas de catálogo/configuração | Usuário interno e auditoria | `usuario_interno`: bo | `backoffice_auditoria`, `acesso_dado_pessoal` | BO (TI-80; D-19) |
-| **`019`** | `associado_financeiro` (cache mínimo: `situacao ∈ em_dia\|em_atraso\|desconhecida`, `dias_atraso`, `atualizado_em`, `fonte`; **sem valores nem mensalidades**) | Situação financeira | jobs (cache) | — | 7 (⛔ P-04, P-08) |
-| **`020`** | `score_engajamento` (PK `(contact_id, data)`, 5 componentes, `versao_pesos`; particionada por mês), `score_pesos` | — (spec:§11.4) | — | ambas | F2 (TI-86) |
-| **`021`** | `base_ativa_mensal` (`mes`, `categoria`, `regional`, `total`, `novos`, `cancelados`; gravada por job a partir do hub) | — (denominadores §11.3) | — | sim | BO/4 (TI-44; EXT-25) |
-| **`022`** | views `vw_ind_01..14`, `vw_qualidade_parceiro_mes`, `vw_consentimento_atual`, `vw_meu_valor_ano` (se não criadas antes); usuário `apm_area_painel` só `SELECT` nas views; k ≥ 20 nos recortes a terceiro/regional | Evento de uso (painéis) | — | — | BO/4 (TI-44; DEC-16) |
+| **`012`** | **Comunicação:** `comunicacao_evento` (outbox; único `(gatilho, contact_id, referencia_id)`; `(status, enviar_apos)`), `comunicacao_envio` (particionada), `comunicacao_supressao`, `notificacao` (UPDATE só `lida_em`), `fila_ligacao` | Comunicação | `comunicacao_evento`: jobs (status, tentativas); `notificacao`: web (`lida_em`); `fila_ligacao`: bo (resultado) | `comunicacao_envio`, `comunicacao_supressao` | 3 (TI-18; produção) / 3b (envio) |
+| **`013`** | **Ajuda e parâmetros:** `faq` (pergunta, resposta, categoria, ordem, `publicada`, `atualizada_em`; FULLTEXT opcional), `texto_sistema` (chave, texto, vigência — estados vazios/erro editáveis), `parametro` (chave PK com CHECK regex como `feature_flag`, valor, tipo `int\|decimal\|bool\|texto`, descrição; seed: `avaliacao_prazo_dias`=30, `prazo_retorno_padrao_dias`, `central_horario`, `central_telefone` vazio até P-44) | Segmento e bloco (conteúdo) · configuração B13 | **bo** (até o backoffice: operador por SQL); web só lê | — | **Onda 2** (TI-20) |
+| **`014`** | **Revogação da carteirinha:** `ALTER associado` + `carteirinha_revogada_em DATETIME(6) NULL`, `situacao_consultada_em DATETIME(6) NULL`, `situacao_normalizada` (cache curto da verificação pública; UPDATE já concedido na `005`) | Filiação (situação) | web/jobs (já em `005`) | — | **Onda 2** (TI-45) |
+| **`015`** | **Catálogo como dado:** `parceiro` (código APM `PAR017`, `requisito ∈ api\|relatorio\|portal\|email`, `prazo_retorno_dias`, vigência, `contato JSON` sem CPF, `host`), `beneficio_categoria` (8 da spec), `beneficio` (ficha B03: textos, `tipo_ativacao` 1–6, `destino`/`url_acesso`, `carencia_meses` 0–12, `exige_adimplencia`, `regional`, `modalidade_mensuracao`, `prazo_retorno_dias`, vigência, `status ∈ rascunho\|aprovado\|publicado\|encerrado`, `patrocinado`, `sigiloso`, `ordem`), `beneficio_versao` (snapshot JSON), `beneficio_faq`, `beneficio_categoria_associado` (matriz × categoria), `beneficio_afinidade` (segmento, pontos 0–3), `beneficio_ativacao` (tipo 1; `ativo`, `ativado_em`, `desativado_em`), `recomendacao_dispensa`, `recomendacao_exposicao`, `associado_categoria_hist`, `ALTER associado_perfil` (+`faixa_carreira`, `especialidade_cod`, `regional_cod`, `nome_social`, `isento_remido`), `destaque_editorial` (`UNIQUE (segmento, vigência)`), `busca_sem_resultado` (sem identidade), `categoria_associado` (de-para rótulo → código, TI-92) | Benefício · Parceiro e contrato · Segmento e bloco · Filiação (hist.) | catálogo/configuração/editorial: **bo**; `beneficio_ativacao`, `recomendacao_exposicao`: web | `beneficio_versao`, `recomendacao_dispensa`, `associado_categoria_hist`, `busca_sem_resultado` | **4** (TI-29); seed real só com P-48 |
+| **`016`** | **Valor e importação:** `valor_referencia` (valor, `base ∈ anual\|por_uso`, fonte, `data_fonte`, `aprovado_por`, `aprovado_em`, vigência, `revisao_prevista_em`; vigente = última aprovada ≤ hoje), `uso_valor` (RF-FA-09; CHECK `economia = referencia − pago`; CHECK nível 4 ⇒ `validado_em`; `estorna_id`, `valida_id`), `importacao` (cabeçalho: parceiro, competência, `arquivo_sha256`, contagens, `status ∈ recebida\|validada\|confirmada\|devolvida`, usuário), `importacao_linha` (**sem CPF**; `contact_id` ou `sem_associado`; único `(parceiro_id, id_externo)`; `erro_codigo`; CHECK anti-CPF em `observacao`), view `vw_meu_valor_ano` | Uso e valor · Importação | `importacao`: bo (status, contagens) | `valor_referencia`, `uso_valor`, `importacao_linha` | 4 (TI-35, TI-54; antecipada da 8) |
+| **`017`** | **Conteúdo do portal:** `noticia_cache`, `evento_cache` (+ `categoria_carencia`), `tema`, `associado_tema`, `noticia_salva`, `evento_inscricao` (+ `perfil_preco`, `status ∈ interesse\|inscrito`) | Conteúdo e evento | web (cache por upsert; "desfazer" por coluna) | — | 5 (TI-56; ADR-0006) |
+| **`018`** | **LGPD e preferências:** `consentimento_texto` (finalidade, canal, versão, texto; texto novo = linha nova), `consentimento` (append; `vw_consentimento_atual`), `preferencia_canal`, `perfil_declarado` (tratamento, área de atuação, região, temas), `pergunta_perfil` (catálogo), `titular_pedido` (`tipo ∈ exportacao\|exclusao`, status, protocolo), colunas `anonimizado_em` em `associado_perfil`/`perfil_declarado` | Perfil declarado · Consentimento | `preferencia_canal`, `perfil_declarado`: web; `titular_pedido`: web (abrir) e bo (fechar) | `consentimento_texto`, `consentimento` | **3b** (TI-25) |
+| **`019`** | **Trilha, comunidade, clube:** `trilha_passo` (por categoria; `evento_conclusao`, `carencia_meses`, `valor_referencia`), `trilha_progresso` (append), `comunidade`, `comunidade_adesao`, `oferta_clube` | Conteúdo e evento | `comunidade_adesao`: web; `oferta_clube`, `trilha_passo`, `comunidade`: bo | `trilha_progresso` | 4 (trilha) / 6 (comunidade, clube) |
+| **`020`** | **Backoffice:** `usuario_interno` (e-mail, nome, `perfil ENUM(8)`, ativo; **sem senha** — identidade externa), `backoffice_auditoria` (valor anterior/novo JSON, justificativa; CHECK anti-segredo/CPF), `acesso_dado_pessoal` (quem, `contact_id` alvo, campos); criação do usuário `apm_area_bo` e `GRANT UPDATE` nas tabelas de catálogo/configuração | Usuário interno e auditoria | `usuario_interno`: bo | `backoffice_auditoria`, `acesso_dado_pessoal` | BO (TI-80; D-19) |
+| **`021`** | `associado_financeiro` (cache mínimo: `situacao ∈ em_dia\|em_atraso\|desconhecida`, `dias_atraso`, `atualizado_em`, `fonte`; **sem valores nem mensalidades**) | Situação financeira | jobs (cache) | — | 7 (⛔ P-04, P-08) |
+| **`022`** | `score_engajamento` (PK `(contact_id, data)`, 5 componentes, `versao_pesos`; particionada por mês), `score_pesos` | — (spec:§11.4) | — | ambas | F2 (TI-86) |
+| **`023`** | `base_ativa_mensal` (`mes`, `categoria`, `regional`, `total`, `novos`, `cancelados`; gravada por job a partir do hub) | — (denominadores §11.3) | — | sim | BO/4 (TI-44; EXT-25) |
+| **`024`** | views `vw_ind_01..14`, `vw_qualidade_parceiro_mes`, `vw_consentimento_atual`, `vw_meu_valor_ano` (se não criadas antes); usuário `apm_area_painel` só `SELECT` nas views; k ≥ 20 nos recortes a terceiro/regional | Evento de uso (painéis) | — | — | BO/4 (TI-44; DEC-16) |
 
 Entidades da spec **sem tabela própria na área**, por desenho: *Associado* e *Filiação* (fonte
 CRM via hub; cache em `associado_perfil` + histórico em `associado_categoria_hist`), *Situação
-financeira* (só o cache mínimo de `019`; valores vêm do hub na hora, só na P08), *Conteúdo
+financeira* (só o cache mínimo de `021`; valores vêm do hub na hora, só na P08), *Conteúdo
 editorial* dos protótipos (migra de `app/dominio/catalogo.py` para `texto_sistema`/
-`destaque_editorial`/`oferta_clube` em `012`/`017`), *Adesão TotalPass* (cache em memória 10 min),
+`destaque_editorial`/`oferta_clube` em `013`/`015`/`019`), *Adesão TotalPass* (cache em memória 10 min),
 *Carteirinha* e *Meu valor* (derivadas), *Lead* (RD/CRM, DEC-19).
 
 ### 6.3 Allowlist de `UPDATE` por usuário (`scripts/db_check.py`, TI-03)
@@ -1935,7 +1949,7 @@ parceiro (`relatorio`/`email` na F1 — **nenhuma chamada HTTP a parceiro**, D-1
 `portal` F2) ou `crm` (tipo 3); `prazo_retorno_dias` copiado na criação.
 
 **Serviços da APM sem benefício** (`tipo_servico`, `beneficio_id` nulo; migram para o catálogo
-com `tipo_ativacao=3` quando `sql/012` existir, DIV-26):
+com `tipo_ativacao=3` quando `sql/015` existir, DIV-26):
 
 | `tipo_servico` | Rótulo (proposta) | Origem | Campos obrigatórios | Opcionais | Unicidade / limite |
 |---|---|---|---|---|---|
@@ -1945,7 +1959,7 @@ com `tipo_ativacao=3` quando `sql/012` existir, DIV-26):
 | `mentoria_pedir` | Quero um mentor | RF-CO-06 (F3) | — | `area_interesse` (≤ 120) | 1 não terminal |
 | `mentoria_oferecer` | Quero ser mentor | RF-CO-06 (F3) | — | `area_interesse` (≤ 120) | 1 não terminal |
 | `cartao_apm` | Cartão APM | RF-ON-09 (F3, só com contrato) | — | — | 1 não terminal |
-| `outro` | Outro assunto | RF-SO-03, RF-AJ-03 | `assunto` (1–120), `mensagem` (1–2000) | — | 5/dia (contagem no banco, D-17) |
+| `outro` | Outro assunto | RF-SO-03, RF-AJ-03 | `assunto` (1–120), `mensagem` (1–2000) | — | 5 em 24 h móveis (contagem no banco, D-17) |
 | **`declaracao_associado`** | Declaração de associado | RF-FI-04 | `finalidade` ENUM (inclui `amb_prova_titulo`, carência 1 mês) | `observacao` (≤ 200) | 1 não terminal por finalidade |
 | **`cancelamento_associacao`** | Cancelamento da associação | RF-AJ-04 | `motivo` ENUM(`nao_uso`, `preco`, `mudanca`, `insatisfacao_servico`, `outro`), `quer_conversa` | `comentario` (≤ 500) | 1 aberto por associado; step-up; flag `cancelamento_online` |
 | **`exclusao_dados`** | Exclusão de dados (LGPD) | RF-PE-14 | — | — | 1 aberto; step-up; flag `lgpd_consentimentos` |
@@ -1966,7 +1980,7 @@ na visão 360.
 - **Idempotência:** `uuid` da área como chave de correlação; `solicitacao.espelhar` devolve o
   registro existente se o `uuid` já existir.
 - **Sync de volta:** job `sincronizar` (5 min) chama `solicitacao.alteracoes_consultar` com cursor
-  (`modifiedon`, `@odata.nextLink` tratado no hub) e aplica só transições válidas da tabela 7.3
+  (`modifiedon`, `odata.nextLink` tratado no hub) e aplica só transições válidas da tabela 7.3
   com `origem = crm`.
 - **Canais manuais (tipo 2 na F1):** `relatorio`/`email` — a APM encaminha ao parceiro fora do
   sistema; dados ao parceiro só com allowlist por benefício e aprovação do DPO (DEC-04); o retorno
@@ -2121,7 +2135,7 @@ transpose, metadados removidos, recorte quadrado, 512×512 JPEG q85 para o CRM, 
 ### 9.1 Perfil declarado e preferências (v0.2; spec:§6 P13)
 
 Campos que **não** vêm do CRM e vivem só na área (`perfil_declarado`, `preferencia_canal`,
-`sql/015`; `UPDATE` pelo web — é perfil editável, não trilha):
+`sql/018`; `UPDATE` pelo web — é perfil editável, não trilha):
 
 | Campo | Rótulo (proposta) | Tipo | Validação | Uso |
 |---|---|---|---|---|

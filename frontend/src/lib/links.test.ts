@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MENSAGEM_CENTRAL, urlExternaSegura, urlWhatsapp } from './links';
+import { MENSAGEM_CENTRAL, urlExternaSegura, urlTelefone, urlWhatsapp } from './links';
 
 describe('links externos (RF-SH-12)', () => {
   it.each([
@@ -29,4 +29,21 @@ describe('links externos (RF-SH-12)', () => {
     expect(urlWhatsapp('11 3188-6200', 'x')).toBeNull();
     expect(urlWhatsapp('0551131886200', 'x')).toBeNull();
   });
+});
+
+describe('telefone (RF-AJ-02: `tel:` na allowlist de esquemas)', () => {
+  it.each([
+    ['tel:+551131886200', 'tel:+551131886200'],
+    ['TEL:1131886200', 'tel:1131886200'],
+    ['08007701234', 'tel:08007701234'],
+  ])('aceita %s', (entrada, esperado) => {
+    expect(urlTelefone(entrada)).toBe(esperado);
+  });
+
+  it.each(['tel:+55 11 3188-6200', 'tel:1131886200;ext=2', 'tel:abc', 'javascript:alert(1)', 'tel:123', 'tel:+1234567890123456', 'sms:1131886200', ''])(
+    'recusa %s',
+    (entrada) => {
+      expect(urlTelefone(entrada)).toBeNull();
+    },
+  );
 });

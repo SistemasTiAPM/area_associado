@@ -25,9 +25,65 @@ _WEB = [
 
 # ------------------------------------------------------------- allowlist
 def test_allowlist_so_com_tabelas_migradas():
-    # Prospectivas (solicitacao, noticia_cache, job_execucao...) entram com a migração, não antes.
-    assert TABELAS_COM_UPDATE == frozenset({"associado", "associado_perfil", "email_verificacao"})
+    # Prospectivas (noticia_cache, job_execucao...) entram com a migração, não antes.
+    assert TABELAS_COM_UPDATE == frozenset({"associado", "associado_perfil", "email_verificacao",
+                                            "solicitacao", "job_execucao", "comunicacao_evento", "notificacao"})
     assert POLITICAS["apm_area"].tabelas_com_update == TABELAS_COM_UPDATE
+    # Trilhas e configuração da Onda 2 nunca recebem UPDATE do processo web (ADR-0004, ADR-0022).
+    for tabela in ("solicitacao_evento", "comunicacao_envio", "comunicacao_supressao", "fila_ligacao",
+                   "parametro", "faq", "texto_sistema"):
+        assert tabela not in TABELAS_COM_UPDATE, tabela
+
+
+# SHOW GRANTS real do ensaio da Onda 2 (MySQL 8.4.11, sql/000→013): UPDATE por coluna.
+_ONDA2 = [
+    *_WEB,
+    "GRANT UPDATE (`atualizado_em`, `enviar_apos`, `externo_id`, `proxima_tentativa_em`, `status`, "
+    "`supressao_motivo`, `tentativas`) ON `area_associado`.`comunicacao_evento` TO `apm_area`@`%`",
+    "GRANT UPDATE (`lida_em`) ON `area_associado`.`notificacao` TO `apm_area`@`%`",
+    "GRANT UPDATE (`atualizada_em`, `avaliacao_comentario`, `avaliacao_nota`, `avaliada_em`, `cancel_motivo`, "
+    "`concluida_em`, `crm_id`, `crm_proxima_em`, `crm_sync`, `crm_tentativas`, `enviada_em`, `responsavel`, "
+    "`resultado`, `sem_retorno_desde`, `status`) ON `area_associado`.`solicitacao` TO `apm_area`@`%`",
+]
+
+
+def test_grant_por_coluna_conta_como_update_da_tabela():
+    assert avaliar_grants(_ONDA2, _S, "apm_area@%") == []
+    assert grants_de_update(_ONDA2, _S) >= {"solicitacao", "comunicacao_evento", "notificacao"}
+    existentes = {"associado", "associado_perfil", "email_verificacao", "solicitacao", "solicitacao_evento",
+                  "comunicacao_evento", "notificacao", "parametro"}
+    assert avaliar_allowlist(_ONDA2, _S, existentes, "apm_area@%") == []
+    # A trilha nunca: UPDATE (mesmo por coluna) em solicitacao_evento é violação.
+    ruim = [*_ONDA2, "GRANT UPDATE (`mensagem_publica`) ON `area_associado`.`solicitacao_evento` TO `apm_area`@`%`"]
+    v = avaliar_grants(ruim, _S, "apm_area@%")
+    assert len(v) == 1 and "solicitacao_evento" in v[0]
+    # Migração 012 aplicada pela metade (sem o grant de notificacao) falha.
+    sem_notif = [g for g in _ONDA2 if "`notificacao`" not in g]
+    v = avaliar_allowlist(sem_notif, _S, existentes, "apm_area@%")
+    assert len(v) == 1 and "notificacao" in v[0]
+
+
+# SHOW GRANTS real do ensaio da frente C (MySQL 8.4.11, sql/000→014): job_execucao por coluna.
+_JOBS = [
+    *_ONDA2,
+    "GRANT UPDATE (`erro_resumo`, `itens_erro`, `itens_gravados`, `itens_lidos`, `posicao`, `status`, "
+    "`terminado_em`) ON `area_associado`.`job_execucao` TO `apm_area`@`%`",
+]
+
+
+def test_job_execucao_por_coluna_na_allowlist():
+    existentes = {"associado", "associado_perfil", "email_verificacao", "solicitacao", "comunicacao_evento",
+                  "notificacao", "job_execucao"}
+    assert avaliar_grants(_JOBS, _S, "apm_area@%") == []
+    assert avaliar_allowlist(_JOBS, _S, existentes, "apm_area@%") == []
+    # sql/011 aplicada pela metade (tabela sem o GRANT) é violação (ADR-0004 §6).
+    v = avaliar_allowlist(_ONDA2, _S, existentes, "apm_area@%")
+    assert len(v) == 1 and "job_execucao" in v[0]
+    # Antes da 011, a ausência da tabela não é violação.
+    assert avaliar_allowlist(_ONDA2, _S, existentes - {"job_execucao"}, "apm_area@%") == []
+    # DELETE em job_execucao, mesmo por tabela, nunca.
+    ruim = [*_JOBS, "GRANT DELETE ON `area_associado`.`job_execucao` TO `apm_area`@`%`"]
+    assert avaliar_grants(ruim, _S, "apm_area@%")
 
 
 def test_grants_do_web_conformes_com_usuario_qualificado():

@@ -112,26 +112,36 @@ if [ -r .env ]; then
   [ "$n_bak" -gt 0 ] && alerta "$n_bak arquivo(s) .env.bak-* no disco — apagar após replicar no cofre (P-36)"
 fi
 
-# job_execucao (quando a migração dos jobs existir; até lá informa n/a).
+# job_execucao (ADR-0019 item 5; docs/JOBS.md §6). Lido pelo container WEB (tem a
+# credencial do banco e o mesmo código): `python -m app.jobs --estado --json`.
+# Alerta: execução com erro em 24 h; evento_log de erro gravado por job (3 falhas
+# seguidas, espelho/comunicação `falhou`); job parado além do atraso máximo
+# (só quando o serviço rodou nas últimas 24 h — desligado de propósito não alerta);
+# container de jobs existente e não saudável. n/a sem a sql/011.
 jobs_erro="n/a (tabela job_execucao ainda não existe)"
-JE=$(docker exec area_associado python - 2>/dev/null <<'PY' || true
-from sqlalchemy import text
-from app.database import engine
-try:
-    with engine.connect() as c:
-        if c.execute(text("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'job_execucao'")).scalar_one():
-            print(c.execute(text("SELECT COUNT(*) FROM job_execucao WHERE status = 'erro' AND iniciado_em >= UTC_TIMESTAMP(6) - INTERVAL 1 DAY")).scalar_one())
-        else:
-            print("n/a")
-except Exception as exc:  # noqa: BLE001 — só informa; nada de corpo de erro
-    print("erro:" + type(exc).__name__)
-PY
-)
-case "${JE:-}" in
-  ""|n/a) ;;
-  erro:*) jobs_erro="$JE" ;;
-  *) jobs_erro="$JE"; [ "$JE" -gt 0 ] 2>/dev/null && alerta "jobs: $JE execução(ões) com erro" ;;
-esac
+JE=$(docker exec area_associado python -m app.jobs --estado --json 2>/dev/null || true)
+if [ -z "$JE" ] || ! printf '%s' "$JE" | jq -e . >/dev/null 2>&1; then
+  jobs_erro="n/a (imagem sem app.jobs ou banco indisponível)"
+elif printf '%s' "$JE" | jq -e '.erro' >/dev/null 2>&1; then
+  jobs_erro="erro:$(printf '%s' "$JE" | jq -r '.erro')"; alerta "jobs: leitura de job_execucao falhou ($jobs_erro)"
+elif [ "$(printf '%s' "$JE" | jq -r '.tabela')" = "true" ]; then
+  n_err=$(printf '%s' "$JE" | jq '[.jobs[].erros_24h] | add // 0')
+  n_ab=$(printf '%s' "$JE" | jq '[.jobs[].abortados_24h] | add // 0')
+  ativo=$(printf '%s' "$JE" | jq -r '.ativo')
+  jobs_erro="$n_err (abortados=$n_ab, serviço ativo=$ativo)"
+  [ "$n_err" -gt 0 ] && alerta "jobs: $n_err execução(ões) com erro em 24 h: $(printf '%s' "$JE" | jq -r '[.jobs[] | select(.erros_24h > 0) | "\(.job)=\(.erros_24h)"] | join(", ")')"
+  ev=$(printf '%s' "$JE" | jq -r '(.eventos_erro_24h // {}) | to_entries | map("\(.key)=\(.value)") | join(", ")')
+  [ -n "$ev" ] && alerta "jobs: evento_log de erro em 24 h: $ev"
+  if [ "$ativo" = "true" ]; then
+    parados=$(printf '%s' "$JE" | jq -r '[.jobs[] | select(.parado) | "\(.job) (última ok \(.ultima_ok // "nunca"))"] | join(", ")')
+    [ -n "$parados" ] && alerta "jobs: parado(s) além do atraso máximo: $parados"
+  fi
+fi
+if docker inspect area_associado_jobs >/dev/null 2>&1; then
+  hj=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' area_associado_jobs)
+  SAUDE="$SAUDE area_associado_jobs=$hj"
+  [ "$hj" = "healthy" ] || alerta "container area_associado_jobs: $hj (heartbeat parado?)"
+fi
 
 # ------------------------------------------------------------- saída
 if [ "$JSON" = 1 ]; then

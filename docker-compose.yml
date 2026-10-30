@@ -1,6 +1,9 @@
 services:
   area-associado:
     build: .
+    # Nome explícito (= o padrão do compose para este projeto): o serviço de
+    # jobs usa a MESMA imagem sem construí-la de novo.
+    image: area_associado-area-associado:latest
     container_name: area_associado
     restart: always
     env_file:
@@ -37,6 +40,64 @@ services:
           # bomb sem atrapalhar. (Equivale a `pids_limit`; o compose 2.40
           # recusa as duas formas juntas quando há `deploy.resources.limits`.)
           pids: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - rede_publica
+
+  # =================================================================== #
+  # Serviço de jobs (ADR-0019; runbook docs/JOBS.md). Mesma imagem, outro #
+  # processo. Só sobe com o profile: `docker compose --profile jobs up -d #
+  # area-associado-jobs` — o operador liga DEPOIS das migrações 010–014.  #
+  # Dry-run por padrão (JOBS_APLICAR=0 no Settings).                      #
+  # =================================================================== #
+  area-associado-jobs:
+    image: area_associado-area-associado:latest
+    # Nunca buscar no Docker Hub uma imagem com este nome: é construída aqui
+    # (`docker compose build area-associado` / scripts/deploy.sh).
+    pull_policy: never
+    container_name: area_associado_jobs
+    command: ["python", "-m", "app.jobs"]
+    profiles: ["jobs"]
+    restart: always
+    # Segredos SÓ de job (conta do hub `area-associado-jobs`, futuros RD/
+    # Locaweb) e o pool pequeno ficam em .env.jobs (0600, fora do git),
+    # carregado por cima do .env. Opcional: sem ele, vale o .env.
+    env_file:
+      - .env
+      - path: .env.jobs
+        required: false
+    environment:
+      TZ: America/Sao_Paulo
+      JOBS_HEARTBEAT: /tmp/jobs.heartbeat
+    # Sem `expose`/`ports`: o serviço não escuta nada.
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # SIGTERM → o job para entre um item e outro; a escrita no hub espera até
+    # HUB_TIMEOUT_ESCRITA (30 s) antes de desistir.
+    stop_grace_period: 40s
+    # O HEALTHCHECK do Dockerfile (curl em :8000) não vale aqui: saúde = idade
+    # do heartbeat que o laço grava a cada volta (≤ 15 s) e a cada item.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; p='/tmp/jobs.heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 180 else 1)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          # Um processo Python, sem threads além do pool do banco (2+2).
+          pids: 64
     logging:
       driver: json-file
       options:

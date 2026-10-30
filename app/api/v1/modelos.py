@@ -34,6 +34,13 @@ class ConfigInterface(_Resposta):
     animations: bool
 
 
+class RecursosSessao(_Resposta):
+    """Prontidão das migrações da Onda 2 (`app/prontidao.py`): false = a SPA mostra "em construção"."""
+
+    solicitacoes: bool
+    ajuda: bool
+
+
 class SessaoResposta(_Resposta):
     """`GET /api/v1/sessao` — sem CPF, e-mail, `sub` ou `contact_id`."""
 
@@ -44,7 +51,8 @@ class SessaoResposta(_Resposta):
     config: ConfigInterface
     stub: bool
     dados_demonstracao: bool
-    solicitacoes_aguardando: int
+    recursos: RecursosSessao
+    solicitacoes_aguardando: int = Field(description="Solicitações em `pendente_associado` (0 sem o recurso).")
     expira_em: str
 
 
@@ -101,8 +109,10 @@ class CarteirinhaResposta(_Resposta):
     status_associativo: str | None
     membro_desde: str | None
     verificado_em: str | None
-    url_verificacao: str
-    qr: str
+    # TI-45/46: revogada (filiação cancelada no CRM) ⇒ sem QR nem URL de verificação.
+    revogada: bool
+    url_verificacao: str | None
+    qr: str | None
 
 
 class UrlResposta(_Resposta):

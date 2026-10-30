@@ -20,16 +20,28 @@ export class ApiError extends Error {
   readonly erro: string;
   readonly requestId: string | null;
   readonly detalhes: CorpoErro['detalhes'];
+  /** Campos do corpo de erro além do contrato único (ex.: `libera_em` em `409 nao_elegivel`). */
+  readonly extras: Readonly<Record<string, unknown>>;
 
-  constructor(status: number, erro: string, mensagem: string, requestId: string | null = null, detalhes?: CorpoErro['detalhes']) {
+  constructor(
+    status: number,
+    erro: string,
+    mensagem: string,
+    requestId: string | null = null,
+    detalhes?: CorpoErro['detalhes'],
+    extras: Readonly<Record<string, unknown>> = {},
+  ) {
     super(mensagem);
     this.name = 'ApiError';
     this.status = status;
     this.erro = erro;
     this.requestId = requestId;
     this.detalhes = detalhes;
+    this.extras = extras;
   }
 }
+
+const CHAVES_CONTRATO = new Set(['erro', 'mensagem', 'request_id', 'detalhes']);
 
 let tokenCsrf: string | null = null;
 let ouvinteCsrfInvalido: (() => void) | null = null;
@@ -82,7 +94,8 @@ async function lerErro(resposta: Response): Promise<ApiError> {
   const corpo = await lerCorpo(resposta);
   const requestId = resposta.headers.get('X-Request-Id');
   if (corpoErroValido(corpo)) {
-    return new ApiError(resposta.status, corpo.erro, corpo.mensagem, corpo.request_id ?? requestId, corpo.detalhes);
+    const extras = Object.fromEntries(Object.entries(corpo).filter(([chave]) => !CHAVES_CONTRATO.has(chave)));
+    return new ApiError(resposta.status, corpo.erro, corpo.mensagem, corpo.request_id ?? requestId, corpo.detalhes, extras);
   }
   const erro = resposta.status === 429 ? 'limite_taxa' : resposta.status >= 500 ? 'erro_interno' : 'erro_desconhecido';
   return new ApiError(resposta.status, erro, MENSAGEM_PADRAO, requestId);

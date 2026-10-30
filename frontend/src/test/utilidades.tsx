@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import type { ChaveFlag, Sessao } from '../api/tipos';
 import { App } from '../App';
@@ -35,6 +35,8 @@ export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flag
     stub: false,
     dados_demonstracao: false,
     solicitacoes_aguardando: 0,
+    // Fail-closed como o servidor sem migração; os testes das telas da Onda 2 ligam o que usam.
+    recursos: { solicitacoes: false, ajuda: false },
     expira_em: '2026-10-17T12:00:00Z',
     ...parcial,
     associado: {
@@ -83,7 +85,7 @@ export function montarApp(
 ): ReturnType<typeof render> & ReturnType<typeof simularApi> {
   const api = simularApi(sessao, rotas);
   const resultado = render(
-    <MemoryRouter initialEntries={[rota]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter initialEntries={[rota]}>
       <App />
     </MemoryRouter>,
   );
@@ -91,5 +93,5 @@ export function montarApp(
 }
 
 export function Envolvido({ children }: { children: ReactNode }) {
-  return <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</MemoryRouter>;
+  return <MemoryRouter>{children}</MemoryRouter>;
 }

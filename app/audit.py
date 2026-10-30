@@ -143,3 +143,41 @@ def registrar_isolado(request: Request, **kwargs: Any) -> None:
         registrar(db, request, **kwargs)
     finally:
         db.close()
+
+
+def registrar_sistema(
+    *,
+    categoria: str,
+    tipo: str,
+    severidade: str = "info",
+    origem: str,
+    contact_id: str | None = None,
+    detalhes: dict[str, Any] | None = None,
+) -> None:
+    """`evento_log` de processo SEM requisição HTTP (serviço de jobs, ADR-0019):
+    transação própria, sem IP/UA, `rota` = `job:<origem>` para filtrar. Mesmo
+    filtro de chaves proibidas e mesma garantia: nunca lança."""
+    if categoria not in CATEGORIAS or severidade not in SEVERIDADES:
+        logger.error("audit: categoria/severidade inválida (%s/%s)", categoria, severidade)
+        return
+    from .database import session_scope  # import tardio: evita ciclo config→database no import do módulo
+
+    try:
+        tabela = _safe_identifier(get_settings().evento_log_table)
+        with session_scope() as db:
+            db.execute(
+                text(
+                    f"INSERT INTO `{tabela}` (categoria, tipo, severidade, contact_id, rota, detalhes) "
+                    "VALUES (:categoria, :tipo, :severidade, :contact_id, :rota, :detalhes)"
+                ),
+                {
+                    "categoria": categoria,
+                    "tipo": tipo[:48],
+                    "severidade": severidade,
+                    "contact_id": contact_id[:64] if contact_id else None,
+                    "rota": f"job:{origem}"[:160],
+                    "detalhes": _limpar_detalhes(detalhes),
+                },
+            )
+    except (SQLAlchemyError, ValueError) as exc:
+        logger.error("audit: falha ao gravar evento %s/%s: %s", categoria, tipo, type(exc).__name__)

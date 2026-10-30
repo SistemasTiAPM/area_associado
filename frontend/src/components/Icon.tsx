@@ -40,6 +40,12 @@ const CAMINHOS = {
   recarregar: ['M20 12a8 8 0 1 1-2.3-5.7', 'M20 4v4.5h-4.5'],
   info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 11v5', 'M12 7.5v.01'],
   megafone: ['M3 10v4a1 1 0 0 0 1 1h3l7 4V5L7 9H4a1 1 0 0 0-1 1z', 'M18 9a4 4 0 0 1 0 6'],
+  // Onda 2 (P05, P14, P07).
+  ajuda: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M9.5 9.5a2.5 2.5 0 1 1 3.4 2.33c-.55.22-.9.75-.9 1.34V14', 'M12 17.25v.01'],
+  baixar: ['M12 4v11', 'M7 10.5l5 5 5-5', 'M5 20h14'],
+  telefone: ['M6.5 3.5h3l1.5 4.5-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2 4.5 1.5v3a2 2 0 0 1-2 2A16.5 16.5 0 0 1 4.5 5.5a2 2 0 0 1 2-2z'],
+  documento: ['M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z', 'M14 3v5h5', 'M9 13h6', 'M9 17h4'],
+  envelope: ['M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z', 'M3.5 7l8.5 6 8.5-6'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type NomeIcone = keyof typeof CAMINHOS;

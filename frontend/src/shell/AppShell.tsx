@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router';
 import { registrarUso } from '../lib/analytics';
 import { TITULO_NAO_ENCONTRADA, caminhoParaAnalytics, resolverCaminho, rotaVisivel } from '../rotas';
 import { useSessao } from '../state/SessaoContext';

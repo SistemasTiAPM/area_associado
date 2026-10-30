@@ -17,7 +17,7 @@
     Ambiente de construção ({{ app_env }}): login sem o Login APM (AUTH_MODE=stub).
   </div>
   {% endif %}
-  {# Verificação pública da carteirinha (spec; ADR-0014): só nome, situação e "verificado em".
+  {# Verificação pública da carteirinha (spec; ADR-0014; DEC-36): só nome, situação e "verificado em".
      Visual dos mockups (ADR-0017). Sem JS e sem estilo inline (ADR-0013). #}
   <div class="entrada__grade">
     <section class="entrada__hero" aria-label="Verificação de carteirinha APM">
@@ -36,6 +36,13 @@
         <p class="verificacao__rotulo">Resultado da verificação</p>
         <h1 class="entrada__titulo">Verificação indisponível</h1>
         <p class="entrada__texto">Não foi possível verificar agora. Tente novamente em instantes.</p>
+      </div>
+      {% elif revogada %}
+      {# Revogada (filiação cancelada, TI-45): sem nome e sem motivo. #}
+      <div class="verificacao__aviso">
+        <p class="verificacao__rotulo">Resultado da verificação</p>
+        <h1 class="entrada__titulo">Carteirinha sem validade</h1>
+        <p class="entrada__texto">Esta carteirinha não é mais válida como comprovante de associação à APM.</p>
       </div>
       {% elif encontrado %}
       <article class="verificacao__cartao" aria-labelledby="verificacao-nome">

@@ -10,6 +10,11 @@ workers, a memória não é compartilhada — por isso a área sempre relê do c
 fora de "ativo"; `registros_inativos` simula contato desativado (`statecode=1`).
 `endereco_disponivel = False` simula o hub sem a flag/Metadata do endereço:
 perfil sem endereço e gravação de endereço com 409.
+Solicitações (contrato "Solicitações", Onda 5/P-06): `espelhos` guarda
+`solicitacao_id → crm_id` (idempotente, como o hub fará pela chave da área);
+`status_enviados` registra cada `status_atualizar`; `alteracoes` é a fila de
+linhas que `solicitacao_alteracoes_consultar` devolve (cursor = posição);
+`falhar_solicitacoes[id] = HubError(...)` simula erro por pedido.
 Escrita obedece a `HUB_ESCRITA_HABILITADA` como no cliente real.
 Proibido em produção (validador de `Settings`).
 """
@@ -18,9 +23,12 @@ from __future__ import annotations
 
 import hashlib
 import threading
+import uuid
 from typing import Any
 
 from .hub import SITUACOES_NORMALIZADAS, Endereco, HubError, PerfilCrm, SituacaoCrm, exigir_escrita_habilitada
+
+_NS_TASK = uuid.UUID("6f1c2a9e-3b7d-4c55-9a1e-0d2f6b8c4e71")
 
 
 class ClienteHubStub:
@@ -32,6 +40,11 @@ class ClienteHubStub:
         self._fotos: dict[str, bytes] = {}
         self.situacoes: dict[str, str] = {}
         self.registros_inativos: set[str] = set()
+        self.espelhos: dict[str, str] = {}
+        self.espelhar_chamadas: list[dict[str, Any]] = []
+        self.status_enviados: list[dict[str, Any]] = []
+        self.alteracoes: list[dict[str, Any]] = []
+        self.falhar_solicitacoes: dict[str, HubError] = {}
 
     def _verificar(self) -> None:
         if self.falhar:
@@ -113,3 +126,37 @@ class ClienteHubStub:
                 self._fotos[contact_id] = jpeg
             else:
                 self._fotos.pop(contact_id, None)
+
+    # ------------------------------------------------- solicitações (P-06)
+    def _falha_da_solicitacao(self, dados: dict[str, Any]) -> None:
+        with self._lock:
+            erro = self.falhar_solicitacoes.get(str(dados.get("solicitacao_id")))
+        if erro is not None:
+            raise erro
+
+    def solicitacao_espelhar(self, dados: dict[str, Any]) -> str:
+        exigir_escrita_habilitada()
+        self._verificar()
+        self._falha_da_solicitacao(dados)
+        if "cpf" in dados or "cpf" in (dados.get("campos") or {}):
+            raise HubError("entrada_invalida", 400)
+        sid = str(dados["solicitacao_id"])
+        with self._lock:
+            self.espelhar_chamadas.append(dict(dados))
+            return self.espelhos.setdefault(sid, str(uuid.uuid5(_NS_TASK, sid)))
+
+    def solicitacao_status_atualizar(self, dados: dict[str, Any]) -> None:
+        exigir_escrita_habilitada()
+        self._verificar()
+        self._falha_da_solicitacao(dados)
+        with self._lock:
+            if self.espelhos.get(str(dados.get("solicitacao_id"))) != dados.get("crm_id"):
+                raise HubError("nao_encontrado", 404)
+            self.status_enviados.append(dict(dados))
+
+    def solicitacao_alteracoes_consultar(self, cursor: str | None, limite: int) -> list[dict[str, Any]]:
+        self._verificar()
+        inicio = int(cursor) if cursor and cursor.isdigit() else 0
+        with self._lock:
+            fatia = self.alteracoes[inicio:inicio + max(1, int(limite))]
+            return [{**linha, "cursor": str(inicio + i + 1)} for i, linha in enumerate(fatia)]

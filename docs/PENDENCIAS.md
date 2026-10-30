@@ -8,7 +8,7 @@ resolvido, ele **sai daqui e entra em [CONCLUIDO.md](CONCLUIDO.md)** com data e 
 - **Referências:** decisões em [docs/adr/](adr/), requisitos em [REQUISITOS-minha-apm.md](REQUISITOS-minha-apm.md),
   plano por fases em [REQUISITOS-minha-apm.md §12](REQUISITOS-minha-apm.md) e no roteiro abaixo.
 
-## 📍 Onde paramos — 2026-10-30 (Onda 1 fechada)
+## 📍 Onde paramos — 2026-10-30 (Onda 2 fechada)
 
 **Últimos commits:** área na `main` (`SistemasTiAPM/area_associado`, ver [CONCLUIDO.md](CONCLUIDO.md));
 hub `8bb3c43` na `main` de `SistemasTiAPM/mcp_hub`. Ambos no GitHub.
@@ -57,17 +57,29 @@ WCAG 2.2 em todas as rotas, 10 primitivos puros, sub-rotas no shell; hub com `as
 `historico_associacao` por `contact_id` sem CPF (grant M-7 pelo operador); REQUISITOS v0.2; ADR-0018..0022.
 Decisões DEC-01/02/04/13/22/28/29 aceitas e DEC-03 (parte de banco) decidida.
 
-**Ações do operador pendentes (Onda 0 + fechamento):** P-36, P-01, P-34, P-19, P-61 (`docs/OPERACAO.md`
-§2–§5); **M-7** grant exato de `associado.situacao` e `associado.historico_associacao` à conta
-`area-associado` no painel do hub; aplicar `sql/008` (snapshot antes; sha256 em PROVISIONAMENTO §2.3) e
-`sql/009` (§2.4); P-59/P-60 (IAM e teste de restauração); WebKit no host de e2e
-(`npx playwright install --with-deps webkit`, root).
+**2026-10-30 — Onda 2 executada** (`docs/PLANO-EXECUCAO.md`): solicitações com os 8 status da spec
+(`sql/010`, máquina de estados, API `/solicitacoes`, contador real), P14 Ajuda (FAQ, contato da Central,
+formulário, declaração, pedido de cancelamento atrás de `cancelamento_online` com step-up), outbox de
+comunicação e `notificacao` gravadas na mesma transação (`sql/012`), `faq`/`texto_sistema`/`parametro`
+(`sql/013`), carteirinha em tempo quase real com revogação e download em PNG/PDF (`sql/014`), serviço de
+jobs em dry-run (`sql/011`, `app/jobs`, profile `jobs`), React Router 7 (P-40 resolvida), telas P05/P14. No
+ar desde 30/10; **enquanto `sql/008`–`014` não forem aplicadas, P05 e P14 aparecem "em construção"**
+(`/sessao.recursos`).
 
-**Para retomar:** **Onda 2** = Fase 3 (solicitações), **ampliada** pelo levantamento (§12.2: 8 status da spec,
-P14 como dois tipos de solicitação, outbox de comunicação produzida, serviço de jobs). As decisões DEC-01, DEC-02, DEC-04, DEC-13, DEC-22, DEC-28 e DEC-29 já estão tomadas (ADR-0018..0021);
-o plano da Onda 2 não precisa de nova rodada de perguntas. Cada fase começa com plano e
-aprovação (CLAUDE.md, sessão 4). Toda entrega daqui para a frente vai ao ar em minha.apm.org.br
-com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência vê na hora).
+**Ações do operador pendentes, em ordem:**
+1. Snapshot do RDS e aplicar `sql/008`→`014` (PROVISIONAMENTO §2.3–§2.5; a `014` usa `ALGORITHM=COPY`:
+   janela de pouco tráfego, trava o upsert do login por segundos); `db_check` "conforme".
+2. **M-7**: grant exato de `associado.situacao` e `associado.historico_associacao` à conta `area-associado`.
+3. Jobs: `.env.jobs` (0600) conforme `docs/JOBS.md` §3 (conta `area-associado-jobs` quando existir — M-8;
+   `HUB_ESCRITA_HABILITADA=false`; `JOBS_APLICAR=0`) e `docker compose --profile jobs up -d area-associado-jobs`.
+4. Porteiro: zonas da TI-08 (`docs/OPERACAO.md` §11).
+5. Onda 0: P-36, P-01, P-34, P-19, P-61 (`docs/OPERACAO.md` §2–§5); P-59/P-60; WebKit no host de e2e (root).
+6. Ligar `cancelamento_online` é decisão de negócio (ADR-0021).
+
+**Para retomar:** **Onda 3** = Fase 3b (P13: preferências, consentimentos versionados, exportação e
+exclusão por anonimização; RD Station em stub). Decidir antes DEC-06, DEC-26, DEC-27 (levantamento §11).
+Cada onda começa com plano (`docs/PLANO-EXECUCAO.md`) e aprovação (CLAUDE.md §4). Deploy:
+`scripts/deploy.sh` (tag, smoke, rollback); o serviço de jobs é recriado à parte (`docs/JOBS.md`).
 
 ---
 
@@ -100,7 +112,6 @@ com `DOCKER_BUILDKIT=0 docker compose build && docker compose up -d` (a agência
 | P-13 | P2 | Wallet Apple/Google: conta developer, certificado de assinatura `.pkpass`, service account do Google Wallet. | TI | Fase 8 | aberta | 2026-10-16 |
 | P-38 | P2 | **Imagens e números dos mockups.** A área (e a página de entrada, hoje guardada sem rota) usam gradientes e formas em CSS no lugar das fotos, e só o número "95 anos". Falta a Comunicação/agência enviar, com direito de uso e em resolução de produção, a foto do hero da entrada (`0ebf4ef7.png`), o selo "95 anos" (`c2cd4d74.png`) e as fotos dos cards (Painel `0ebf4ef7.png`, avatares e capas do banco de imagens). Também falta aprovar com fonte, ou retirar, "+40 benefícios" e "60 regionais" (REQUISITOS LA-14). As imagens entram em `app/static/` (CSP `img-src 'self'`). Os arquivos já existem no pacote dos mockups (artifact `KvCeCEoD531nxQ1GyaVjMo`: logos oficiais, foto do hero aparentemente gerada por IA e fotos de banco); em 2026-10-20 o usuário optou por publicar sem eles até a confirmação do direito de uso. | Comunicação / agência | cutover | aberta | 2026-10-20 |
 | P-39 | P2 | **Mockups da agência no repositório.** Os 12 `*.dc.html` que definem o visual (ADR-0017) só existem colados na conversa de 2026-10-20, sem `support.js` e sem `assets/`. Pedir à agência o pacote completo e versionar em `docs/mockups/` (sem executar o `support.js`; só referência), para que as fases 3 a 8 sigam a mesma fonte. | Agência / Vitrine | Fase 3 (telas novas) | aberta | 2026-10-20 |
-| P-40 | P2 | **`react-router-dom` 6.30 com 2 avisos moderados** (`npm audit`: open redirect por barra invertida em `<Link>`/`useNavigate`, GHSA-wrjc-x8rr-h8h6; injeção em hidratação SSR, GHSA-337j-9hxr-rhxg). Anteriores a 2026-10-20. Hoje a área não monta destino de navegação com dado do usuário e não usa SSR, mas a correção só existe no 7.18+ (troca de major). Avaliar a migração ou um bloqueio de `\` nos destinos. | Sentinela / Vitrine | antes do cutover | aberta | 2026-10-20 |
 
 ## Técnicas e operação
 
@@ -154,6 +165,10 @@ o que a TI faz enquanto espera). Estado inicial: aguardando terceiro.
 | P-63 | P2 | **Egress e armazenamento** (EXT-32): confirmar saída do SG da EC2 para Locaweb 3306 e API do RD (443) a partir do container de jobs; bucket S3 privado + role `PutObject` só se DEC-05 escolher S3 para o CSV. | AWS admin | jobs WP/RD; canal do CSV (F2) | aguardando terceiro | 2026-10-29 |
 | P-64 | P2 | **Canal celular para OTP e régua** (EXT-35): WhatsApp API oficial (Fortics, já previsto no IdP e desligado) ou provedor SMS, com contrato, remetente e limites. SMS não existe em nenhum sistema. Até lá só e-mail; P13 não mostra WhatsApp/SMS (regra 19). | TI / contratos / Marketing | OTP por celular no IdP, A02, canais em P13 | aguardando terceiro | 2026-10-29 |
 | P-65 | P1 | **Entra ID da APM para o backoffice** (EXT-36; DEC-03): tenant, app registration, grupos → 8 perfis (§9.1), política de MFA. O backoffice nunca usa o `login_associado` (IdP de associados). | TI / diretoria | backoffice (B01–B13) | aguardando terceiro | 2026-10-29 |
+| P-66 | P2 | **Transição vinda do CRM `pendente_associado → concluida_*`**: a máquina da ADR-0018 só conclui a partir de `enviada`/`em_atendimento`; o job de sincronização registra a divergência e não aplica. Decidir se a APM pode concluir direto de `pendente_associado` (adenda à ADR-0018) quando a P-06 trouxer o espelho real. | negócio / Maestro | sincronização real (Onda 5) | aberta | 2026-10-30 |
+| P-67 | P2 | **Rotação do token da carteirinha** (DEC-09): o token é HMAC determinístico do `contact_id`; hoje a revogação é desfeita quando o CRM volta a dizer "ativo". Rotacionar exige versionar o token (coluna + chave por versão) — ADR futura. | Sentinela | — | aberta | 2026-10-30 |
+| P-68 | P2 | **`CENTRAL_EMAIL`** (endereço da Central para os avisos internos A05/A16 e do formulário): sem ele, o job grava `suprimido: sem_credencial`. Definir o endereço junto com a credencial SMTP (P-27). | Central / TI | avisos internos por e-mail | aguardando terceiro | 2026-10-30 |
+| P-69 | P2 | **Conteúdo da Ajuda**: FAQ inicial (≥ 20 perguntas), `central_horario` e `central_telefone` em `parametro` (hoje vazios; o bloco some). Faz parte de P-44; carga por SQL do operador até existir backoffice. | Marketing APM / Central | P14 completa | aguardando terceiro | 2026-10-30 |
 
 ### Decisões pendentes da spec v2
 

@@ -1,7 +1,10 @@
 """Rotas públicas sem sessão: verificação da carteirinha (RF-CA-03).
 
 `GET /verificar/{token}` mostra SÓ nome, situação e "verificado em" (spec,
-"Privacidade"). Token inválido e inexistente têm a mesma resposta (404).
+"Privacidade"; sem categoria, DEC-36). Carteirinha revogada mostra só "sem
+validade", sem nome nem motivo. Token inválido e inexistente têm a mesma
+resposta (404). A situação pode vir do hub na hora (TI-45): a consulta é
+bloqueante e roda fora do event loop, dentro de `carteirinha.resolver`.
 Rate limit estrito no vhost (zona `area_verificar`); `noindex`; `no-store`.
 """
 
@@ -38,7 +41,11 @@ async def verificar(token: str, request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request, "verificar.html", {"encontrado": False},
                                           status_code=404, headers=_CABECALHOS)
     await run_in_threadpool(uso.registrar, "carteirinha_verificar", "carteirinha", contact_id=resultado.contact_id,
-                            sub=None, origem="publico", request_id=getattr(request.state, "request_id", None))
+                            sub=None, origem="publico", request_id=getattr(request.state, "request_id", None),
+                            detalhes={"resultado": resultado.resultado})
+    if resultado.revogada:
+        return templates.TemplateResponse(request, "verificar.html", {"encontrado": True, "revogada": True},
+                                          headers=_CABECALHOS)
     quando = (resultado.verificado_em.replace(tzinfo=ZoneInfo("UTC")).astimezone(_FUSO).strftime("%d/%m/%Y às %H:%M")
               if resultado.verificado_em else None)
     return templates.TemplateResponse(

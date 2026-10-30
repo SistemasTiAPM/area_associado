@@ -14,10 +14,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from starlette.concurrency import run_in_threadpool
 
+from ... import prontidao
 from ...config import get_settings
 from ...csrf import csrf_token
 from ...dominio import perfil
 from ...dominio.associado import contact_id_valido
+from ...dominio.solicitacoes import servico as solicitacoes
 from ...flags import flags_efetivas
 from ...session_guard import Associado, require_associado
 from .modelos import SessaoResposta
@@ -48,7 +50,8 @@ def iniciais(nome: str) -> str:
 
 
 def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool],
-                  foto_versao: str | None = None) -> dict[str, Any]:
+                  foto_versao: str | None = None, recursos: dict[str, bool] | None = None,
+                  aguardando: int = 0) -> dict[str, Any]:
     s = get_settings()
     nome = formatar_nome(associado.nome)
     expira = datetime.fromtimestamp(associado.auth_at + s.session_absolute_max, tz=timezone.utc)
@@ -73,7 +76,10 @@ def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]
         "stub": associado.is_stub,
         # Hub do CRM ou e-mail simulados: contato, endereço e foto são de demonstração.
         "dados_demonstracao": s.hub_mode == "stub" or s.smtp_mode == "stub",
-        "solicitacoes_aguardando": 0,  # Fase 3 (solicitações)
+        # Prontidão das migrações da Onda 2: sem as tabelas, a SPA mostra "em construção".
+        "recursos": {"solicitacoes": bool((recursos or {}).get("solicitacoes")),
+                     "ajuda": bool((recursos or {}).get("ajuda"))},
+        "solicitacoes_aguardando": aguardando,
         "expira_em": expira.isoformat().replace("+00:00", "Z"),
     }
 
@@ -81,5 +87,9 @@ def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]
 @router.get("/sessao", response_model=SessaoResposta)
 async def obter_sessao(request: Request, associado: Associado = Depends(require_associado)) -> dict[str, Any]:
     flags = await run_in_threadpool(flags_efetivas)
-    versao = await run_in_threadpool(perfil.foto_etag, contact_id_valido(associado.contact_id))
-    return montar_sessao(request, associado, flags, versao)
+    cid = contact_id_valido(associado.contact_id)
+    versao = await run_in_threadpool(perfil.foto_etag, cid)
+    recursos = await run_in_threadpool(prontidao.recursos)
+    # Contador real (RF-SO-07); sem o recurso ou com falha de banco, 0 — o menu nunca depende disto.
+    aguardando = await run_in_threadpool(solicitacoes.contar_aguardando, cid) if recursos["solicitacoes"] else 0
+    return montar_sessao(request, associado, flags, versao, recursos, aguardando)

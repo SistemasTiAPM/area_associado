@@ -133,12 +133,53 @@ class SituacaoCrm:
         return self.situacao_normalizada == "ativo" and self.statecode == 0
 
 
+# Solicitações (Onda 5, P-06 — docs/CONTRATO-HUB.md "Solicitações"). O hub mapeia a `task`
+# do CRM para estas situações; a área traduz para os status dela (REQUISITOS §7.5).
+SITUACOES_TASK = frozenset({"nao_iniciada", "em_andamento", "aguardando_associado", "concluida", "nao_seguiu",
+                            "cancelada"})
+_RE_UUID4 = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+_RE_CURSOR = re.compile(r"^[A-Za-z0-9_.:+=/-]{1,200}$")
+_RE_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$")
+
+
+@dataclass(frozen=True)
+class AlteracaoCrm:
+    """Uma linha de `solicitacao.alteracoes_consultar`, já validada (ids, enum, cursor)."""
+
+    solicitacao_id: str
+    crm_id: str
+    contact_id: str
+    situacao: str
+    mensagem_publica: str | None
+    modificado_em: str
+    cursor: str
+
+
+def alteracao_de_linha(linha: dict[str, Any]) -> AlteracaoCrm | None:
+    """None = linha fora do contrato (descartada pelo chamador com log, nunca aplicada)."""
+    sid = linha.get("solicitacao_id")
+    sid = sid.strip().lower() if isinstance(sid, str) else ""
+    crm_id, cid = _guid(linha.get("crm_id")), _guid(linha.get("contact_id"))
+    situacao, cursor, modificado = linha.get("situacao"), linha.get("cursor"), linha.get("modificado_em")
+    if (not _RE_UUID4.match(sid) or crm_id is None or cid is None or situacao not in SITUACOES_TASK
+            or not isinstance(cursor, str) or not _RE_CURSOR.match(cursor)
+            or not isinstance(modificado, str) or not _RE_ISO.match(modificado)):
+        return None
+    mensagem = linha.get("mensagem_publica")
+    if mensagem is not None and not isinstance(mensagem, str):
+        return None
+    return AlteracaoCrm(sid, crm_id, cid, situacao, mensagem, modificado, cursor)
+
+
 class ClienteHub(Protocol):
     def perfil_consultar(self, contact_id: str) -> PerfilCrm | None: ...
     def situacao_consultar(self, contact_id: str) -> SituacaoCrm | None: ...
     def contato_atualizar(self, contact_id: str, campos: dict[str, Any]) -> list[str]: ...
     def foto_obter(self, contact_id: str) -> bytes | None: ...
     def foto_atualizar(self, contact_id: str, jpeg: bytes | None) -> None: ...
+    def solicitacao_espelhar(self, dados: dict[str, Any]) -> str: ...
+    def solicitacao_status_atualizar(self, dados: dict[str, Any]) -> None: ...
+    def solicitacao_alteracoes_consultar(self, cursor: str | None, limite: int) -> list[dict[str, Any]]: ...
 
 
 def _texto(valor: Any, limite: int) -> str | None:
@@ -346,6 +387,25 @@ class ClienteHubReal:
     def foto_atualizar(self, contact_id: str, jpeg: bytes | None) -> None:
         b64 = base64.b64encode(jpeg).decode("ascii") if jpeg else None
         self.chamar("associado.foto_atualizar", {"contact_id": contact_id, "imagem_jpeg_b64": b64}, escrita=True)
+
+    # ------------------------------------- solicitações (Onda 5, P-06)
+    # Ferramentas ainda inexistentes no hub: até a P-06, o hub responde 404
+    # genérico → `HubError("fonte_indisponivel")`, e o job registra e recua.
+    def solicitacao_espelhar(self, dados: dict[str, Any]) -> str:
+        """Cria (ou devolve, pela `solicitacao_id`) a `task` regarding contact. Devolve o `crm_id`."""
+        linhas = self.chamar("solicitacao.espelhar", dados, escrita=True)
+        crm_id = _guid(linhas[0].get("crm_id")) if linhas else None
+        if crm_id is None:
+            logger.error("hub: solicitacao.espelhar sem crm_id válido — resultado incerto (repete, idempotente)")
+            raise HubError("fonte_indisponivel")
+        return crm_id
+
+    def solicitacao_status_atualizar(self, dados: dict[str, Any]) -> None:
+        self.chamar("solicitacao.status_atualizar", dados, escrita=True)
+
+    def solicitacao_alteracoes_consultar(self, cursor: str | None, limite: int) -> list[dict[str, Any]]:
+        """Linhas cruas (o job valida cada uma com `alteracao_de_linha`)."""
+        return self.chamar("solicitacao.alteracoes_consultar", {"cursor": cursor, "limite": int(limite)})
 
 
 _instancia: ClienteHub | None = None

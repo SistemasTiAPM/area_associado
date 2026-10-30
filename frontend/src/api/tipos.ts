@@ -20,9 +20,18 @@ export interface Sessao {
   stub: boolean;
   /** Hub do CRM ou e-mail simulados no servidor: nada do que o associado edita vai ao cadastro real. */
   dados_demonstracao: boolean;
+  /** Contagem real de solicitações em `pendente_associado` (0 quando o recurso está indisponível). */
   solicitacoes_aguardando: number;
+  /**
+   * Prontidão (`app/prontidao.py`): `false` enquanto as migrações do recurso não foram
+   * aplicadas. A SPA mostra "em construção" na rota e não chama a API dele.
+   */
+  recursos: Record<RecursoSessao, boolean>;
   expira_em: string;
 }
+
+/** Recursos com prontidão informada por `GET /sessao` (Onda 2). */
+export type RecursoSessao = 'solicitacoes' | 'ajuda';
 
 /** REQUISITOS §10 — espelho de app/flags.py:FLAGS_CONHECIDAS. */
 export type ChaveFlag =

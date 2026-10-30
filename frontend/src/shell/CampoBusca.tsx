@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Icon } from '../components/Icon';
 
 const ROTAS_COM_BUSCA = ['/beneficios', '/noticias'];

@@ -22,7 +22,8 @@ _ENV = {
 
 
 # Integração com MySQL real (opcional): com TESTE_DB_HOST definido, os testes
-# usam esse banco (migrações 000–007 aplicadas) e os marcados `mysql` rodam.
+# usam esse banco (migrações 000–013 aplicadas, sem lacunas além das de outras frentes)
+# e os marcados `mysql` rodam.
 _INTEGRACAO = {k[len("TESTE_"):]: v for k, v in os.environ.items() if k.startswith("TESTE_DB_")}
 if _INTEGRACAO:
     _ENV.update(_INTEGRACAO)

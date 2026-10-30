@@ -116,6 +116,86 @@
         "title": "AssociadoSessao",
         "type": "object"
       },
+      "Avaliacao": {
+        "additionalProperties": false,
+        "properties": {
+          "avaliada_em": {
+            "title": "Avaliada Em",
+            "type": "string"
+          },
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "nota": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Nota",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nota",
+          "comentario",
+          "avaliada_em"
+        ],
+        "title": "Avaliacao",
+        "type": "object"
+      },
+      "AvaliarEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "comentario": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "nota": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Nota",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nota"
+        ],
+        "title": "AvaliarEntrada",
+        "type": "object"
+      },
+      "BeneficioRef": {
+        "additionalProperties": false,
+        "properties": {
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "titulo"
+        ],
+        "title": "BeneficioRef",
+        "type": "object"
+      },
       "Body_auth_login_stub": {
         "properties": {
           "cpf": {
@@ -166,6 +246,107 @@
           }
         },
         "title": "Body_auth_logout",
+        "type": "object"
+      },
+      "CanalTelefone": {
+        "additionalProperties": false,
+        "properties": {
+          "exibicao": {
+            "title": "Exibicao",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exibicao",
+          "uri"
+        ],
+        "title": "CanalTelefone",
+        "type": "object"
+      },
+      "CanalWhatsapp": {
+        "additionalProperties": false,
+        "properties": {
+          "exibicao": {
+            "title": "Exibicao",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exibicao",
+          "url"
+        ],
+        "title": "CanalWhatsapp",
+        "type": "object"
+      },
+      "CancelamentoEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "chave_idempotencia": {
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Chave Idempotencia",
+            "type": "string"
+          },
+          "comentario": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "motivo": {
+            "enum": [
+              "nao_uso",
+              "preco",
+              "mudanca",
+              "insatisfacao_servico",
+              "outro"
+            ],
+            "title": "Motivo",
+            "type": "string"
+          },
+          "quer_conversa": {
+            "title": "Quer Conversa",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "motivo",
+          "quer_conversa",
+          "chave_idempotencia"
+        ],
+        "title": "CancelamentoEntrada",
+        "type": "object"
+      },
+      "CancelarEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "title": "CancelarEntrada",
         "type": "object"
       },
       "CarteirinhaResposta": {
@@ -227,8 +408,19 @@
             "title": "Num Contato"
           },
           "qr": {
-            "title": "Qr",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qr"
+          },
+          "revogada": {
+            "title": "Revogada",
+            "type": "boolean"
           },
           "status_associativo": {
             "anyOf": [
@@ -253,8 +445,15 @@
             "title": "Tipo Associado"
           },
           "url_verificacao": {
-            "title": "Url Verificacao",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url Verificacao"
           },
           "verificado_em": {
             "anyOf": [
@@ -277,10 +476,30 @@
           "status_associativo",
           "membro_desde",
           "verificado_em",
+          "revogada",
           "url_verificacao",
           "qr"
         ],
         "title": "CarteirinhaResposta",
+        "type": "object"
+      },
+      "CategoriaFaq": {
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "rotulo": {
+            "title": "Rotulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "rotulo"
+        ],
+        "title": "CategoriaFaq",
         "type": "object"
       },
       "ConfigInterface": {
@@ -327,6 +546,50 @@
           "codigo"
         ],
         "title": "ConfirmacaoEntrada",
+        "type": "object"
+      },
+      "ContatoCentral": {
+        "additionalProperties": false,
+        "description": "Bloco vazio (null) = a SPA não mostra o canal.",
+        "properties": {
+          "horario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horario"
+          },
+          "telefone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanalTelefone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "whatsapp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanalWhatsapp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "whatsapp",
+          "telefone",
+          "horario"
+        ],
+        "title": "ContatoCentral",
         "type": "object"
       },
       "ContatoEntrada": {
@@ -381,6 +644,29 @@
           }
         },
         "title": "ContatoEntrada",
+        "type": "object"
+      },
+      "ContatoSolicitacao": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "enum": [
+              "whatsapp",
+              "telefone"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "texto": {
+            "title": "Texto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "canal",
+          "texto"
+        ],
+        "title": "ContatoSolicitacao",
         "type": "object"
       },
       "DetalheErro": {
@@ -571,6 +857,73 @@
         "title": "EventoUi",
         "type": "object"
       },
+      "FaqResposta": {
+        "additionalProperties": false,
+        "properties": {
+          "categorias": {
+            "items": {
+              "$ref": "#/components/schemas/CategoriaFaq"
+            },
+            "title": "Categorias",
+            "type": "array"
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/ItemFaq"
+            },
+            "title": "Itens",
+            "type": "array"
+          },
+          "sugestoes": {
+            "description": "Códigos de categoria sugeridos quando a busca não encontra nada.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Sugestoes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "categorias",
+          "itens",
+          "sugestoes"
+        ],
+        "title": "FaqResposta",
+        "type": "object"
+      },
+      "FormularioEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "assunto": {
+            "enum": [
+              "beneficio",
+              "cadastro",
+              "financeiro",
+              "eventos",
+              "outro"
+            ],
+            "title": "Assunto",
+            "type": "string"
+          },
+          "chave_idempotencia": {
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Chave Idempotencia",
+            "type": "string"
+          },
+          "mensagem": {
+            "maxLength": 4000,
+            "title": "Mensagem",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assunto",
+          "mensagem",
+          "chave_idempotencia"
+        ],
+        "title": "FormularioEntrada",
+        "type": "object"
+      },
       "FotoResposta": {
         "additionalProperties": false,
         "properties": {
@@ -610,6 +963,121 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ItemFaq": {
+        "additionalProperties": false,
+        "properties": {
+          "categoria": {
+            "title": "Categoria",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "pergunta": {
+            "title": "Pergunta",
+            "type": "string"
+          },
+          "resposta": {
+            "title": "Resposta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pergunta",
+          "resposta",
+          "categoria"
+        ],
+        "title": "ItemFaq",
+        "type": "object"
+      },
+      "ItemLinhaDoTempo": {
+        "additionalProperties": false,
+        "properties": {
+          "ator": {
+            "enum": [
+              "voce",
+              "equipe_apm",
+              "parceiro",
+              "sistema"
+            ],
+            "title": "Ator",
+            "type": "string"
+          },
+          "mensagem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Só a mensagem pública; justificativa interna nunca sai.",
+            "title": "Mensagem"
+          },
+          "quando": {
+            "title": "Quando",
+            "type": "string"
+          },
+          "rotulo": {
+            "title": "Rotulo",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "criada",
+              "enviada",
+              "em_atendimento",
+              "pendente_associado",
+              "concluida_positiva",
+              "concluida_negativa",
+              "cancelada"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quando",
+          "status",
+          "rotulo",
+          "ator",
+          "mensagem"
+        ],
+        "title": "ItemLinhaDoTempo",
+        "type": "object"
+      },
+      "ListaSolicitacoes": {
+        "additionalProperties": false,
+        "properties": {
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/SolicitacaoResumo"
+            },
+            "title": "Itens",
+            "type": "array"
+          },
+          "proximo_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proximo Cursor"
+          }
+        },
+        "required": [
+          "itens",
+          "proximo_cursor"
+        ],
+        "title": "ListaSolicitacoes",
+        "type": "object"
+      },
       "LoteUso": {
         "additionalProperties": false,
         "properties": {
@@ -627,6 +1095,37 @@
           "eventos"
         ],
         "title": "LoteUso",
+        "type": "object"
+      },
+      "NovaSolicitacao": {
+        "additionalProperties": false,
+        "properties": {
+          "campos": {
+            "additionalProperties": true,
+            "maxProperties": 8,
+            "title": "Campos",
+            "type": "object"
+          },
+          "chave_idempotencia": {
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Chave Idempotencia",
+            "type": "string"
+          },
+          "tipo_servico": {
+            "enum": [
+              "outro",
+              "declaracao_associado",
+              "alteracao_cadastro"
+            ],
+            "title": "Tipo Servico",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_servico",
+          "chave_idempotencia"
+        ],
+        "title": "NovaSolicitacao",
         "type": "object"
       },
       "PerfilResposta": {
@@ -847,6 +1346,41 @@
         "title": "PerfilResposta",
         "type": "object"
       },
+      "RecursosSessao": {
+        "additionalProperties": false,
+        "description": "Prontidão das migrações da Onda 2 (`app/prontidao.py`): false = a SPA mostra \"em construção\".",
+        "properties": {
+          "ajuda": {
+            "title": "Ajuda",
+            "type": "boolean"
+          },
+          "solicitacoes": {
+            "title": "Solicitacoes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "solicitacoes",
+          "ajuda"
+        ],
+        "title": "RecursosSessao",
+        "type": "object"
+      },
+      "ResponderEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "texto": {
+            "maxLength": 4000,
+            "title": "Texto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "texto"
+        ],
+        "title": "ResponderEntrada",
+        "type": "object"
+      },
       "SessaoResposta": {
         "additionalProperties": false,
         "description": "`GET /api/v1/sessao` — sem CPF, e-mail, `sub` ou `contact_id`.",
@@ -877,11 +1411,15 @@
             "title": "Flags",
             "type": "object"
           },
+          "recursos": {
+            "$ref": "#/components/schemas/RecursosSessao"
+          },
           "rota_inicial": {
             "title": "Rota Inicial",
             "type": "string"
           },
           "solicitacoes_aguardando": {
+            "description": "Solicitações em `pendente_associado` (0 sem o recurso).",
             "title": "Solicitacoes Aguardando",
             "type": "integer"
           },
@@ -898,10 +1436,265 @@
           "config",
           "stub",
           "dados_demonstracao",
+          "recursos",
           "solicitacoes_aguardando",
           "expira_em"
         ],
         "title": "SessaoResposta",
+        "type": "object"
+      },
+      "Solicitacao": {
+        "additionalProperties": false,
+        "properties": {
+          "aguardando_parceiro": {
+            "description": "Marcador sem retorno (A05): a APM já está cobrando.",
+            "title": "Aguardando Parceiro",
+            "type": "boolean"
+          },
+          "atualizada_em": {
+            "title": "Atualizada Em",
+            "type": "string"
+          },
+          "avaliacao": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Avaliacao"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "beneficio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BeneficioRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Catálogo como dado só na Fase 4: hoje sempre null."
+          },
+          "campos": {
+            "additionalProperties": true,
+            "description": "Só os campos permitidos do tipo, como o associado enviou.",
+            "title": "Campos",
+            "type": "object"
+          },
+          "contato": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContatoSolicitacao"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criada_em": {
+            "title": "Criada Em",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "linha_do_tempo": {
+            "items": {
+              "$ref": "#/components/schemas/ItemLinhaDoTempo"
+            },
+            "title": "Linha Do Tempo",
+            "type": "array"
+          },
+          "pode_avaliar": {
+            "title": "Pode Avaliar",
+            "type": "boolean"
+          },
+          "pode_cancelar": {
+            "title": "Pode Cancelar",
+            "type": "boolean"
+          },
+          "pode_responder": {
+            "title": "Pode Responder",
+            "type": "boolean"
+          },
+          "prazo_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AAAA-MM-DD (America/Sao_Paulo); null sem envio ou se encerrada.",
+            "title": "Prazo Em"
+          },
+          "rotulo_status": {
+            "title": "Rotulo Status",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "criada",
+              "enviada",
+              "em_atendimento",
+              "pendente_associado",
+              "concluida_positiva",
+              "concluida_negativa",
+              "cancelada"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tipo": {
+            "$ref": "#/components/schemas/TipoSolicitacao"
+          }
+        },
+        "required": [
+          "id",
+          "tipo",
+          "beneficio",
+          "status",
+          "rotulo_status",
+          "aguardando_parceiro",
+          "prazo_em",
+          "contato",
+          "criada_em",
+          "atualizada_em",
+          "pode_cancelar",
+          "pode_responder",
+          "pode_avaliar",
+          "campos",
+          "linha_do_tempo",
+          "avaliacao"
+        ],
+        "title": "Solicitacao",
+        "type": "object"
+      },
+      "SolicitacaoResumo": {
+        "additionalProperties": false,
+        "properties": {
+          "aguardando_parceiro": {
+            "description": "Marcador sem retorno (A05): a APM já está cobrando.",
+            "title": "Aguardando Parceiro",
+            "type": "boolean"
+          },
+          "atualizada_em": {
+            "title": "Atualizada Em",
+            "type": "string"
+          },
+          "beneficio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BeneficioRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Catálogo como dado só na Fase 4: hoje sempre null."
+          },
+          "contato": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContatoSolicitacao"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criada_em": {
+            "title": "Criada Em",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "pode_avaliar": {
+            "title": "Pode Avaliar",
+            "type": "boolean"
+          },
+          "pode_cancelar": {
+            "title": "Pode Cancelar",
+            "type": "boolean"
+          },
+          "pode_responder": {
+            "title": "Pode Responder",
+            "type": "boolean"
+          },
+          "prazo_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AAAA-MM-DD (America/Sao_Paulo); null sem envio ou se encerrada.",
+            "title": "Prazo Em"
+          },
+          "rotulo_status": {
+            "title": "Rotulo Status",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "criada",
+              "enviada",
+              "em_atendimento",
+              "pendente_associado",
+              "concluida_positiva",
+              "concluida_negativa",
+              "cancelada"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tipo": {
+            "$ref": "#/components/schemas/TipoSolicitacao"
+          }
+        },
+        "required": [
+          "id",
+          "tipo",
+          "beneficio",
+          "status",
+          "rotulo_status",
+          "aguardando_parceiro",
+          "prazo_em",
+          "contato",
+          "criada_em",
+          "atualizada_em",
+          "pode_cancelar",
+          "pode_responder",
+          "pode_avaliar"
+        ],
+        "title": "SolicitacaoResumo",
+        "type": "object"
+      },
+      "TipoSolicitacao": {
+        "additionalProperties": false,
+        "properties": {
+          "codigo": {
+            "description": "`tipo_servico` (ou `beneficio` quando nasce do catálogo).",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "rotulo": {
+            "title": "Rotulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "rotulo"
+        ],
+        "title": "TipoSolicitacao",
         "type": "object"
       },
       "TrocaEmailIniciada": {
@@ -1033,6 +1826,596 @@
           }
         },
         "summary": "Home"
+      }
+    },
+    "/api/v1/ajuda/cancelamento": {
+      "post": {
+        "operationId": "pedir_cancelamento",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelamentoEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Repetição da mesma `chave_idempotencia`."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Pedir Cancelamento",
+        "tags": [
+          "ajuda"
+        ]
+      }
+    },
+    "/api/v1/ajuda/contato": {
+      "get": {
+        "operationId": "obter_contato",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContatoCentral"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Obter Contato",
+        "tags": [
+          "ajuda"
+        ]
+      }
+    },
+    "/api/v1/ajuda/faq": {
+      "get": {
+        "operationId": "obter_faq",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "categoria",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9_]{1,31}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FaqResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Obter Faq",
+        "tags": [
+          "ajuda"
+        ]
+      }
+    },
+    "/api/v1/ajuda/formulario": {
+      "post": {
+        "operationId": "enviar_formulario",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormularioEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Repetição da mesma `chave_idempotencia`."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Enviar Formulario",
+        "tags": [
+          "ajuda"
+        ]
       }
     },
     "/api/v1/carteirinha": {
@@ -1228,7 +2611,7 @@
                 }
               }
             },
-            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+            "description": "`carteirinha_revogada` — carteirinha sem validade"
           },
           "413": {
             "content": {
@@ -1272,6 +2655,250 @@
           }
         },
         "summary": "Compartilhar Carteirinha",
+        "tags": [
+          "carteirinha"
+        ]
+      }
+    },
+    "/api/v1/carteirinha/documento.pdf": {
+      "get": {
+        "operationId": "baixar_carteirinha_pdf",
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Carteirinha em PDF (85,6 × 54 mm), sem metadados do associado"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`carteirinha_revogada` — carteirinha sem validade"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Baixar Carteirinha Pdf",
+        "tags": [
+          "carteirinha"
+        ]
+      }
+    },
+    "/api/v1/carteirinha/imagem.png": {
+      "get": {
+        "operationId": "baixar_carteirinha_png",
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Carteirinha em PNG (1012×638, 300 dpi), sem metadados"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`carteirinha_revogada` — carteirinha sem validade"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Baixar Carteirinha Png",
         "tags": [
           "carteirinha"
         ]
@@ -1345,7 +2972,7 @@
                 }
               }
             },
-            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+            "description": "`carteirinha_revogada` — carteirinha sem validade"
           },
           "413": {
             "content": {
@@ -2414,6 +4041,942 @@
         "summary": "Obter Sessao",
         "tags": [
           "sessao"
+        ]
+      }
+    },
+    "/api/v1/solicitacoes": {
+      "get": {
+        "operationId": "listar_solicitacoes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "situacao",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "andamento",
+                    "encerradas"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Situacao"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaSolicitacoes"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Listar Solicitacoes",
+        "tags": [
+          "solicitacoes"
+        ]
+      },
+      "post": {
+        "operationId": "criar_solicitacao",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaSolicitacao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Repetição da mesma `chave_idempotencia`."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Criar Solicitacao",
+        "tags": [
+          "solicitacoes"
+        ]
+      }
+    },
+    "/api/v1/solicitacoes/{solicitacao_id}": {
+      "get": {
+        "operationId": "obter_solicitacao",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solicitacao_id",
+            "required": true,
+            "schema": {
+              "title": "Solicitacao Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Obter Solicitacao",
+        "tags": [
+          "solicitacoes"
+        ]
+      }
+    },
+    "/api/v1/solicitacoes/{solicitacao_id}/avaliar": {
+      "post": {
+        "operationId": "avaliar_solicitacao",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solicitacao_id",
+            "required": true,
+            "schema": {
+              "title": "Solicitacao Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvaliarEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Avaliar Solicitacao",
+        "tags": [
+          "solicitacoes"
+        ]
+      }
+    },
+    "/api/v1/solicitacoes/{solicitacao_id}/cancelar": {
+      "post": {
+        "operationId": "cancelar_solicitacao",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solicitacao_id",
+            "required": true,
+            "schema": {
+              "title": "Solicitacao Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CancelarEntrada"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Entrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Cancelar Solicitacao",
+        "tags": [
+          "solicitacoes"
+        ]
+      }
+    },
+    "/api/v1/solicitacoes/{solicitacao_id}/responder": {
+      "post": {
+        "operationId": "responder_solicitacao",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solicitacao_id",
+            "required": true,
+            "schema": {
+              "title": "Solicitacao Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponderEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Solicitacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Responder Solicitacao",
+        "tags": [
+          "solicitacoes"
         ]
       }
     },

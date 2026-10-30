@@ -1,5 +1,5 @@
 import type { NomeIcone } from './components/Icon';
-import type { ChaveFlag, Sessao } from './api/tipos';
+import type { ChaveFlag, RecursoSessao, Sessao } from './api/tipos';
 
 /**
  * Mapa de rotas (REQUISITOS §3.0; ADR-0001: URL real, sem localStorage).
@@ -17,6 +17,11 @@ export interface Rota {
   rotuloInferior?: string;
   /** Rota inteira some (menu e URL) com a flag desligada (RF-SH-11). */
   flag?: ChaveFlag;
+  /**
+   * Recurso com prontidão em `GET /sessao` (`recursos`): indisponível = a rota
+   * continua no menu e mostra "em construção", sem chamar a API.
+   */
+  recurso?: RecursoSessao;
   /** Só para este tipo de associado (rótulo do CRM). */
   somenteTipo?: string;
   /** Separada visualmente na sidebar (spec: "Onboarding acadêmico"). */
@@ -41,7 +46,9 @@ export const ROTAS: readonly Rota[] = [
   { id: 'evt', caminho: 'eventos', titulo: 'Congresso e eventos', chamada: 'Onde a profissão se encontra, aprende e avança junto.', icone: 'calendario', subRota: 'publica' },
   { id: 'card', caminho: 'carteirinha', titulo: 'Carteirinha digital', chamada: 'Sua identificação APM, sempre no bolso.', icone: 'cartao', rotuloInferior: 'Carteirinha' },
   { id: 'perfil', caminho: 'perfil', titulo: 'Meu perfil', chamada: 'Seus dados de contato e de cadastro na APM.', icone: 'usuario' },
-  { id: 'solicitacoes', caminho: 'solicitacoes', titulo: 'Minhas solicitações', chamada: 'Acompanhe cada protocolo em um só lugar.', icone: 'caixa', subRota: 'pessoal' },
+  { id: 'solicitacoes', caminho: 'solicitacoes', titulo: 'Minhas solicitações', chamada: 'Acompanhe cada protocolo em um só lugar.', icone: 'caixa', subRota: 'pessoal', recurso: 'solicitacoes' },
+  // P14 (TI-22): no rodapé do menu, junto de "Meu perfil"; fora da barra inferior.
+  { id: 'ajuda', caminho: 'ajuda', titulo: 'Ajuda', chamada: 'Perguntas frequentes, canais da Central e pedidos comuns.', icone: 'ajuda', recurso: 'ajuda' },
   {
     id: 'onb',
     caminho: 'onboarding',
@@ -66,6 +73,12 @@ export function rotaVisivel(rota: Rota, sessao: Sessao): boolean {
   if (rota.flag && !sessao.flags[rota.flag]) return false;
   if (rota.somenteTipo && sessao.associado.tipo !== rota.somenteTipo) return false;
   return true;
+}
+
+/** Recurso da rota pronto no servidor (sem `recurso` = sempre pronto; ausente na sessão = não pronto). */
+export function recursoPronto(rota: Rota, sessao: Sessao): boolean {
+  if (!rota.recurso) return true;
+  return sessao.recursos?.[rota.recurso] === true;
 }
 
 export function destino(rota: Rota): string {

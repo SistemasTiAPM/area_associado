@@ -16,9 +16,10 @@ const ROTAS = [
   ['/area/carteirinha', 'Carteirinha digital'],
   ['/area/perfil', 'Meu perfil'],
   ['/area/solicitacoes', 'Minhas solicitações'],
+  ['/area/ajuda', 'Ajuda'],
 ] as const;
 
-test('login stub → saudação, 9 rotas pelo URL com recarga, sem violação de CSP', async ({ page }) => {
+test('login stub → saudação, 10 rotas pelo URL com recarga, sem violação de CSP', async ({ page }) => {
   const violacoes = await vigiarCsp(page);
   await entrar(page);
   await expect(page.getByText('Telma', { exact: true })).toBeVisible();
@@ -31,7 +32,8 @@ test('login stub → saudação, 9 rotas pelo URL com recarga, sem violação de
     await semRolagemHorizontal(page);
   }
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1, name: 'Minhas solicitações' })).toBeVisible();
+  const [, ultimoTitulo] = ROTAS[ROTAS.length - 1];
+  await expect(page.getByRole('heading', { level: 1, name: ultimoTitulo })).toBeVisible();
   expect(violacoes).toEqual([]);
 });
 

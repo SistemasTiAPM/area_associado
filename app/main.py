@@ -26,6 +26,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_303_SEE_OTHER
 
 from . import audit, publico, spa, uso
+from .jobs import rastro as rastro_jobs
 from .api import v1 as api_v1
 from .api.erros import (
     MENSAGENS_PADRAO,
@@ -391,6 +392,8 @@ async def favicon() -> RedirectResponse:
 @app.get("/db-health", include_in_schema=False)
 async def db_health() -> JSONResponse:
     corpo = {"database": settings.db_name, "uso_falhas": uso.falhas(), "spa": spa.carregar_index() is not None}
+    # Última execução ok de cada job (ADR-0019 item 5): nomes e horários, nada pessoal.
+    corpo["jobs"] = await run_in_threadpool(rastro_jobs.ultimas_execucoes_ok)
     try:
         st = await run_in_threadpool(tls_status)
         return JSONResponse({"status": "ok", **corpo, "user": st.get("current_user"),

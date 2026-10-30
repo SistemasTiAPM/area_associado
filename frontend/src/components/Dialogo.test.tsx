@@ -70,11 +70,12 @@ describe('Dialogo (modal acessível)', () => {
 
   it('clique no scrim fecha; clique dentro não fecha', async () => {
     const usuario = userEvent.setup();
-    const { container } = render(<Harness />);
+    render(<Harness />);
     await usuario.click(screen.getByRole('button', { name: 'Abrir' }));
     await usuario.click(screen.getByText('Conteúdo'));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    await usuario.click(container.querySelector('.scrim') as HTMLElement);
+    // O diálogo vive num portal em document.body (fora do container do render).
+    await usuario.click(document.body.querySelector('.dialogo-camada .scrim') as HTMLElement);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -88,5 +89,27 @@ describe('Dialogo (modal acessível)', () => {
     expect(screen.getByRole('button', { name: 'Cancelar solicitação' })).not.toHaveFocus();
     await usuario.click(screen.getByRole('button', { name: 'Cancelar solicitação' }));
     expect(confirmar).toHaveBeenCalledOnce();
+  });
+
+  it('abre num portal fora da raiz da SPA, que fica inert enquanto aberto; ao fechar o foco volta', async () => {
+    const usuario = userEvent.setup();
+    const raiz = document.createElement('div');
+    raiz.id = 'raiz';
+    document.body.appendChild(raiz);
+    try {
+      render(<Harness />, { container: raiz });
+      const abrir = screen.getByRole('button', { name: 'Abrir' });
+      await usuario.click(abrir);
+      const dialogo = screen.getByRole('dialog', { name: 'Cancelar a solicitação' });
+      expect(raiz.contains(dialogo)).toBe(false);
+      expect(document.body.contains(dialogo)).toBe(true);
+      expect(raiz.inert).toBe(true);
+      await usuario.click(screen.getByRole('button', { name: 'Manter' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(raiz.inert).toBe(false);
+      expect(abrir).toHaveFocus();
+    } finally {
+      raiz.remove();
+    }
   });
 });

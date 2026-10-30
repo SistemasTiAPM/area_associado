@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ApiError } from '../api/client';
 import { Icon } from '../components/Icon';
-import { registrarUso } from '../lib/analytics';
+import { registrarErroExibido } from '../lib/erros';
 
 /**
  * Toast único (RF-SH-07): uma mensagem por vez — a nova substitui a anterior —
@@ -12,7 +12,6 @@ import { registrarUso } from '../lib/analytics';
 
 export const DURACAO_TOAST_MS = 2600;
 const MENSAGEM_ERRO_PADRAO = 'Não foi possível concluir agora. Tente novamente em instantes.';
-const ROTA_ANALYTICS = /^\/area(\/[a-z0-9-]{1,32}){0,3}$/;
 
 interface Toast {
   id: number;
@@ -51,11 +50,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       mostrarErro: (falha) => {
         const erro = falha instanceof ApiError ? falha : null;
         exibir(erro?.message || MENSAGEM_ERRO_PADRAO, 'erro');
-        const detalhes: Record<string, string> = { codigo: erro?.erro ?? 'erro_cliente' };
-        if (erro?.requestId) detalhes.request_id = erro.requestId;
-        const rota = window.location.pathname;
-        if (ROTA_ANALYTICS.test(rota)) detalhes.rota = rota;
-        registrarUso({ acao: 'erro_exibido', entidade: 'rota', entidade_id: rota.slice(0, 64), detalhes });
+        registrarErroExibido(falha);
         if (!erro) console.error(falha); // erro de programação: visível no console, nunca silencioso
       },
     }),

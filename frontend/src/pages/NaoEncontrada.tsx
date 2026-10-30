@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { EstadoVazio } from '../components/EstadoVazio';
 import { Icon } from '../components/Icon';
 

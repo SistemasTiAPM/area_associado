@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useFocoPreso } from '../shell/useFocoPreso';
 import { Icon } from './Icon';
 
@@ -24,11 +25,30 @@ interface Props {
  * rotulado pelo título, foco preso (`useFocoPreso`), Esc e clique no scrim
  * fecham, foco volta a quem abriu, rolagem da página travada. Puro: não fala
  * com API; quem abre decide o conteúdo e as ações.
+ *
+ * Renderizado num portal em `document.body`, fora do `<main>`: o conteúdo cria
+ * contexto de empilhamento próprio e, no celular, a barra inferior fixa cobria o
+ * rodapé do modal e seus links continuavam clicáveis por cima dele (WCAG 2.2
+ * 2.5.8, achado no e2e da Onda 2). Enquanto aberto, a raiz da SPA fica `inert`
+ * (fora da árvore de acessibilidade e de foco), como pede `aria-modal`.
  */
 export function Dialogo({ aberto, titulo, descricao, aoFechar, children, acoes, destrutivo = false, rotuloFechar = 'Fechar' }: Props) {
   const painel = useRef<HTMLDivElement>(null);
   const idTitulo = useId();
   const idDescricao = useId();
+
+  // Declarado antes de `useFocoPreso`: na desmontagem as limpezas rodam na ordem de
+  // declaração, então a raiz deixa de ser `inert` antes de o foco voltar a quem abriu.
+  useEffect(() => {
+    if (!aberto) return;
+    const raizApp = document.getElementById('raiz');
+    if (!raizApp || raizApp.inert) return;
+    raizApp.inert = true;
+    return () => {
+      raizApp.inert = false;
+    };
+  }, [aberto]);
+
   useFocoPreso(painel, aberto, aoFechar);
 
   useEffect(() => {
@@ -39,7 +59,7 @@ export function Dialogo({ aberto, titulo, descricao, aoFechar, children, acoes, 
   }, [aberto]);
 
   if (!aberto) return null;
-  return (
+  return createPortal(
     <div className="dialogo-camada">
       <div className="scrim scrim--visivel" onClick={aoFechar} aria-hidden="true" />
       <div
@@ -66,6 +86,7 @@ export function Dialogo({ aberto, titulo, descricao, aoFechar, children, acoes, 
         {children ? <div className="dialogo__corpo">{children}</div> : null}
         {acoes ? <div className="dialogo__acoes botoes">{acoes}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

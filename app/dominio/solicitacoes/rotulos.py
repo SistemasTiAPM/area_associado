@@ -1,0 +1,111 @@
+"""Rótulos pt-BR das solicitações (REQUISITOS §7.1 e §7.4; spec v2 §8.5).
+
+Textos da spec como PROPOSTA até a P-44 (DEC-35): mudar um rótulo é mudar só
+aqui. Status e códigos nunca mudam (são contrato com a SPA e com o banco).
+"""
+
+from __future__ import annotations
+
+STATUS: tuple[str, ...] = ("criada", "enviada", "em_atendimento", "pendente_associado",
+                           "concluida_positiva", "concluida_negativa", "cancelada")
+TERMINAIS: frozenset[str] = frozenset({"concluida_positiva", "concluida_negativa", "cancelada"})
+NAO_TERMINAIS: tuple[str, ...] = tuple(s for s in STATUS if s not in TERMINAIS)
+CONCLUIDAS: frozenset[str] = frozenset({"concluida_positiva", "concluida_negativa"})
+
+# Os 7 rótulos ao associado (RF-SO-08).
+_ROTULO_STATUS: dict[str, str] = {
+    "criada": "Recebida pela APM",
+    "enviada": "Enviada ao parceiro",
+    "em_atendimento": "Em atendimento",
+    "pendente_associado": "O parceiro precisa de algo seu",
+    "concluida_positiva": "Concluída",
+    "concluida_negativa": "Não seguiu",
+    "cancelada": "Cancelada",
+}
+# Tipo de ativação 3 (serviço da própria APM): só `enviada` muda (contrato da Onda 2).
+_ROTULO_STATUS_TIPO3: dict[str, str] = {
+    "enviada": "Encaminhada à equipe",
+}
+ROTULO_MARCADOR = "Aguardando o parceiro, a APM já está cobrando"
+
+ROTULO_TIPO: dict[str, str] = {
+    "alteracao_cadastro": "Alteração de cadastro",
+    "diagnostico_marketing": "Diagnóstico de marketing",
+    "submeter_trabalho": "Publicação na revista",
+    "mentoria_pedir": "Quero um mentor",
+    "mentoria_oferecer": "Quero ser mentor",
+    "cartao_apm": "Cartão APM",
+    "outro": "Outro assunto",
+    "declaracao_associado": "Declaração de associado",
+    "cancelamento_associacao": "Cancelamento da associação",
+    "exclusao_dados": "Exclusão de dados",
+    "beneficio": "Benefício",
+}
+
+# Ator no log → quem o associado vê na linha do tempo (contrato da API).
+ATOR_PUBLICO: dict[str, str] = {
+    "associado": "voce",
+    "apm": "equipe_apm",
+    "parceiro": "parceiro",
+    "sistema": "sistema",
+    "importacao": "sistema",
+}
+
+# Assunto do formulário da Ajuda (RF-AJ-03) → assunto gravado na solicitação `outro`.
+ASSUNTO_FORMULARIO: dict[str, str] = {
+    "beneficio": "Dúvida sobre benefício",
+    "cadastro": "Cadastro",
+    "financeiro": "Financeiro",
+    "eventos": "Eventos",
+    "outro": "Outro assunto",
+}
+
+FINALIDADE_DECLARACAO: dict[str, str] = {
+    "amb_prova_titulo": "AMB — prova de título de especialista",
+    "geral": "Comprovação de vínculo com a APM",
+}
+
+MOTIVO_CANCELAMENTO: dict[str, str] = {
+    "nao_uso": "Não uso os benefícios",
+    "preco": "Preço",
+    "mudanca": "Mudança de cidade ou de fase",
+    "insatisfacao_servico": "Insatisfação com o serviço",
+    "outro": "Outro motivo",
+}
+
+CAMPO_CADASTRO: dict[str, str] = {
+    "nome": "Nome",
+    "sobrenome": "Sobrenome",
+    "data_nascimento": "Data de nascimento",
+    "sexo": "Sexo",
+}
+
+SEXO: dict[str, str] = {
+    "feminino": "Feminino",
+    "masculino": "Masculino",
+    "outro": "Outro",
+    "prefiro_nao_informar": "Prefiro não informar",
+}
+
+
+def rotulo_status(status: str, tipo_ativacao: int | None = None) -> str:
+    if tipo_ativacao == 3 and status in _ROTULO_STATUS_TIPO3:
+        return _ROTULO_STATUS_TIPO3[status]
+    return _ROTULO_STATUS[status]
+
+
+def rotulo_marcador() -> str:
+    return ROTULO_MARCADOR
+
+
+def rotulo_tipo(tipo_servico: str | None) -> str:
+    return ROTULO_TIPO.get(tipo_servico or "beneficio", ROTULO_TIPO["beneficio"])
+
+
+def rotulo_evento(evento: str, para_status: str, tipo_ativacao: int | None) -> str:
+    """Rótulo de um item da linha do tempo."""
+    if evento in ("sem_retorno", "sem_retorno_2"):
+        return rotulo_marcador()
+    if evento == "avaliacao":
+        return "Avaliação registrada"
+    return rotulo_status(para_status, tipo_ativacao)

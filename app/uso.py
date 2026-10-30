@@ -226,7 +226,10 @@ CATALOGO: dict[str, Acao] = {
     "solicitacao_status_alterado": _a("solicitacao", "servidor job", de=_STATUS, para=_STATUS,
                                       origem=_enum("sistema", "parceiro", "importacao", "associado", "apm")),
     "solicitacao_avaliar": _a("solicitacao", "servidor", nota=_int_ate(10)),
-    "cancelamento_pedir": _a("associado", "servidor", motivo=_enum("nao_uso", "preco", "mudanca", "insatisfacao", "outro")),
+    # `insatisfacao_servico` é o código do contrato da Onda 2 (POST /ajuda/cancelamento);
+    # `insatisfacao` fica aceito para não descartar emissor antigo.
+    "cancelamento_pedir": _a("associado", "servidor", motivo=_enum("nao_uso", "preco", "mudanca",
+                                                                   "insatisfacao_servico", "insatisfacao", "outro")),
     # --- trilha, perfil, privacidade
     "onboarding_passo_concluir": _a("onboarding_passo", "servidor"),
     "perfil_contato_atualizar": _a("associado_perfil", "servidor"),
@@ -237,6 +240,7 @@ CATALOGO: dict[str, Acao] = {
                                 valor=_enum("concedido", "retirado"), versao=_VERSAO),
     # --- carteirinha
     "carteirinha_compartilhar": _a("carteirinha", "servidor"),
+    "carteirinha_baixar": _a("carteirinha", "servidor", formato=_enum("png", "pdf")),
     "carteirinha_verificar": _a("carteirinha", "publico", resultado=_enum("ativo", "inativo", "nao_confirmado")),
     "wallet_adicionar": _a("carteirinha", "ui"),
     # --- financeiro (sem valores; competência AAAA-MM)
@@ -247,8 +251,9 @@ CATALOGO: dict[str, Acao] = {
     "notificacao_abrir": _a("notificacao", "ui", tipo=_SLUG),
     "central_whatsapp_abrir": _a("central", "ui"),
     "ajuda_contatar": _a("central", "ui", canal=_enum("whatsapp", "telefone", "formulario"),
-                         assunto=_enum("beneficios", "solicitacao", "financeiro", "cadastro", "carteirinha",
-                                       "cancelamento", "outro")),
+                         # + `beneficio` e `eventos`: assuntos do formulário da Ajuda (contrato da Onda 2).
+                         assunto=_enum("beneficios", "beneficio", "solicitacao", "financeiro", "cadastro",
+                                       "carteirinha", "cancelamento", "eventos", "outro")),
     # --- qualidade (RUM próprio, TI-67): métricas numéricas; nunca stack nem mensagem
     "erro_exibido": _a("rota", "ui", codigo=_SLUG, request_id=_HEX16, rota=_ROTA),
     "vitais_web": _a("rota", "ui", lcp=_numero(60_000, 1), inp=_numero(60_000, 1), cls=_numero(10, 3), rota=_ROTA),

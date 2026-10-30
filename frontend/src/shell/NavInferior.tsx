@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router';
 import { Icon } from '../components/Icon';
 import { ORDEM_INFERIOR, ROTAS, destino, rotaVisivel } from '../rotas';
 import { useSessao } from '../state/SessaoContext';

@@ -30,6 +30,63 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-10-30 — Onda 2: solicitações, Ajuda, carteirinha em tempo quase real e serviço de jobs (no ar)
+
+**Plano:** `docs/PLANO-EXECUCAO.md` §Onda 2 (contrato de API fixado antes do código), aprovado pelo usuário
+("pode seguir com a onda 2"). Decisões já tomadas na Onda 1 (ADR-0018..0022). Numeração das migrações passou
+a seguir a ordem de criação (REQUISITOS §6.2): 010 solicitação, 011 jobs, 012 comunicação, 013 ajuda e
+parâmetros, 014 revogação da carteirinha. Quatro frentes: A (núcleo), B (carteirinha), D (front) em paralelo;
+C (jobs) depois de A e B.
+
+**Entregue:**
+- **Solicitações (TI-14..16, TI-08, TI-57):** `sql/010_solicitacao.sql` (8 status da spec, `sem_retorno_desde`,
+  vínculos com benefício/parceiro/tipo, canal, prazo, avaliação, idempotência, `crm_*` com 4 valores; UPDATE
+  **por coluna**; `solicitacao_evento` só INSERT com ator/origem/justificativa/`conteudo_enviado` = campos +
+  sha256); `app/dominio/solicitacoes/` (máquina de transições pura com UPDATE condicional e 409, schemas por
+  tipo com allowlist e anti-CPF, rótulos, serviço); `app/dominio/limites_negocio.py` (ADR-0020); API
+  `/api/v1/solicitacoes` (lista com cursor, detalhe com linha do tempo, criar, cancelar, responder, avaliar);
+  `solicitacoes_aguardando` real e `recursos` (prontidão por tabela) em `/sessao`; declaração de associado com
+  carência de 1 mês para "AMB prova de título".
+- **Comunicação (TI-18):** `sql/012_comunicacao_notificacao.sql` (outbox com dedupe, envio e supressão
+  append-only, `notificacao`, `fila_ligacao`); `app/dominio/comunicacao.py`; A04/A05/A06/A16 gravados na mesma
+  transação do negócio.
+- **Ajuda P14 (TI-20, TI-22):** `sql/013_ajuda_parametro.sql` (`faq`, `texto_sistema`, `parametro`, só leitura
+  para o web); `/api/v1/ajuda/faq`, `/contato`, `/formulario`, `/cancelamento` (flag `cancelamento_online`,
+  step-up, janela de arrependimento, nunca escreve no CRM); página `/area/ajuda` no menu.
+- **Carteirinha (TI-45, TI-46):** `sql/014_carteirinha_revogacao.sql`; verificação pública consulta
+  `associado.situacao` no hub com cache de 10 min e limite global de 60/min por processo, revogação quando o
+  CRM diz cancelado, fallback para o cache; `GET /carteirinha/imagem.png` e `/documento.pdf` gerados no servidor
+  (Sora, sem metadados, 10/h) com evento `carteirinha_baixar`; número de associado no cartão; estado revogada.
+- **Jobs (TI-01, TI-17, TI-19):** `sql/011_job_execucao.sql`; `app/jobs/` (loop in-process, `GET_LOCK`,
+  `job_execucao`, heartbeat, 3 falhas → `evento_log`, dry-run por padrão `JOBS_APLICAR=0`); jobs
+  `espelhar_solicitacoes`, `sincronizar_solicitacoes` (dry-run até as ferramentas `solicitacao.*` no hub, P-06),
+  `marcar_sem_retorno`, `enviar_comunicacao` (SMTP; em staging com SMTP simulado não marca `enviado`),
+  `situacao_carteirinhas` (03h, lote 200); serviço `area-associado-jobs` no compose com `profiles: ["jobs"]`;
+  `/db-health` com a última execução de cada job; `alertas.sh` com a seção de jobs; `docs/JOBS.md`; contrato
+  `solicitacao.*` em `CONTRATO-HUB.md`; zonas `limit_req` no vhost de exemplo (`OPERACAO.md` §11).
+- **Front (TI-10, TI-21, TI-22, TI-46):** **React Router 7.18.4** (`npm audit` 0; **P-40 resolvida**),
+  `lib/navegacao.ts` + regra ESLint contra navegação com destino dinâmico; P05 (lista com abas, detalhe com linha
+  do tempo, cancelar, responder, avaliar 0–10); P14; carteirinha com nº, downloads e revogada; telas novas
+  carregadas sob demanda (bundle inicial 232 kB).
+- **Correção encontrada no e2e da integração:** o `Dialogo` era montado dentro do `<main>`, cujo contexto de
+  empilhamento deixava a barra inferior do celular cobrir o rodapé do modal e seus links clicáveis por cima
+  dele (WCAG 2.2 2.5.8). Passou a usar portal em `document.body`, com a raiz da SPA `inert` enquanto aberto e o
+  scrim sob o painel; teste Vitest novo.
+- Docs: REQUISITOS alinhado ao contrato efetivo (rota do PDF, fallback da verificação, `recursos`, teto de 24 h
+  móveis, forma do 409 `nao_elegivel`); PROVISIONAMENTO §2.5 com o laço 010–014 e os sha256.
+
+**Evidências:** pytest **351 passed / 47 skipped** sem banco (398 com MySQL 8.4 e as 14 migrações, frente C);
+ensaios das migrações em MySQL 8.4.11 com `db_check` real "conforme"; Vitest **201**; build da imagem
+(com `npm run check` e verificação do OpenAPI); **e2e 43 passed / 2 skipped** (desktop-1440, mobile-390,
+mobile-360; MySQL com `sql/000`–`014`; 0 violação de CSP, 0 axe WCAG 2.2 AA; P05, P14 e downloads da carteirinha
+de ponta a ponta); `scripts/deploy.sh` aprovado nos 4 smokes; em produção `recursos` = indisponível até o
+operador aplicar as migrações e `db_check` "conforme" com aviso da 008.
+
+**Fica com o operador:** `sql/008`–`014` (snapshot antes; 014 em janela de pouco tráfego), M-7, `.env.jobs` e
+`--profile jobs`, zonas do porteiro, Onda 0. Novas pendências: P-66 (conclusão vinda do CRM a partir de
+`pendente_associado`), P-67 (rotação do token), P-68 (`CENTRAL_EMAIL`), P-69 (conteúdo da Ajuda).
+Próxima: **Onda 3** (P13 LGPD; DEC-06, 26, 27).
+
 ## 2026-10-30 — Onda 1 do plano de execução: base transversal da spec v2 (no ar)
 
 **Plano:** `docs/PLANO-EXECUCAO.md` (7 ondas, do mais fácil ao mais problemático), aprovado em 30/10 com

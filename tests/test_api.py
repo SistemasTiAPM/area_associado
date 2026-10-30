@@ -330,15 +330,15 @@ def test_logout_limpa_cookie_e_volta_para_o_inicio(ctx):
 def test_verificacao_publica_no_visual_novo_sem_dado_extra(ctx, monkeypatch):
     """Três estados da página pública; só nome e situação, sem inline e sem script (ADR-0013/0014)."""
     from datetime import datetime
-    from types import SimpleNamespace
 
     from sqlalchemy.exc import OperationalError
 
     from app.dominio import carteirinha
 
     c = ctx["c"]
-    achado = SimpleNamespace(nome="TELMA NOGUEIRA", situacao="Ativo", contact_id="6b1f3c1e-4f3a-5d2b-9c7e-a5e0c0de57b0",
-                             verificado_em=datetime(2026, 10, 20, 18, 55))
+    achado = carteirinha.Verificacao(nome="TELMA NOGUEIRA", situacao="Ativo",
+                                     contact_id="6b1f3c1e-4f3a-5d2b-9c7e-a5e0c0de57b0",
+                                     verificado_em=datetime(2026, 10, 20, 18, 55), resultado="ativo")
     monkeypatch.setattr(carteirinha, "resolver", lambda token: achado)
     r = c.get("/verificar/AAAAAAAAAAAAAAAAAAAA")
     assert r.status_code == 200 and r.headers["x-robots-tag"] == "noindex, nofollow"

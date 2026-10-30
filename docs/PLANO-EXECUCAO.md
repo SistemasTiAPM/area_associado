@@ -7,13 +7,7 @@
 | Critério de ordem | (1) sem decisão nem terceiro → (2) só decisão do usuário com recomendação pronta → (3) terceiro com versão stub/flag → (4) decisão arquitetural grande ou fonte inexistente |
 | Como usar | Cada onda tem plano próprio e aprovação antes de código (`CLAUDE.md` §4; skill `nova-fase-minha-apm`). Ao fechar uma tarefa, marcar ✅ no levantamento §12 e registrar em `CONCLUIDO.md`. Externos (EXT/P-xx) **nunca** bloqueiam a onda: a versão com stub/flag entra e a real liga quando o terceiro responder. |
 
-Numeração de migrações a partir desta data (o levantamento §6.1 reservava a partir de `sql/008`; deslocou
-em +2 porque a partição e as flags v2 entram antes): `008` partição de `evento_uso`/`evento_log` · `009`
-flags v2 · `010` solicitação · `011` `job_execucao` · `012` catálogo · `013` valor · `014` conteúdo do portal ·
-`015` consentimento/preferências/titular · `016` comunicação/notificação · `017` trilha/comunidade/clube ·
-`018` backoffice · `019` financeiro (cache) · `020` score · `021` base ativa · `022` views.
-
-## Onda 0 — operador, sem código (agora)
+HEAD## Onda 0 — operador, sem código (agora)
 
 | Tarefa | O que | Quem executa | Entregue pela TI |
 |---|---|---|---|
@@ -43,27 +37,83 @@ Sem decisão nova, sem terceiro. Aprovada e executada em 30/10 (ver `CONCLUIDO.m
 Decisões registradas nesta onda (ADRs): 0018 Solicitações v2 · 0019 Serviço de jobs · 0020 Limites de
 negócio · 0021 Flags v2 · 0022 Usuário de banco do backoffice.
 
-## Onda 2 — Fase 3 ampliada: solicitações, P05, P14, jobs, comunicação produzida
+## Onda 2 — Fase 3 ampliada: solicitações, P05, P14, jobs, comunicação produzida, carteirinha (executada em 30/10)
 
-Pré-requisitos: Onda 1 no ar; ADR-0018..0021 (feitas). Decisão restante: nenhuma (DEC-01, 02, 04, 13, 22,
-28, 29 decididas em 30/10).
+Aprovada pelo usuário em 30/10 ("pode seguir com a onda 2"). Decisões já tomadas: DEC-01, 02, 04, 13, 22,
+28, 29 (ADR-0018..0021). Externos que **não** bloqueiam (versão stub/flag/dry-run): P-06 (espelho no CRM),
+P-27 (SMTP), P-42/P-44 (mockups e textos: textos da spec como proposta), P-41/M-7 (cota e grant do hub).
 
-Ordem interna: TI-14 `sql/010` solicitação → TI-15 máquina/schemas → TI-16 API `/solicitacoes` + contador
-real → TI-08 limites/zonas → TI-10 React Router 7 + `navegarSeguro` → TI-01 serviço de jobs (`sql/011`
-`job_execucao`) → TI-17 jobs (espelho em stub, sync, `sem_retorno`) → TI-18 outbox de comunicação +
-`notificacao` produzidas (envio desligado por flag) → TI-19 transacionais A04/A05/A06 (stub SMTP) → TI-20 P14
-(FAQ, contato, cancelamento como solicitação) → TI-21 front P05 → TI-22 front P14 → TI-46 carteirinha
-(download + número) → TI-45 verificação em tempo quase real (usa TI-47) → TI-57 declarações como
-solicitação. Tamanho total: G (3 G + 7 M + 5 P).
+### Frentes e posse de arquivos
 
-Externos que não bloqueiam: P-06 (espelho: stub), P-27 (SMTP: stub), P-42/P-44 (mockups/textos: textos da
-spec como proposta), P-41 (cota: cache e limite global). Pronto quando: associado cria, acompanha, cancela e
-avalia uma solicitação de ponta a ponta com os 8 status; A04/A05/A06 aparecem na outbox; `job_execucao` tem
-rastro; e2e da tela P05/P14 com axe 2.2.
+| Frente | Persona | Tarefas | Arquivos que só ela edita |
+|---|---|---|---|
+| **A — núcleo de solicitações e ajuda** | Atlas + Maestro + Sentinela | TI-14, TI-15, TI-16, TI-08, TI-18 (produção da outbox), TI-20, TI-57 (declaração), contador real e prontidão em `/sessao` | `sql/010`, `sql/012`, `sql/013`; `app/dominio/solicitacoes/`, `app/dominio/comunicacao.py`, `app/dominio/ajuda.py`, `app/dominio/limites_negocio.py`, `app/prontidao.py`; `app/api/v1/solicitacoes.py`, `ajuda.py`, `modelos_solicitacoes.py`, `sessao.py`, `__init__.py`; `app/uso.py` (só `detalhes`); `scripts/db_check.py` (allowlist); `tests/test_solicitacoes*.py`, `tests/test_ajuda*.py` |
+| **B — carteirinha** | Sentinela + Maestro | TI-45 (verificação em tempo quase real e revogação), TI-46 (imagem/PDF, número) | `sql/014`; `app/dominio/carteirinha.py`, `app/publico.py`, `app/api/v1/carteirinha.py`, classe `CarteirinhaResposta` em `modelos.py`; `app/config.py` (só chaves `VERIFICACAO_*`/`CARTEIRINHA_*` novas); `Dockerfile` (só fonte TTF, se precisar); `tests/test_carteirinha*.py` |
+| **D — front** | Vitrine | TI-10 (React Router 7 + `navegarSeguro`), TI-21 (P05), TI-22 (P14), TI-46 (front), rota `ajuda` no menu, prontidão | `frontend/**` (inclui `package.json` só para o Router 7) |
+| **C — jobs** (depois de A e B) | Integrador + Estivador | TI-01 (serviço, `sql/011`, `docs/JOBS.md`), TI-17 (espelho em dry-run, sync, `sem_retorno`), TI-19 (transacionais A04/A05/A06/A16), job noturno de situação (TI-45), zonas `limit_req` (TI-08, vhost de exemplo) | `sql/011`; `app/jobs/**`; `app/integracoes/hub.py`/`hub_stub.py` (métodos `solicitacao.*`); `app/integracoes/email.py` (textos); `app/config.py` (só `JOBS_*`); `docker-compose.yml`; `deploy/**`; `docs/JOBS.md`; `docs/CONTRATO-HUB.md`; `tests/test_jobs*.py` |
+| Integração, deploy e docs | eu | `docs/api/openapi.json` final, REQUISITOS, PENDENCIAS, CONCLUIDO, levantamento, e2e completo, deploy, commit | — |
+
+### Migrações (aplicação pelo operador, em ordem; snapshot antes)
+
+`010_solicitacao` (ADR-0018: 8 status, `sem_retorno_desde`, vínculos, canal, prazo, avaliação, idempotência,
+`crm_*` com 4 valores; `solicitacao_evento` só INSERT com ator/origem/justificativa/`conteudo_enviado`) ·
+`011_job_execucao` (ADR-0019) · `012_comunicacao_notificacao` (`comunicacao_evento` outbox com dedupe,
+`comunicacao_envio` e `comunicacao_supressao` append-only, `notificacao` com UPDATE só de `lida_em`,
+`fila_ligacao`) · `013_ajuda_parametro` (`faq`, `texto_sistema`, `parametro` com seed `avaliacao_prazo_dias`=30,
+`prazo_retorno_padrao_dias`, `cancelamento_janela_horas`=24, `central_horario`/`central_telefone` vazios até
+P-44; só leitura para `apm_area`) · `014_carteirinha_revogacao` (`ALTER associado`: `carteirinha_revogada_em`,
+`situacao_consultada_em`, `situacao_normalizada`). **Enquanto o operador não aplicar**, o web segue no ar:
+`app/prontidao.py` verifica a existência das tabelas (cache 60 s; falha = indisponível) e `GET /sessao` informa
+`recursos {solicitacoes, ajuda}`; a SPA mostra "em construção" nessas rotas e o contador fica 0.
+
+### Contrato de API (fixo para as frentes; tudo sob `/api/v1`, sessão obrigatória, `[C]` = CSRF)
+
+Nunca `contact_id`, `sub`, CPF, `crm_*` ou e-mail em resposta. Erros no contrato único.
+
+| Rota | Entrada | Saída | Erros específicos |
+|---|---|---|---|
+| `GET /sessao` | — | + `recursos: {solicitacoes: bool, ajuda: bool}`; `solicitacoes_aguardando` = contagem real de `pendente_associado` (0 se indisponível) | — |
+| `GET /solicitacoes?situacao=andamento\|encerradas&cursor=&limite=` (≤ 20) | — | `{itens: [Resumo], proximo_cursor: str\|null}` | `503 recurso_indisponivel` sem tabelas |
+| `GET /solicitacoes/{id}` | — | `Solicitacao` | `404 nao_encontrado` (de outro associado também) |
+| `POST /solicitacoes` [C] | `{tipo_servico: outro\|declaracao_associado\|alteracao_cadastro, campos: {...}, chave_idempotencia: uuid}` | `201 Solicitacao` (`200` na repetição da chave) | `400 entrada_invalida` (schema por tipo; tipo fora da lista), `409 estado_invalido` (unicidade por tipo), `409 nao_elegivel {libera_em}` (declaração AMB < 1 mês de filiação), `429 limite_negocio` (`outro` 5/dia) |
+| `POST /solicitacoes/{id}/cancelar` [C] | `{motivo?: str ≤ 200}` | `Solicitacao` | `409 estado_invalido` (inclui `em_atendimento`) |
+| `POST /solicitacoes/{id}/responder` [C] | `{texto: 1–2000}` | `Solicitacao` | `409 estado_invalido` |
+| `POST /solicitacoes/{id}/avaliar` [C] | `{nota: 0–10, comentario?: ≤ 500}` | `Solicitacao` | `409 ja_avaliada`, `409 estado_invalido`, `409 prazo_expirado` |
+| `GET /ajuda/faq?q=&categoria=` | `q` ≤ 80 | `{categorias: [{codigo, rotulo}], itens: [{id, pergunta, resposta, categoria}], sugestoes: [codigo]}` | `503 recurso_indisponivel` |
+| `GET /ajuda/contato` | — | `{whatsapp: {exibicao, url}\|null, telefone: {exibicao, uri}\|null, horario: str\|null}` (vazios = bloco some) | — |
+| `POST /ajuda/formulario` [C] | `{assunto: beneficio\|cadastro\|financeiro\|eventos\|outro, mensagem: 1–2000, chave_idempotencia}` | `201 Solicitacao` (tipo `outro`) | como `POST /solicitacoes` |
+| `POST /ajuda/cancelamento` [C] [F:`cancelamento_online`] step-up | `{motivo: nao_uso\|preco\|mudanca\|insatisfacao_servico\|outro, quer_conversa: bool, comentario?: ≤ 500, chave_idempotencia}` | `201 Solicitacao` (`cancelamento_associacao`; espelho só após `cancelamento_janela_horas`; nunca escreve no CRM) | `403 reautenticacao_necessaria`, `404 recurso_desligado`, `409 estado_invalido` (já há pedido aberto) |
+| `GET /carteirinha` | — | + `revogada: bool`, `num_contato`; `qr`/`url_verificacao` nulos quando revogada | — |
+| `GET /carteirinha/imagem.png`, `GET /carteirinha/documento.pdf` | — | binário, `no-store`, `Content-Disposition: attachment` | `409 carteirinha_revogada`, `503` |
+| `POST /carteirinha/compartilhar` [C] | — | como hoje | `409 carteirinha_revogada` |
+
+`Resumo` = `{id, tipo: {codigo, rotulo}, beneficio: {slug, titulo}\|null, status, rotulo_status,
+aguardando_parceiro: bool, prazo_em: AAAA-MM-DD\|null, contato: {canal, texto}\|null, criada_em,
+atualizada_em, pode_cancelar, pode_responder, pode_avaliar}`. `Solicitacao` = `Resumo` + `{campos:
+{nome: valor} (só campos permitidos do tipo), linha_do_tempo: [{quando, status, rotulo, ator:
+voce\|equipe_apm\|parceiro\|sistema, mensagem\|null}], avaliacao: {nota, comentario, avaliada_em}\|null}`.
+Rótulos de status: os 7 da spec (tipo 3: "Encaminhada à equipe" para `enviada`).
+
+**Verificação pública (`/verificar/{token}`):** revogada ⇒ "carteirinha sem validade" (sem motivo); cache de
+situação > `VERIFICACAO_CACHE_TTL` (10 min) ⇒ `associado.situacao` no hub com limite global de 60/min por
+processo; hub fora/sem grant/limite ⇒ comportamento atual ("não confirmada no momento" quando o cache passa de
+24 h); `detalhes.resultado` ∈ `ativo\|inativo\|nao_confirmado`; nunca CPF, e-mail ou telefone.
+
+**Jobs (frente C):** dry-run por padrão (`JOBS_APLICAR=0`); serviço no compose com `profiles: ["jobs"]` (o
+operador liga depois das migrações); espelho e sincronização chamam `solicitacao.*` no hub só com
+`JOBS_APLICAR=1` (ferramentas chegam na Onda 5 com a P-06); `marcar_sem_retorno` e situação noturna rodam
+sempre; e-mails transacionais pelo SMTP da área (stub fora de produção).
+
+### Pronto quando
+Associado cria (formulário/declaração), acompanha, responde, cancela e avalia uma solicitação com os 8 status
+e a linha do tempo; FAQ e contato da Central na Ajuda; pedido de cancelamento com step-up atrás da flag;
+carteirinha baixável e revogável, verificação pública consultando a situação; outbox e notificação gravadas
+na mesma transação; jobs com rastro em `job_execucao`; pytest, Vitest e e2e (axe 2.2, CSP) verdes; no ar com
+as rotas novas em "em construção" até as migrações.
 
 ## Onda 3 — Fase 3b: P13 preferências, consentimentos e direitos do titular
 
-Decisões antes: DEC-06 (anonimização), DEC-26 (tratamento), DEC-27 (fonte). Ordem: TI-25 `sql/015` → TI-26
+Decisões antes: DEC-06 (anonimização), DEC-26 (tratamento), DEC-27 (fonte). Ordem: TI-25 `sql/018` → TI-26
 domínio/API → TI-27 front → TI-28 retenção (`RETENCAO.md`, scripts do operador) → TI-90 padrão de acesso a
 dado pessoal → TI-64 tokens em `rem` + controle de fonte → TI-53 cliente RD em stub + `outbox_rd` → TI-59 fila
 de ligações provisória. Externos: P-54 (textos/prazos: flag `lgpd_consentimentos` com texto v0), P-46 (RD:
@@ -73,7 +123,7 @@ pedido de exclusão com step-up; retenção documentada.
 ## Onda 4 — Fase 4: catálogo como dado, elegibilidade, home em blocos, Meu valor v1
 
 Decisões antes: DEC-14, DEC-15, DEC-16, DEC-23, DEC-24, DEC-25, DEC-34, DEC-35 (DEC-03 parte de banco já
-decidida: `apm_area_bo`). Ordem: TI-29 `sql/012` + TI-35 `sql/013` + TI-92 → TI-30 elegibilidade (pura, testes
+decidida: `apm_area_bo`). Ordem: TI-29 `sql/015` + TI-35 `sql/016` + TI-92 → TI-30 elegibilidade (pura, testes
 de tabela) → TI-31 ativação por tipo + API de benefícios → TI-32 redirecionador → TI-33 recomendação v1 →
 TI-34 `GET /inicio` → TI-43 trilha por evento real (bloco) → TI-36 Meu valor (modo sem ERP) → TI-37 busca
 → TI-38 P03 → TI-39 P04 → TI-40 P02 → TI-41 P06 → TI-42 job carência → TI-44 views/indicadores → TI-60
@@ -98,7 +148,7 @@ associado, home em blocos sem valor ilustrativo, Meu valor v1 com proteção inc
 
 Decisões: DEC-03 completa (hospedagem e identidade; recomendação: container próprio na mesma imagem,
 host próprio, Cloudflare Access + Entra ID) e DEC-05 (canal do CSV). Externos: P-65 Entra ID, P-62 Cloudflare
-Access/IPs, P-53 arquivos. Entrega: ADR própria, TI-80 (infra + `sql/018`), TI-81 canal do CSV, TI-58 API
+Access/IPs, P-53 arquivos. Entrega: ADR própria, TI-80 (infra + `sql/020`), TI-81 canal do CSV, TI-58 API
 interna, TI-90 em uso; módulos mínimos B01, B05, B06, B13. Até lá: catálogo/parâmetros por SQL do operador
 (limitação registrada), fila de ligações por CSV interno (TI-59).
 
@@ -115,4 +165,5 @@ cobrança" — **o mais problemático: a fonte não existe**.
 |---|---|---|
 | 0 | arquivos entregues (`OPERACAO.md`, `_00_padrao.conf.example`, `verificar-pos-reboot.patch.md`, `alertas.sh`); execução pelo operador | 2026-10-30 |
 | 1 | **feita** (ver `CONCLUIDO.md` 2026-10-30); restam ações do operador: grant M-7 no hub, `sql/008`, `sql/009`, WebKit no host de e2e | 2026-10-30 |
-| 2–7 | planejadas | 2026-10-30 |
+| 2 | **feita** (ver `CONCLUIDO.md`); restam ações do operador: `sql/008`–`014`, M-7, `.env.jobs` + profile `jobs`, zonas do porteiro | 2026-10-30 |
+| 3–7 | planejadas | 2026-10-30 |

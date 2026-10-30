@@ -593,3 +593,325 @@ select.campo__entrada {
     font-size: 20px;
   }
 }
+
+/* ----------------------------------------------------------- Formulários */
+textarea.campo__entrada,
+.campo__entrada--texto {
+  min-height: 96px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* -------------------------------------------------- Minhas solicitações (P05) */
+.lista-solicitacoes {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lista-solicitacoes__mais {
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.item-solicitacao {
+  display: grid;
+  gap: 10px;
+  padding: var(--pad-card);
+}
+
+/* Spec v2 §3.2: o que depende do associado vem em destaque (borda + texto, não só cor). */
+.item-solicitacao--destaque {
+  box-shadow: var(--vidro-sombra), inset 4px 0 0 var(--amber-500);
+}
+
+.item-solicitacao__topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.item-solicitacao__chamada {
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--amber-texto);
+}
+
+.item-solicitacao__titulo {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.item-solicitacao__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--navy-900);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.item-solicitacao__link:hover {
+  text-decoration: underline;
+}
+
+.item-solicitacao__tipo {
+  font-size: var(--fs-meta);
+  color: var(--ink-500);
+}
+
+.item-solicitacao__dados {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.item-solicitacao__dados dt {
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.item-solicitacao__dados dd {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.faixa-cobranca {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--raio-controle);
+  background: var(--azul-100);
+  color: var(--azul-texto);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.secao-solicitacao {
+  display: grid;
+  gap: 14px;
+}
+
+.aviso--acao {
+  display: grid;
+  gap: 8px;
+}
+
+.aviso__citacao {
+  padding-left: 12px;
+  border-left: 3px solid var(--aviso-borda);
+  font-size: 13.5px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.dados-solicitacao__linha {
+  display: contents;
+}
+
+.dados-solicitacao dd {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.dados-solicitacao__lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.avaliacao-feita {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------- Ajuda (P14) */
+.secao-ajuda {
+  display: grid;
+  gap: 14px;
+}
+
+.faq__busca {
+  display: grid;
+  gap: 6px;
+  max-width: 560px;
+}
+
+.faq__filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  font-size: 13.5px;
+}
+
+.faq__filtro .link-texto {
+  min-height: 44px;
+}
+
+.faq__categoria {
+  display: grid;
+  gap: 8px;
+}
+
+.faq__categoria-titulo {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+.faq__paragrafo + .faq__paragrafo {
+  margin-top: 8px;
+}
+
+.faq__paragrafo {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.faq__vazio {
+  display: grid;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--ink-700);
+}
+
+.faq__sugestoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.canais {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.canal {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 12px;
+  align-items: center;
+  padding: 16px;
+  border-radius: var(--raio-subcard);
+  background: var(--vidro-fundo-forte);
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+
+.canal__icone,
+.pedido__icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--mint-100);
+  color: var(--green-700);
+}
+
+.canal__textos {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.canal__titulo {
+  font-size: 14px;
+}
+
+.canal__texto {
+  font-size: 13px;
+  color: var(--ink-500);
+  overflow-wrap: anywhere;
+}
+
+.canal__acao,
+.pedido__acao {
+  grid-column: 1 / -1;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.grade-pedidos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--gap-cards);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pedido {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: var(--pad-card);
+}
+
+.pedido__titulo {
+  font-size: 15px;
+}
+
+.pedido__texto {
+  font-size: 13px;
+  color: var(--ink-500);
+}
+
+.confirmacao {
+  display: grid;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.confirmacao__titulo {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--green-700);
+}
+
+.aviso--libera {
+  display: grid;
+  gap: 8px;
+}
+
+/* ---------------------------------------------- Carteirinha: nº e downloads */
+.carteirinha__numero {
+  font-family: var(--fonte-mono);
+  letter-spacing: 0.02em;
+}
+
+.carteirinha--revogada {
+  filter: grayscale(0.85);
+}
+
+.carteirinha-info__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+.carteirinha-info__downloads .link-texto {
+  min-height: 44px;
+}

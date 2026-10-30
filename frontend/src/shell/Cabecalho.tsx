@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ConteudoAvatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { useSessao } from '../state/SessaoContext';

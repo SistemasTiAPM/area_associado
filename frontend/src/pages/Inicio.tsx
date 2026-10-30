@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { EstadoVazio } from '../components/EstadoVazio';
 import { Icon, type NomeIcone } from '../components/Icon';
+import { LinkInterno } from '../components/LinkInterno';
 import { useSessao } from '../state/SessaoContext';
 
 /** Atalhos só para telas que já existem; nada de contagem ou valor sem fonte (regra 19, LA-14). */
@@ -54,7 +55,7 @@ export function Inicio() {
 
       <div className="grade-atalhos">
         {ATALHOS.map((a) => (
-          <Link key={a.para} to={a.para} className="atalho vidro">
+          <LinkInterno key={a.para} para={a.para} className="atalho vidro">
             <span className="atalho__topo">
               <span className="atalho__icone" aria-hidden="true">
                 <Icon nome={a.icone} tamanho={20} />
@@ -65,7 +66,7 @@ export function Inicio() {
             </span>
             <span className="atalho__titulo">{a.titulo}</span>
             <span className="atalho__texto">{a.texto}</span>
-          </Link>
+          </LinkInterno>
         ))}
       </div>
 
