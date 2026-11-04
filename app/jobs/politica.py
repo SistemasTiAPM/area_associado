@@ -27,8 +27,12 @@ DISJUNTOR_SEGUIDAS = 3
 
 PERMANENTE, TRANSITORIO, SISTEMICO = "permanente", "transitorio", "sistemico"
 
-_HUB_PERMANENTES = frozenset({"entrada_invalida", "nao_encontrado"})
-_HUB_SISTEMICOS = frozenset({"limite_taxa", "edicao_desligada"})
+# ADR-0023: `conflito` (registro_id de outro contato) não se resolve repetindo;
+# catálogo apontando para assunto/time inexistente e conta sem canal no hub são
+# configuração — param a rodada sem gastar tentativa de nenhum pedido.
+# `escrita_indeterminada` (504) é transitório: repetir com o mesmo id é seguro.
+_HUB_PERMANENTES = frozenset({"entrada_invalida", "nao_encontrado", "conflito"})
+_HUB_SISTEMICOS = frozenset({"limite_taxa", "edicao_desligada", "catalogo_crm_invalido", "canal_nao_configurado"})
 
 
 @dataclass(frozen=True)

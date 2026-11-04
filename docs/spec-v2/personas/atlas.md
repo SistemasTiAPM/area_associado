@@ -324,12 +324,12 @@ Convenções (mantidas de REQ L980-982): `contact_id CHAR(36)` com CHECK de GUID
 | `sql/014` | `comunicacao_envio` | log de envios e retorno | ver §12 | não | sim (particionar) | `(contact_id, enviado_em)` | F1 / sem fase |
 | `sql/014` | `comunicacao_supressao` | por que não enviou | ver §12 | não | sim | `(contact_id, em)` | F2 / sem fase |
 | `sql/014` | `notificacao` | P15 notificações no app | `contact_id`, `tipo`, `titulo`, `referencia`, `criada_em`, `lida_em` NULL | **sim** — `lida_em` | não | `(contact_id, lida_em, criada_em)` | F2 / sem fase |
-| `sql/015` | `comunidade`, `comunidade_adesao`, `onboarding_passo` (por categoria), `onboarding_progresso` | REQ L1009-1012 | — | como REQ | `onboarding_progresso` sim | — | F2–F3 / Fase 6 |
-| `sql/016` | `usuario_interno`, `backoffice_auditoria`, `acesso_dado_pessoal` | §9 | ver §9 | `usuario_interno` sim (ativar/desativar, perfil); trilhas não | trilhas sim | anti-segredo nas trilhas | F1 / ⛔ DEC-A03 |
-| `sql/017` | `associado_financeiro` | cache mínimo da cobrança | ver §8.4 | sim — cache | não | — | F1 cond. / Fase 7 (⛔ P-04, P-08) |
-| `sql/018` | `score_engajamento`, `score_pesos` | §11.4 | ver §11.4 | não | sim (particionar por mês) | PK `(contact_id, data)` | F2 / sem fase |
-| `sql/019` | `base_ativa_mensal` | denominadores dos indicadores | `mes`, `categoria`, `regional`, `total`, `novos`, `cancelados`, `gravado_em` | não | sim | PK `(mes, categoria, regional)` | F1 B12 / sem fase |
-| `sql/020` | views `vw_ind_01..14`, `vw_meu_valor_ano`, `vw_qualidade_parceiro_mes`, `vw_consentimento_atual` | ADR-0012 §6 | — | — | — | k ≥ 20 nas de recorte; usuário `apm_area_painel` só `SELECT` nas views | F1 / sem fase |
+| `sql/016` | `comunidade`, `comunidade_adesao`, `onboarding_passo` (por categoria), `onboarding_progresso` | REQ L1009-1012 | — | como REQ | `onboarding_progresso` sim | — | F2–F3 / Fase 6 |
+| `sql/017` | `usuario_interno`, `backoffice_auditoria`, `acesso_dado_pessoal` | §9 | ver §9 | `usuario_interno` sim (ativar/desativar, perfil); trilhas não | trilhas sim | anti-segredo nas trilhas | F1 / ⛔ DEC-A03 |
+| `sql/018` | `associado_financeiro` | cache mínimo da cobrança | ver §8.4 | sim — cache | não | — | F1 cond. / Fase 7 (⛔ P-04, P-08) |
+| `sql/019` | `score_engajamento`, `score_pesos` | §11.4 | ver §11.4 | não | sim (particionar por mês) | PK `(contact_id, data)` | F2 / sem fase |
+| `sql/020` | `base_ativa_mensal` | denominadores dos indicadores | `mes`, `categoria`, `regional`, `total`, `novos`, `cancelados`, `gravado_em` | não | sim | PK `(mes, categoria, regional)` | F1 B12 / sem fase |
+| `sql/021` | views `vw_ind_01..14`, `vw_meu_valor_ano`, `vw_qualidade_parceiro_mes`, `vw_consentimento_atual` | ADR-0012 §6 | — | — | — | k ≥ 20 nas de recorte; usuário `apm_area_painel` só `SELECT` nas views | F1 / sem fase |
 | `sql/0NN` (cedo) | `evento_uso`, `evento_log` (ALTER) | partição mensal p/ expurgo sem DELETE | PK `(id, ocorrido_em)`, `PARTITION BY RANGE (TO_DAYS(ocorrido_em))` | — | — | manter índices atuais | F0 / agora (TI-A02) |
 
 Tabelas que **não** devem existir na área: CPF em qualquer forma (ADR-0014), senha de usuário interno (DEC-A03), payload de comunicação (texto da mensagem vive no RD), dado de saúde (spec L1051), valor pago/mensalidades do associado além do cache de situação (vem do hub na hora).
@@ -396,7 +396,7 @@ Mecânica que **não muda** (🔒): catálogo fechado, `contact_id` da sessão, 
 | TI-A09 | `sql/013` consentimento_texto, consentimento, preferencia_canal, titular_pedido + `app/dominio/consentimento.py` + ação `consentimento_alterar` | SQL / dominio / API | area_associado | M | textos e finalidades do jurídico (EXT-A06) | estrutura sim; textos não |
 | TI-A10 | `sql/014` comunicacao_evento/envio/supressao/notificacao + job `enviar_comunicacao` (só grava e marca `suprimido` enquanto não houver credencial do RD) | SQL / jobs | area_associado | M | EXT-A04 para enviar de fato | estrutura sim |
 | TI-A11 | Serviço `area-associado-jobs` no compose (RNF-19) + `app/jobs/` com agendador, `job_execucao`, `GET_LOCK` por job; primeiros jobs: outbox CRM, sync CRM, `marcar_sem_retorno`, `carencias_vencidas`, `atualizar_perfis` | jobs / infra | area_associado | M | TI-A03 | sim (Estivador + Atlas) |
-| TI-A12 | Views `sql/020` (`vw_ind_*`, `vw_meu_valor_ano`, `vw_qualidade_parceiro_mes`, `vw_consentimento_atual`) com k ≥ 20 nas de recorte; usuário `apm_area_painel` só `SELECT` nas views; `base_ativa_mensal` por job | SQL | area_associado | M | TI-A07, DEC-A04 (ferramenta de painel) | definições das views sim |
+| TI-A12 | Views `sql/021` (`vw_ind_*`, `vw_meu_valor_ano`, `vw_qualidade_parceiro_mes`, `vw_consentimento_atual`) com k ≥ 20 nas de recorte; usuário `apm_area_painel` só `SELECT` nas views; `base_ativa_mensal` por job | SQL | area_associado | M | TI-A07, DEC-A04 (ferramenta de painel) | definições das views sim |
 | TI-A13 | `docs/RETENCAO.md`: tabela × prazo × mecanismo (partição / anonimização / nunca) + procedimento administrativo; fecha P-15 | docs | area_associado | P | EXT-A06 (prazos do jurídico) | rascunho sim |
 | TI-A14 | Procedimento de **anonimização** do titular (ADR-0004: sem DELETE): `associado_perfil` zerado, `perfil_declarado` zerado, `contact_id` mantido nas trilhas (pseudônimo), `titular_pedido` fechado — script administrativo fora do `apm_area` | docs / scripts | area_associado | P | TI-A09 | sim |
 | TI-A15 | Teste de restauração do snapshot do RDS para um `area_associado_restore` + conferência de `schema_migrations` (spec §14 L1202-1203) | infra / docs | area_associado | P | acesso administrativo do operador | sim (com Estivador) |
@@ -480,6 +480,6 @@ Mecânica que **não muda** (🔒): catálogo fechado, `contact_id` da sessão, 
 4. **Antes da Fase 4:** DEC-A03 (backoffice e `apm_area_bo`) e DEC-A04 (painéis) → ADR-0019, 0020, 0024, 0026; EXT-A01/A07 (categorias e catálogo validado). Então TI-A07 (`sql/010`, `sql/011`), TI-A08 (elegibilidade e valor puros), TI-A12 (views e `base_ativa_mensal`).
 5. **Com o hub (P-04 ampliado, EXT-A02/A03):** `associado_categoria_hist`, `associado_financeiro`, importação (ADR-0022), ferramentas por `contact_id`.
 6. **Com o RD (EXT-A04):** TI-A10 passa de "só grava" para "envia"; webhook de retorno (Sentinela + Maestro).
-7. **F2:** `sql/012` conteúdo (Fase 5), `sql/015` comunidade/onboarding por categoria (Fase 6), `sql/018` score, notificações.
+7. **F2:** `sql/012` conteúdo (Fase 5), `sql/016` comunidade/onboarding por categoria (Fase 6), `sql/019` score, notificações.
 
 Nada acima altera as decisões fechadas: continua MySQL próprio com espelho no CRM, UPDATE por grant de tabela, DELETE nunca, trilhas só INSERT, `evento_uso` com catálogo fechado em transação própria, `contact_id` nunca CPF, CRM/ERP só pelo hub e WordPress só pelo job com cache.

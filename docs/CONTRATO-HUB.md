@@ -143,78 +143,96 @@ exige base64 válido, até 256 KiB, JPEG (SOI/EOI) de **512×512** lido do marca
 remove a foto. Saída `{"contact_id", "bytes"}`. Se o CRM guarda a imagem cheia ou só 144×144 é
 P-30 (homologação).
 
-## Solicitações (Onda 5, P-06)
+## Solicitações (P-06 resolvida pelo hub em 2026-11-04; ADR-0023)
 
-**Contrato proposto pela área em 2026-10-30 (frente C da Onda 2); as três ferramentas ainda NÃO existem
-no hub.** A área já tem cliente (`app/integracoes/hub.py`), simulado (`hub_stub.py`) e o serviço de jobs
-que as chama (`app/jobs/solicitacoes.py`) — **só com `JOBS_APLICAR=1`**. Até a P-06, uma chamada real
-recebe o 404 genérico do hub ("ferramenta inexistente/sem grant"), que vira `HubError("fonte_indisponivel")`:
-o job registra, recua (1, 2, 4 … 60 min) e não quebra. Implementação no hub = TI-50, com a P-06
-(entidade, mapeamento de status, campo de mensagem pública).
+**Contrato do hub**, implantado e ensaiado em produção em 2026-11-04: `mcp_hub/docs/PLANO-SOLICITACOES.md`
+(decisões D-1..D-13) e `mcp_hub/docs/CATALOGO-CRM-SOLICITACOES.md` (GUIDs e códigos do tenant). A proposta
+anterior da área (`task` + `espelhar`/`status_atualizar`/`alteracoes_consultar`) foi **substituída**: o hub
+cria `incident` (ocorrência) ou `opportunity` (oportunidade) e lista por contato. Cliente:
+`app/integracoes/hub.py` (`solicitacao_criar`, `solicitacao_listar`); simulado em `hub_stub.py`; jobs em
+`app/jobs/solicitacoes.py`; catálogo em `app/dominio/solicitacoes/catalogo_crm.py`; texto em
+`app/dominio/solicitacoes/crm.py`.
 
 Regras comuns:
 
-- Chave = `contact_id` (GUID) + `solicitacao_id` (UUID v4 gerado pela área, correlação e idempotência).
-  **Sem CPF** em entrada ou saída: o hub recusa (400) a chave `cpf` e texto com padrão de CPF em `campos`.
-- Entidade no CRM: **`task` regarding contact** (`regardingobjectid_contact@odata.bind`), com o
-  `solicitacao_id` gravado num atributo próprio (nome a definir na P-06, ex.: `alf_id_externo`, com
-  índice/alternate key). Credencial própria do hub com papel **só Create/Write em `task`** (nunca em contact).
-- Conta: o espelho e o sync rodam no serviço de jobs, conta **`area-associado-jobs`** (`.env.jobs`);
-  `espelhar`/`status_atualizar` exigem `ferramentas:escrever` nela (hoje só `ler`, M-8) e
-  `HUB_ESCRITA_HABILITADA=true` no `.env.jobs`. Grants exatos nas três (nunca `solicitacao.*`).
-- Escrita: mesmo pipeline das escritas da Fase 2b (intenção auditada antes, resultado depois, 1 retry só em
-  401/429/503, timeout de 25 s no hub; a área espera `HUB_TIMEOUT_ESCRITA`). 504 `escrita_indeterminada`
-  é seguro de repetir: as duas escritas são idempotentes pela chave.
+- Conta **`area-associado-jobs`** (`.env.jobs`): `ferramentas:ler` + `ferramentas:escrever`, grants exatos em
+  `solicitacao.criar` e `solicitacao.listar` (nunca `solicitacao.*`), mais `associado.situacao` e
+  `associado.perfil_consultar` (M-8). `HUB_ESCRITA_HABILITADA=true` só no `.env.jobs`; o web segue só leitura.
+- **Canal e origem** o hub grava pela CONTA chamadora (`CRM_SOLICITACAO_CONTAS` no `.env` do hub):
+  `area-associado-jobs` → canal `100000001` "Minha APM", origem `3` Web. Conta sem mapa → 403
+  `canal_nao_configurado` antes de qualquer chamada ao CRM.
+- **Sem CPF**, sem e-mail, sem telefone no texto: só o que o associado preencheu no formulário do tipo.
+- **Cota PII conta LINHAS**: `listar` com 10 linhas gasta 10; `criar` não gasta.
 
-### `solicitacao.espelhar` (escrita)
+### `solicitacao.criar` (escrita, só REST)
 
-Entrada:
-
-| Campo | Tipo | Observação |
+| Campo | Regra | Origem na área |
 |---|---|---|
 | `contact_id` | GUID | dono do pedido |
-| `solicitacao_id` | UUID v4 | chave de idempotência: se já existe `task` com ela, devolve a existente (`criada: false`) |
-| `tipo` | texto ou `null` | `tipo_servico` da área (`outro`, `declaracao_associado`, `alteracao_cadastro`, `cancelamento_associacao`, …); `null` quando vier de benefício |
-| `titulo` | texto ≤ 200 | `Minha APM: <rótulo do tipo>` → `subject` |
-| `status` | enum da área | status atual (`criada`, ou outro se mudou antes do espelho) |
-| `criada_em` | ISO UTC | `2026-10-30T12:00:00Z` |
-| `prazo_retorno_dias` | int 1–365 | → `scheduledend` = criação + prazo |
-| `campos` | objeto | o que o associado preencheu (allowlist do tipo na área; ≤ 16 kB; sem CPF) → `description` formatada pelo hub (rótulo: valor), nunca HTML |
-| `beneficio_id` / `parceiro_id` | texto | só em pedido nascido do catálogo (Fase 4) |
+| `registro_id` | UUID v4 minúsculo = chave primária no CRM (`incidentid`/`opportunityid`); **idempotente** (o hub faz GET antes do POST) | `solicitacao.id` (por isso `crm_id = id`) |
+| `entidade` | `ocorrencia` \| `oportunidade` | catálogo |
+| `tipo` | `^[a-z0-9_]{2,50}$` → `alf_tipo_solicitacao` | `tipo_servico` |
+| `titulo` | ≤ 200 unidades UTF-16 | `Minha APM: <rótulo do tipo>` (no formulário livre, o assunto dado pelo associado) |
+| `descricao` | 10–2000 unidades UTF-16, texto puro | cabeçalho fixo + "rótulo: valor" por campo do formulário (texto longo em bloco) |
+| `assunto_id` | GUID `subject`; obrigatório em ocorrência, `null` em oportunidade | catálogo |
+| `time_id` | GUID `team` dono | catálogo (Central de Relacionamento) |
 
-Saída: **uma** linha `{"solicitacao_id", "crm_id": "<activityid>", "criada": bool}`. Sem `crm_id` GUID
-válido a área trata como resultado incerto e repete (idempotente).
+Saída: **uma** linha `{contact_id, registro_id, entidade, criada, protocolo, statecode, statuscode, criado_em}`.
+`criada=false` = já existia (repetição). `protocolo` = `ticketnumber` (`CAS-######-XXXXXX`), só em ocorrência.
+Resposta fora disso (outro `registro_id`, ocorrência sem protocolo, códigos não inteiros) = **resultado
+incerto**: a área trata como `escrita_indeterminada` e repete com o mesmo `registro_id`.
 
-### `solicitacao.status_atualizar` (escrita)
+Limite de texto garantido **na origem**: o formulário livre (`outro`) aceita assunto ≤ 120 e mensagem ≤ 1700
+unidades UTF-16 (API e `maxLength` do navegador medem igual); o pior caso de cada tipo cabe nas 2000 sem
+corte (teste). Corte só como defesa, marcado `[texto cortado pela Minha APM]`, nunca no meio de um emoji.
 
-Entrada `{"contact_id", "solicitacao_id", "crm_id", "status", "mensagem_associado"?, "cancel_motivo"?}`.
-`status` é o status atual da área; `mensagem_associado` (≤ 2000) é a resposta do associado quando a última
-transição foi dele (`pendente_associado → em_atendimento`), gravada como nota/anotação na `task`;
-`cancel_motivo` (≤ 200) quando o associado cancelou. Mapeamento área → `task`: `cancelada` → `statecode=2`;
-`em_atendimento` → "Em andamento"; demais só anotação. Saída: uma linha `{"solicitacao_id", "crm_id"}`.
-Erros: 404 `nao_encontrado` se a `task` não existe ou não é daquele `contact_id`/`solicitacao_id` (a área
-marca `falhou` direto — permanente).
+### `solicitacao.listar` (leitura, só REST)
 
-### `solicitacao.alteracoes_consultar` (leitura)
+Entrada `{"contact_id", "limite": 1..50}` (padrão do hub 20; a área usa `JOBS_SYNC_LIMITE` = 10 e amplia
+para 50 só quando o pedido não está na primeira página). Linhas, mais recentes primeiro:
+`registro_id, entidade, protocolo, assunto_id, tipo, canal, titulo, descricao, statecode, statuscode,
+criado_em, atualizado_em` (+ `contact_id`). Registros abertos pela Central vêm com `canal`, `titulo` e
+`descricao` `null` — e **também gastam linha da cota**. A área descarta `titulo`/`descricao` (não guarda texto
+do CRM) e casa só por `registro_id`.
 
-Entrada `{"cursor": "<opaco>" | null, "limite": 1..200}`. Devolve as `task`s **criadas pela área** (com
-`solicitacao_id`) alteradas depois do cursor, em ordem `modifiedon, activityid`; `null` = desde o início.
-O hub trata `odata.nextLink` por dentro. Cada linha:
+### Mapeamento `statecode/statuscode` → status da área
 
-| Campo | Observação |
+A área só transita quando o par **muda** em relação ao último visto (`crm_estado`/`crm_status`): depois de
+o associado agir, o CRM continua no estado anterior. Códigos padrão do Dataverse (customização do tenant a
+confirmar — P-76):
+
+| Ocorrência | Área |
 |---|---|
-| `solicitacao_id`, `crm_id`, `contact_id` | a área confere os três contra o pedido local; divergência → `evento_log`, nada aplicado |
-| `situacao` | enum fechado: `nao_iniciada` \| `em_andamento` \| `aguardando_associado` \| `concluida` \| `nao_seguiu` \| `cancelada` |
-| `mensagem_publica` | texto ao associado (obrigatório em `aguardando_associado`); **nunca** a descrição interna da `task` (campo definido na P-06) |
-| `modificado_em` | ISO com fuso |
-| `cursor` | posição opaca **depois** desta linha (`[A-Za-z0-9_.:+=/-]{1,200}`); a área guarda a da última linha aplicada em `job_execucao.posicao` |
+| 0/1 Em andamento | nada — é o status de **criação** (ninguém da Central abriu) |
+| 0/1 vindo de outro estado | `em_atendimento` (a Central retomou, ex.: saiu de "Aguardando detalhes") |
+| 0/2 Em espera, 0/4 Pesquisando | `em_atendimento` |
+| 0/3 Aguardando detalhes | `pendente_associado`, com a mensagem padrão + protocolo (o CRM não manda texto) |
+| 1/* Resolvida | `concluida_positiva` |
+| 2/6 Cancelada | `concluida_negativa` |
+| 2/2000 Mesclada; 0/x desconhecido | nada + divergência no `evento_log` (uma vez por mudança) |
 
-Mapeamento na área (REQUISITOS §7.5): `nao_iniciada` → nada (a área não regride); `em_andamento` →
-`em_atendimento`; `aguardando_associado` → `pendente_associado` (via `em_atendimento` se preciso);
-`concluida` → `concluida_positiva`; `nao_seguiu` e `cancelada` → `concluida_negativa` (a P-06 ainda precisa
-distinguir "não seguiu" de "cancelada pela APM"). Transição fora da tabela da máquina, terminal local ou
-espelho local pendente → não aplica (o local prevalece; divergência em `evento_log`; cancelamento local é
-reenviado). Linha fora do contrato → a rodada para sem avançar o cursor.
+Oportunidade: 0/1 nada, 0/2 `em_atendimento`, 1/* `concluida_positiva`, 2/* `concluida_negativa`. Caminho pela
+máquina com `(apm, crm)`, passando por `em_atendimento` quando preciso (inclusive de `pendente_associado`, P-66).
+
+### O que NÃO existe no hub (e o que a área faz)
+
+| Falta | Consequência na área |
+|---|---|
+| Ferramenta de status (`status_atualizar`): o app user do hub não tem Write em incident/opportunity | Pedido já no CRM: **cancelar e responder pela área são recusados** (409 `na_central`) e a tela orienta a falar com a Central pelo protocolo. Mudança local depois do envio (ex.: backoffice) fica `crm_sync='retido'` + aviso `solicitacao_transicao_retida` — reprocessável quando a ferramenta existir (P-74) |
+| Consulta por cursor (`alteracoes_desde`) | Sincronização por contato com cadência (`JOBS_SYNC_CADENCIA_H` = 6 h) e teto diário de linhas (`JOBS_SYNC_LINHAS_DIA` = 5.000); com cursor filtrado pelo canal Minha APM o custo cairia para dezenas de linhas/dia (P-75) |
+| Campo de mensagem pública | `pendente_associado` vindo do CRM usa texto fixo (`rotulos.MENSAGEM_PENDENTE_CRM`) + protocolo |
+
+### Erros das duas ferramentas
+
+| HTTP / `erro` | Classe no job | Efeito |
+|---|---|---|
+| 429 `fonte_limitada` / `limite_taxa` + `Retry-After` (1..60 s) | sistêmico | para a rodada; o processo inteiro não chama o hub até o prazo; nenhuma tentativa gasta |
+| 504 `escrita_indeterminada` | transitório | repete com o mesmo `registro_id` (seguro), recuo 1, 2, 4 … 60 min |
+| 404 `nao_encontrado` do **contato** | permanente | `falhou` + `evento_log` |
+| 404 `nao_encontrado` de **assunto/time** | sistêmico (`catalogo_crm_invalido`) | catálogo errado: para a rodada, não marca `falhou` (a área lê `detalhes[].campo`; até o hub mandar, a mensagem fixa — P-76) |
+| 409 `conflito` | permanente | `falhou` + `evento_log` severidade erro (o `registro_id` é de outro contato) |
+| 403 `canal_nao_configurado` | sistêmico | conta sem mapa no hub: para a rodada |
+| 400 `entrada_invalida` | permanente | `falhou` |
 
 ## Erros
 

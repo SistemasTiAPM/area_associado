@@ -49,9 +49,22 @@ class EntradaInvalida(Exception):
         self.mensagem = mensagem
 
 
+# Texto livre que vai ao CRM (ADR-0023): medido em unidades UTF-16, como o Dataverse
+# (e o `maxLength` do navegador) contam — emoji vale 2. Com o cabeçalho e os rótulos
+# de `crm.descricao`, assunto + mensagem do tipo `outro` cabem nas 2000 da descrição.
+ASSUNTO_OUTRO_MAX = 120
+MENSAGEM_OUTRO_MAX = 1700
+
+
+def unidades_utf16(texto: str) -> int:
+    return len(texto.encode("utf-16-le")) // 2
+
+
 # ---------------------------------------------------------------- texto
-def texto_livre(valor: Any, *, minimo: int = 1, maximo: int, multilinha: bool = False) -> str:
-    """Normaliza e valida um texto do associado. `ValueError` com motivo fixo."""
+def texto_livre(valor: Any, *, minimo: int = 1, maximo: int, multilinha: bool = False,
+                utf16: bool = False) -> str:
+    """Normaliza e valida um texto do associado. `ValueError` com motivo fixo.
+    `utf16=True`: o máximo conta unidades UTF-16 (texto que vai ao CRM)."""
     if not isinstance(valor, str):
         raise ValueError("deve ser texto")
     v = unicodedata.normalize("NFC", valor).replace("\r\n", "\n").replace("\r", "\n")
@@ -64,7 +77,7 @@ def texto_livre(valor: Any, *, minimo: int = 1, maximo: int, multilinha: bool = 
         v = " ".join(v.split())
     if len(v) < minimo:
         raise ValueError("obrigatório" if minimo == 1 else f"mínimo de {minimo} caracteres")
-    if len(v) > maximo:
+    if (unidades_utf16(v) if utf16 else len(v)) > maximo:
         raise ValueError(f"máximo de {maximo} caracteres")
     if _RE_HTML.search(v):
         raise ValueError("não use marcação HTML")
@@ -73,8 +86,8 @@ def texto_livre(valor: Any, *, minimo: int = 1, maximo: int, multilinha: bool = 
     return v
 
 
-def _texto(maximo: int, minimo: int = 1, multilinha: bool = False) -> Callable[[Any], str]:
-    return lambda v: texto_livre(v, minimo=minimo, maximo=maximo, multilinha=multilinha)
+def _texto(maximo: int, minimo: int = 1, multilinha: bool = False, utf16: bool = False) -> Callable[[Any], str]:
+    return lambda v: texto_livre(v, minimo=minimo, maximo=maximo, multilinha=multilinha, utf16=utf16)
 
 
 def _enum(opcoes: Mapping[str, str]) -> Callable[[Any], str]:
@@ -153,8 +166,8 @@ class Campo:
 
 SCHEMAS: dict[str, tuple[Campo, ...]] = {
     "outro": (
-        Campo("assunto", True, _texto(120)),
-        Campo("mensagem", True, _texto(2000, multilinha=True)),
+        Campo("assunto", True, _texto(ASSUNTO_OUTRO_MAX, utf16=True)),
+        Campo("mensagem", True, _texto(MENSAGEM_OUTRO_MAX, multilinha=True, utf16=True)),
         Campo("categoria", False, _enum(rotulos.ASSUNTO_FORMULARIO)),
     ),
     "declaracao_associado": (

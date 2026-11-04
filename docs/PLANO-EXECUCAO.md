@@ -113,7 +113,7 @@ as rotas novas em "em construção" até as migrações.
 
 ## Onda 3 — Fase 3b: P13 preferências, consentimentos e direitos do titular
 
-Decisões antes: DEC-06 (anonimização), DEC-26 (tratamento), DEC-27 (fonte). Ordem: TI-25 `sql/018` → TI-26
+Decisões antes: DEC-06 (anonimização), DEC-26 (tratamento), DEC-27 (fonte). Ordem: TI-25 `sql/019` → TI-26
 domínio/API → TI-27 front → TI-28 retenção (`RETENCAO.md`, scripts do operador) → TI-90 padrão de acesso a
 dado pessoal → TI-64 tokens em `rem` + controle de fonte → TI-53 cliente RD em stub + `outbox_rd` → TI-59 fila
 de ligações provisória. Externos: P-54 (textos/prazos: flag `lgpd_consentimentos` com texto v0), P-46 (RD:
@@ -123,7 +123,7 @@ pedido de exclusão com step-up; retenção documentada.
 ## Onda 4 — Fase 4: catálogo como dado, elegibilidade, home em blocos, Meu valor v1
 
 Decisões antes: DEC-14, DEC-15, DEC-16, DEC-23, DEC-24, DEC-25, DEC-34, DEC-35 (DEC-03 parte de banco já
-decidida: `apm_area_bo`). Ordem: TI-29 `sql/015` + TI-35 `sql/016` + TI-92 → TI-30 elegibilidade (pura, testes
+decidida: `apm_area_bo`). Ordem: TI-29 `sql/016` + TI-35 `sql/017` + TI-92 → TI-30 elegibilidade (pura, testes
 de tabela) → TI-31 ativação por tipo + API de benefícios → TI-32 redirecionador → TI-33 recomendação v1 →
 TI-34 `GET /inicio` → TI-43 trilha por evento real (bloco) → TI-36 Meu valor (modo sem ERP) → TI-37 busca
 → TI-38 P03 → TI-39 P04 → TI-40 P02 → TI-41 P06 → TI-42 job carência → TI-44 views/indicadores → TI-60
@@ -148,7 +148,7 @@ associado, home em blocos sem valor ilustrativo, Meu valor v1 com proteção inc
 
 Decisões: DEC-03 completa (hospedagem e identidade; recomendação: container próprio na mesma imagem,
 host próprio, Cloudflare Access + Entra ID) e DEC-05 (canal do CSV). Externos: P-65 Entra ID, P-62 Cloudflare
-Access/IPs, P-53 arquivos. Entrega: ADR própria, TI-80 (infra + `sql/020`), TI-81 canal do CSV, TI-58 API
+Access/IPs, P-53 arquivos. Entrega: ADR própria, TI-80 (infra + `sql/021`), TI-81 canal do CSV, TI-58 API
 interna, TI-90 em uso; módulos mínimos B01, B05, B06, B13. Até lá: catálogo/parâmetros por SQL do operador
 (limitação registrada), fila de ligações por CSV interno (TI-59).
 

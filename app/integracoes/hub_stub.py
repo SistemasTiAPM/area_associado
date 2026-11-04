@@ -10,11 +10,14 @@ workers, a memória não é compartilhada — por isso a área sempre relê do c
 fora de "ativo"; `registros_inativos` simula contato desativado (`statecode=1`).
 `endereco_disponivel = False` simula o hub sem a flag/Metadata do endereço:
 perfil sem endereço e gravação de endereço com 409.
-Solicitações (contrato "Solicitações", Onda 5/P-06): `espelhos` guarda
-`solicitacao_id → crm_id` (idempotente, como o hub fará pela chave da área);
-`status_enviados` registra cada `status_atualizar`; `alteracoes` é a fila de
-linhas que `solicitacao_alteracoes_consultar` devolve (cursor = posição);
-`falhar_solicitacoes[id] = HubError(...)` simula erro por pedido.
+Solicitações (contrato "Solicitações", ADR-0023): `registros` guarda o que o
+"CRM" tem, por `registro_id` (criação idempotente: repetir devolve `criada=False`
+com o mesmo protocolo; o mesmo id com outro contato é 409 `conflito`, como no
+hub); `criar_chamadas` registra cada pedido; `definir_estado(id, statecode,
+statuscode)` simula a Central mexendo no CRM; `registros_central(contact_id, n)`
+cria linhas abertas pela Central (sem canal); `falhar_solicitacoes[id] =
+HubError(...)` simula erro por pedido. Toda ocorrência nasce 0/1 ("Em andamento"),
+como no tenant.
 Escrita obedece a `HUB_ESCRITA_HABILITADA` como no cliente real.
 Proibido em produção (validador de `Settings`).
 """
@@ -26,9 +29,21 @@ import threading
 import uuid
 from typing import Any
 
-from .hub import SITUACOES_NORMALIZADAS, Endereco, HubError, PerfilCrm, SituacaoCrm, exigir_escrita_habilitada
+from .hub import (
+    LISTAR_LIMITE_MAX,
+    SITUACOES_NORMALIZADAS,
+    CriacaoCrm,
+    Endereco,
+    HubError,
+    PedidoCrm,
+    PerfilCrm,
+    RegistroCrm,
+    SituacaoCrm,
+    exigir_escrita_habilitada,
+)
 
-_NS_TASK = uuid.UUID("6f1c2a9e-3b7d-4c55-9a1e-0d2f6b8c4e71")
+_NS_CENTRAL = uuid.UUID("6f1c2a9e-3b7d-4c55-9a1e-0d2f6b8c4e71")
+_CANAL_MINHA_APM = 100000001
 
 
 class ClienteHubStub:
@@ -40,11 +55,11 @@ class ClienteHubStub:
         self._fotos: dict[str, bytes] = {}
         self.situacoes: dict[str, str] = {}
         self.registros_inativos: set[str] = set()
-        self.espelhos: dict[str, str] = {}
-        self.espelhar_chamadas: list[dict[str, Any]] = []
-        self.status_enviados: list[dict[str, Any]] = []
-        self.alteracoes: list[dict[str, Any]] = []
+        self.registros: dict[str, dict[str, Any]] = {}
+        self.criar_chamadas: list[dict[str, Any]] = []
+        self.listar_chamadas: list[tuple[str, int]] = []
         self.falhar_solicitacoes: dict[str, HubError] = {}
+        self._sequencia = 0
 
     def _verificar(self) -> None:
         if self.falhar:
@@ -127,36 +142,66 @@ class ClienteHubStub:
             else:
                 self._fotos.pop(contact_id, None)
 
-    # ------------------------------------------------- solicitações (P-06)
-    def _falha_da_solicitacao(self, dados: dict[str, Any]) -> None:
+    # ------------------------------------------------ solicitações (ADR-0023)
+    def _relogio(self) -> str:
+        self._sequencia += 1
+        return f"2026-11-04T{(self._sequencia // 3600) % 24:02d}:{(self._sequencia // 60) % 60:02d}:" \
+               f"{self._sequencia % 60:02d}Z"
+
+    def solicitacao_criar(self, pedido: PedidoCrm) -> CriacaoCrm:
+        exigir_escrita_habilitada()
+        self._verificar()
+        argumentos = pedido.argumentos()  # mesma validação de contrato do cliente real
         with self._lock:
-            erro = self.falhar_solicitacoes.get(str(dados.get("solicitacao_id")))
+            erro = self.falhar_solicitacoes.get(pedido.registro_id)
         if erro is not None:
             raise erro
-
-    def solicitacao_espelhar(self, dados: dict[str, Any]) -> str:
-        exigir_escrita_habilitada()
-        self._verificar()
-        self._falha_da_solicitacao(dados)
-        if "cpf" in dados or "cpf" in (dados.get("campos") or {}):
-            raise HubError("entrada_invalida", 400)
-        sid = str(dados["solicitacao_id"])
         with self._lock:
-            self.espelhar_chamadas.append(dict(dados))
-            return self.espelhos.setdefault(sid, str(uuid.uuid5(_NS_TASK, sid)))
+            self.criar_chamadas.append(argumentos)
+            existente = self.registros.get(pedido.registro_id)
+            if existente is not None:
+                if existente["contact_id"] != pedido.contact_id:
+                    raise HubError("conflito", 409)
+                criada = False
+            else:
+                digitos = int(hashlib.sha256(pedido.registro_id.encode()).hexdigest()[:10], 16)
+                protocolo = (f"CAS-{digitos % 1000000:06d}-{format(digitos, 'X')[-6:].rjust(6, 'A')}"
+                             if pedido.entidade == "ocorrencia" else None)
+                quando = self._relogio()
+                existente = self.registros[pedido.registro_id] = {
+                    "contact_id": pedido.contact_id, "registro_id": pedido.registro_id,
+                    "entidade": pedido.entidade, "protocolo": protocolo, "statecode": 0, "statuscode": 1,
+                    "canal": _CANAL_MINHA_APM, "criado_em": quando, "atualizado_em": quando,
+                }
+                criada = True
+            return CriacaoCrm(pedido.registro_id, pedido.entidade, criada, existente["protocolo"],
+                              existente["statecode"], existente["statuscode"])
 
-    def solicitacao_status_atualizar(self, dados: dict[str, Any]) -> None:
-        exigir_escrita_habilitada()
-        self._verificar()
-        self._falha_da_solicitacao(dados)
+    def definir_estado(self, registro_id: str, statecode: int, statuscode: int) -> None:
+        """Simula a Central mudando o registro no CRM."""
         with self._lock:
-            if self.espelhos.get(str(dados.get("solicitacao_id"))) != dados.get("crm_id"):
-                raise HubError("nao_encontrado", 404)
-            self.status_enviados.append(dict(dados))
+            registro = self.registros[registro_id]
+            registro.update(statecode=statecode, statuscode=statuscode, atualizado_em=self._relogio())
 
-    def solicitacao_alteracoes_consultar(self, cursor: str | None, limite: int) -> list[dict[str, Any]]:
-        self._verificar()
-        inicio = int(cursor) if cursor and cursor.isdigit() else 0
+    def registros_central(self, contact_id: str, quantidade: int) -> None:
+        """Simula ocorrências abertas pela Central (sem canal) — gastam linha no `listar`."""
         with self._lock:
-            fatia = self.alteracoes[inicio:inicio + max(1, int(limite))]
-            return [{**linha, "cursor": str(inicio + i + 1)} for i, linha in enumerate(fatia)]
+            for _ in range(quantidade):
+                rid = str(uuid.uuid5(_NS_CENTRAL, f"{contact_id}:{self._sequencia}"))
+                quando = self._relogio()
+                self.registros[rid] = {"contact_id": contact_id, "registro_id": rid, "entidade": "ocorrencia",
+                                       "protocolo": "CAS-000001-CENTRA", "statecode": 0, "statuscode": 1,
+                                       "canal": None, "criado_em": quando, "atualizado_em": quando}
+
+    def solicitacao_listar(self, contact_id: str, limite: int) -> list[RegistroCrm]:
+        self._verificar()
+        limite = max(1, min(int(limite), LISTAR_LIMITE_MAX))
+        with self._lock:
+            erro = self.falhar_solicitacoes.get(contact_id)
+            if erro is not None:
+                raise erro
+            self.listar_chamadas.append((contact_id, limite))
+            do_contato = sorted((r for r in self.registros.values() if r["contact_id"] == contact_id),
+                                key=lambda r: r["criado_em"], reverse=True)[:limite]
+            return [RegistroCrm(r["registro_id"], r["entidade"], r["protocolo"], r["statecode"], r["statuscode"],
+                                r["canal"], r["criado_em"], r["atualizado_em"]) for r in do_contato]

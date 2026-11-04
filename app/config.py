@@ -165,7 +165,7 @@ class Settings(BaseSettings):
     jobs_heartbeat: str = Field("/tmp/jobs.heartbeat", alias="JOBS_HEARTBEAT")
     # Intervalos (segundos) dos jobs periódicos; jitter de até 10% (≤ 30 s).
     jobs_intervalo_espelho: int = Field(60, alias="JOBS_INTERVALO_ESPELHO")
-    jobs_intervalo_sync: int = Field(300, alias="JOBS_INTERVALO_SYNC")
+    jobs_intervalo_sync: int = Field(900, alias="JOBS_INTERVALO_SYNC")
     jobs_intervalo_sem_retorno: int = Field(900, alias="JOBS_INTERVALO_SEM_RETORNO")
     jobs_intervalo_comunicacao: int = Field(60, alias="JOBS_INTERVALO_COMUNICACAO")
     # Itens por execução no espelho e na comunicação (disjuntor da cota do hub/SMTP).
@@ -176,6 +176,16 @@ class Settings(BaseSettings):
     jobs_situacao_lote: int = Field(200, alias="JOBS_SITUACAO_LOTE")
     jobs_situacao_rodadas: int = Field(5, alias="JOBS_SITUACAO_RODADAS")
     jobs_situacao_pausa: float = Field(1.0, alias="JOBS_SITUACAO_PAUSA")
+    # Sincronização com o CRM (ADR-0023): cada contato com pedido aberto no CRM é
+    # consultado no máximo a cada JOBS_SYNC_CADENCIA_H horas, com até
+    # JOBS_SYNC_LIMITE linhas por consulta; a cota PII do hub conta LINHAS, e o
+    # job para no teto diário JOBS_SYNC_LINHAS_DIA (protege a varredura noturna).
+    jobs_sync_cadencia_h: int = Field(6, alias="JOBS_SYNC_CADENCIA_H")
+    jobs_sync_limite: int = Field(10, alias="JOBS_SYNC_LIMITE")
+    jobs_sync_linhas_dia: int = Field(5000, alias="JOBS_SYNC_LINHAS_DIA")
+    # Ensaio em produção: só estes contact_id (vírgula) entram no espelho e na
+    # sincronização. Vazio = todos. Só para execução avulsa (`--uma-vez`).
+    jobs_ensaio_contatos: str | None = Field(None, alias="JOBS_ENSAIO_CONTATOS")
     # Destino dos avisos internos (A05 equipe, A16 Central). Ausente = o
     # aviso interno é suprimido (`sem_credencial`), nunca vai a outro lugar.
     central_email: str | None = Field(None, alias="CENTRAL_EMAIL")
@@ -183,6 +193,10 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # Propriedades derivadas                                             #
     # ------------------------------------------------------------------ #
+    @property
+    def jobs_ensaio_contatos_lista(self) -> tuple[str, ...]:
+        return tuple(self.jobs_ensaio_contatos.split(",")) if self.jobs_ensaio_contatos else ()
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
@@ -405,11 +419,20 @@ class Settings(BaseSettings):
             ("JOBS_SITUACAO_HORA", self.jobs_situacao_hora, 0, 23),
             ("JOBS_SITUACAO_LOTE", self.jobs_situacao_lote, 1, 200),
             ("JOBS_SITUACAO_RODADAS", self.jobs_situacao_rodadas, 1, 50),
+            ("JOBS_SYNC_CADENCIA_H", self.jobs_sync_cadencia_h, 1, 48),
+            ("JOBS_SYNC_LIMITE", self.jobs_sync_limite, 1, 50),
+            ("JOBS_SYNC_LINHAS_DIA", self.jobs_sync_linhas_dia, 100, 100000),
         ):
             if not minimo <= valor <= maximo:
                 raise ValueError(f"{nome} deve ficar entre {minimo} e {maximo}")
         if not 0.1 <= self.jobs_situacao_pausa <= 10.0:
             raise ValueError("JOBS_SITUACAO_PAUSA deve ficar entre 0.1 e 10 segundos")
+        contatos = [c.strip().lower() for c in (self.jobs_ensaio_contatos or "").split(",") if c.strip()]
+        if any(not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", c) for c in contatos):
+            raise ValueError("JOBS_ENSAIO_CONTATOS deve ser uma lista de contact_id (GUID) separados por vírgula")
+        if len(contatos) > 20:
+            raise ValueError("JOBS_ENSAIO_CONTATOS aceita no máximo 20 contatos")
+        self.jobs_ensaio_contatos = ",".join(contatos) or None
         if self.jobs_aplicar and self.app_env not in ("development", "test") and self.hub_mode == "stub":
             raise ValueError("JOBS_APLICAR=1 com HUB_MODE=stub só em development/test")
         if self.central_email is not None:

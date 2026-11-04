@@ -170,6 +170,39 @@ describe('Minhas solicitações — detalhe (P05; RF-SO-02, 04, 05, 10, 13)', ()
     expect(JSON.stringify(corpoUso(chamadas))).not.toContain(ID_SOLICITACAO);
   });
 
+  it('já na Central (ADR-0023): protocolo, orientação e nada de cancelar ou responder pela área', async () => {
+    montarApp(`/solicitacoes/${ID_SOLICITACAO}`, PRONTA, (url) =>
+      url === API_DETALHE
+        ? respostaJson(
+            solicitacao({
+              status: 'pendente_associado',
+              rotulo_status: 'O parceiro precisa de algo seu',
+              protocolo: 'CAS-285497-M7P9T5',
+              na_central: true,
+              pode_cancelar: false,
+              pode_responder: false,
+              linha_do_tempo: [
+                {
+                  quando: '2026-10-21T15:30:00Z',
+                  status: 'pendente_associado',
+                  rotulo: 'O parceiro precisa de algo seu',
+                  ator: 'equipe_apm',
+                  mensagem: 'A Central de Relacionamento precisa de mais informações. Protocolo: CAS-285497-M7P9T5.',
+                },
+              ],
+            }),
+          )
+        : undefined,
+    );
+    expect(await screen.findByText('Protocolo na Central')).toBeInTheDocument();
+    expect(screen.getAllByText('CAS-285497-M7P9T5', { exact: false }).length).toBeGreaterThan(0);
+    expect(screen.getByText('A Central precisa de mais informações.')).toBeInTheDocument();
+    expect(screen.getByText(/Para cancelar ou complementar, fale com a Central e informe o protocolo CAS-285497-M7P9T5\./))
+      .toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancelar solicitação' })).toBeNull();
+    expect(screen.queryByText(/Responda abaixo/)).toBeNull();
+  });
+
   it('não encontrada: 404 sem oráculo, com caminho de volta', async () => {
     montarApp(`/solicitacoes/${ID_SOLICITACAO}`, PRONTA, (url) =>
       url === API_DETALHE ? respostaJson({ erro: 'nao_encontrado', mensagem: 'Não encontramos.', request_id: null }, 404) : undefined,

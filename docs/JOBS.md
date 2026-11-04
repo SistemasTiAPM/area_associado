@@ -47,8 +47,8 @@ cada volta (≤ 15 s) e a cada item processado.
 
 | Job | Agenda | Efeito | Com `JOBS_APLICAR=0` (dry-run) | Com `JOBS_APLICAR=1` |
 |---|---|---|---|---|
-| `espelhar_solicitacoes` | 1 min (`JOBS_INTERVALO_ESPELHO`) | **externo** (CRM) | conta e loga os ids que iriam ao hub; nada muda | `crm_sync ∈ {pendente, erro}` com `crm_proxima_em ≤ agora` (respeita a janela de arrependimento do cancelamento): sem `crm_id` → `solicitacao.espelhar`, com `crm_id` → `solicitacao.status_atualizar`; sucesso grava `crm_id`/`crm_sync=ok` e promove `criada → enviada` (`canal_envio=crm`, ator `sistema`, origem `job`, `evento_uso solicitacao_status_alterado`); falha recua 1, 2, 4, 8, 16, 32, 60… min e, na 10ª (ou erro permanente), `falhou` + `evento_log` erro. Cancelada antes de existir no CRM → `crm_sync=ok` sem chamar o hub. Exige também `HUB_ESCRITA_HABILITADA=true` (senão: espera, execução `erro` "escrita no hub desligada") |
-| `sincronizar_solicitacoes` | 5 min (`JOBS_INTERVALO_SYNC`) | leitura do hub → local | só loga a posição; não consulta | `solicitacao.alteracoes_consultar(cursor)` (até 5 páginas de 100), transições pela máquina com origem `crm`; terminal local prevalece (divergência em `evento_log`, cancelamento local reenviado); espelho local pendente → adia; cursor em `job_execucao.posicao` da última execução ok em modo aplicar |
+| `espelhar_solicitacoes` | 1 min (`JOBS_INTERVALO_ESPELHO`) | **externo** (CRM) | conta e loga `<id>:criar|reter|nada`; nada muda | `crm_sync ∈ {pendente, erro}` com `crm_proxima_em ≤ agora` (respeita a janela de arrependimento do cancelamento). Sem `crm_id` e com destino no catálogo (`catalogo_crm.py`) → `solicitacao.criar` (ocorrência da Central; `registro_id` = id, idempotente); sucesso grava `crm_id = id`, entidade, protocolo e o par `statecode/statuscode` e promove `criada → enviada` (ator `sistema`, origem `job`, `evento_uso solicitacao_status_alterado`). Com `crm_id` (mudança local depois do envio) ou sem destino (`exclusao_dados`, benefício) → `crm_sync=retido` + aviso no `evento_log`, sem chamar o hub (não existe ferramenta de status, ADR-0023). Falha recua 1, 2, 4, 8, 16, 32, 60… min e, na 10ª (ou erro permanente: `conflito`, contato inexistente, texto recusado), `falhou` + `evento_log` erro; 429/catálogo inválido/conta sem canal param a rodada sem gastar tentativa. Cancelada antes de existir no CRM → `crm_sync=ok` sem chamar o hub. Exige `HUB_ESCRITA_HABILITADA=true` (senão: espera, execução `erro` "escrita no hub desligada") e a `sql/015` (senão: pulado) |
+| `sincronizar_solicitacoes` | 15 min (`JOBS_INTERVALO_SYNC`) | leitura do hub → local | só conta os contatos que consultaria | Contatos com pedido no CRM, não terminal, consultados há mais de `JOBS_SYNC_CADENCIA_H` (6 h): `solicitacao.listar` com `JOBS_SYNC_LIMITE` (10) linhas, 50 se o pedido não estiver na página; casa por `registro_id`; transita **só quando o par `statecode/statuscode` muda** (0/1 de criação não move nada; 0/3 → `pendente_associado` com mensagem padrão + protocolo; resolvida/cancelada → concluída, inclusive de `pendente_associado`). Código desconhecido, registro sumido e terminal local → divergência no `evento_log`. Para no teto diário `JOBS_SYNC_LINHAS_DIA` (5.000 linhas lidas, dia de São Paulo; a cota PII do hub conta linhas) com execução `erro` "teto diário" |
 | `marcar_sem_retorno` | 15 min (`JOBS_INTERVALO_SEM_RETORNO`) | local | **roda** | igual: 1º vencimento do prazo → marcador `sem_retorno_desde`, evento, notificação, outbox A05 (associado, equipe, RD); 2º (prazo × 2) → `fila_ligacao` |
 | `enviar_comunicacao` | 1 min (`JOBS_INTERVALO_COMUNICACAO`) | **externo** (e-mail) | supressões locais (RD `sem_credencial`; interno sem `CENTRAL_EMAIL` `sem_credencial`; fato mudou `fato_mudou`) acontecem; e-mails só são logados | A04/A05/A06/A16 ao associado (endereço lido do cache `associado_perfil` na hora, nunca gravado na outbox); A05 equipe / A16 Central para `CENTRAL_EMAIL`; `app` → `enviado`; recuo e 10 tentativas como o espelho; `comunicacao_envio` a cada envio/falha. Com `SMTP_MODE=stub` em **staging** nada é marcado (o e-mail espera o SMTP real, P-27); em development/test o stub marca `enviado` com `externo_id=smtp_stub` |
 | `situacao_carteirinhas` | diário 03h local (`JOBS_SITUACAO_HORA`) | leitura do hub → local | **roda** | igual: quem tem carteirinha e acessou em 90 dias, leitura com mais de 20 h; lotes ≤ 200 (`JOBS_SITUACAO_LOTE`) × `JOBS_SITUACAO_RODADAS`, pausa `JOBS_SITUACAO_PAUSA` entre chamadas; `cancelado` revoga a carteirinha, `ativo` reativa; 5 leituras seguidas sem resposta → execução `erro` |
@@ -78,7 +78,7 @@ DB_MAX_OVERFLOW=2
 HUB_CLIENT_ID=area-associado-jobs
 HUB_CLIENT_SECRET=<segredo da conta de jobs no hub — M-8>
 # A conta de jobs nasce só com `ferramentas:ler`: pedir `escrever` faria o hub responder
-# invalid_scope e derrubaria até as leituras. true só quando a conta ganhar `escrever` (P-06).
+# invalid_scope e derrubaria até as leituras. true só quando a conta ganhar `escrever` (ADR-0023, §4b).
 HUB_ESCRITA_HABILITADA=false
 JOBS_APLICAR=0
 # CENTRAL_EMAIL=central@apm.org.br     # avisos internos A05/A16 (vazio = suprimidos)
@@ -90,8 +90,9 @@ EOF
   aceitável no dry-run, não para o job noturno em volume.
 - **Pool:** o processo é de uma linha só e usa no máximo 3 conexões (trava + transação + auditoria); o
   2 + 2 só reduz o teto no RDS compartilhado.
-- **Quando ligar `JOBS_APLICAR=1`:** espelho/sync só depois da P-06 (ferramentas `solicitacao.*` no hub,
-  grant exato e `ferramentas:escrever` na conta de jobs, `HUB_ESCRITA_HABILITADA=true` no `.env.jobs`);
+- **Quando ligar `JOBS_APLICAR=1`:** espelho/sync só depois do ensaio da §4b (conta de jobs com
+  `ferramentas:escrever`, grants exatos em `solicitacao.criar` e `solicitacao.listar`, cota 25.000/dia,
+  `sql/015` aplicada, `HUB_ESCRITA_HABILITADA=true` no `.env.jobs`);
   e-mails só depois da P-27 (`SMTP_MODE=real` com credencial própria). Antes disso o resultado é inócuo
   (espelho em espera; e-mails pendentes em staging), mas a execução registra erro e alerta.
   `JOBS_APLICAR=1` com `HUB_MODE=stub` só sobe em development/test (validador do `Settings`).
@@ -100,11 +101,44 @@ EOF
 
 ```bash
 docker logs --since 1h area_associado_jobs | grep -E "simulação|pulado|falhou|disjuntor"
-# espelho (simulação): 3 solicitação(ões) seriam enviadas ao CRM: <id>:espelhar, ...
+# espelho (simulação): 3 solicitação(ões) na fila do CRM: <id>:criar, <id>:reter, ...
+# sync (simulação): consultaria 12 contato(s) no CRM (cadência 6 h)
 # comunicação (simulação): 2 envio(s) seriam feitos: 41:A04/email/associado, ...
 ```
 
 As linhas de `job_execucao` do dry-run têm `modo = 'simular'`; o cursor do sync nunca é gravado nelas.
+
+## 4b. Ensaio do espelho em produção (ADR-0023) — só o contato sintético
+
+Pré-requisitos: `sql/015` aplicada; no painel do hub, a conta `area-associado-jobs` com `ferramentas:escrever`
+e grants exatos em `solicitacao.criar` e `solicitacao.listar` (o mapa `CRM_SOLICITACAO_CONTAS` do hub já tem
+`area-associado-jobs` → canal Minha APM, origem Web); janela combinada com a Central. O laço do serviço
+continua em simulação: o ensaio roda **avulso**, com `JOBS_ENSAIO_CONTATOS` restringindo espelho e
+sincronização ao contato sintético. Nenhuma alteração no `.env.jobs`.
+
+```bash
+cd /home/ubuntu/area_associado
+J="docker compose --profile jobs exec area-associado-jobs"
+E="-e JOBS_APLICAR=1 -e HUB_ESCRITA_HABILITADA=true -e JOBS_ENSAIO_CONTATOS=8eb5da36-3847-ee11-be6f-00224837e097"
+$J python -m scripts.ensaio_espelho criar                        # pedido local de ensaio, sem e-mail
+docker compose --profile jobs exec $E area-associado-jobs python -m app.jobs --uma-vez espelhar_solicitacoes
+$J python -m scripts.ensaio_espelho estado                       # enviada, sync ok, protocolo CAS-…, crm 0/1
+docker compose --profile jobs exec $E area-associado-jobs python -m scripts.ensaio_espelho repetir <id>
+                                                                 # criada=False e o mesmo protocolo
+```
+
+Depois, a Central muda o status da ocorrência no CRM (ex.: "Aguardando detalhes"). A cadência de 6 h
+vale também aqui; para não esperar, rodar a sincronização com `JOBS_SYNC_CADENCIA_H=1` uma hora depois
+do envio (ou mais):
+
+```bash
+docker compose --profile jobs exec $E -e JOBS_SYNC_CADENCIA_H=1 area-associado-jobs \
+  python -m app.jobs --uma-vez sincronizar_solicitacoes
+$J python -m scripts.ensaio_espelho estado                       # pendente_associado, crm 0/3
+```
+
+Por fim a Central **cancela** a ocorrência (nunca apaga); a próxima sincronização leva o pedido a
+`concluida_negativa`. Registrar protocolo, horários e saídas em `docs/CONCLUIDO.md`.
 
 ## 5. Reprocessar (SQL administrativo)
 
@@ -129,6 +163,14 @@ UPDATE solicitacao SET crm_sync = 'pendente', crm_tentativas = 0, crm_proxima_em
  WHERE crm_sync = 'falhou' AND id IN ('<uuid>', '<uuid>');
 ```
 
+Retidos (`crm_sync = 'retido'`, ADR-0023): mudanças locais que o CRM não recebe e tipos sem destino. Não
+reprocessar enquanto o hub não tiver a ferramenta de status (P-74); a lista serve para avisar a Central:
+
+```sql
+SELECT s.id, s.tipo_servico, s.status, s.crm_protocolo, s.atualizada_em FROM solicitacao s
+ WHERE s.crm_sync = 'retido' ORDER BY s.atualizada_em DESC LIMIT 50;
+```
+
 Outbox de comunicação (`falhou` → pendente):
 
 ```sql
@@ -144,12 +186,8 @@ UPDATE comunicacao_evento SET status = 'pendente', tentativas = 0, proxima_tenta
 
 Nunca reprocessar `suprimido`: a supressão é decisão (fato mudou, sem credencial, cancelamento), não
 falha. Linha presa em `enviando` volta sozinha a `erro` depois de 15 min (o e-mail pode sair duas vezes,
-nunca zero). Sync do CRM do zero (raro — releitura idempotente): rodar `--uma-vez
-sincronizar_solicitacoes` depois de gravar uma execução ok com a posição desejada não é possível pela
-aplicação (sem UPDATE em `job`/`modo`); pedir ao hub um cursor e inserir, como admin, uma linha
-`INSERT INTO job_execucao (job, iniciado_em, terminado_em, status, modo, posicao, host, versao_app)
-VALUES ('sincronizar_solicitacoes', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 'ok', 'aplicar', '<cursor>',
-'operador', 'manual')`.
+nunca zero). Sync do CRM antes da cadência (ex.: depois de corrigir um código no mapa): como admin,
+`UPDATE solicitacao SET crm_consultado_em = NULL WHERE id IN (...)` — o próximo ciclo consulta esses contatos.
 
 ## 6. Ler o rastro
 

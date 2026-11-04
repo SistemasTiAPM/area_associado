@@ -703,6 +703,12 @@ textarea.campo__entrada,
   gap: 14px;
 }
 
+/* Protocolo da Central (ADR-0023): mono, como os outros códigos da área. */
+.dado-protocolo {
+  font-family: var(--fonte-mono);
+  letter-spacing: 0.02em;
+}
+
 .aviso--acao {
   display: grid;
   gap: 8px;

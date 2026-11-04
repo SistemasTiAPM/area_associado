@@ -233,6 +233,24 @@ data, `db_check` conforme, suíte `-m mysql` verde). sha256 esperado:
 `sql/014_carteirinha_revogacao.sql` e `v=014`. Até ser aplicada, a verificação pública segue no
 comportamento anterior (só cache de perfil) e `GET /carteirinha` informa `revogada: false`.
 
+### 2.6 Espelho no CRM — `sql/015_solicitacao_crm` (2026-11-04, ADR-0023)
+
+Colunas do espelho por incident/opportunity em `solicitacao` e `GRANT UPDATE` nas cinco colunas novas.
+**Não reaplicável** (ALTER com CHECK; a segunda execução falha inteira sem mudar nada) e `ALGORITHM=COPY`:
+snapshot manual antes (`docs/OPERACAO.md` §6) e janela de pouco uso. Aplicar **antes** do deploy do código
+que a usa (o código novo funciona sem ela, mas o espelho fica parado).
+
+```bash
+cd /home/ubuntu/area_associado
+M="mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado"
+sha256sum sql/015_solicitacao_crm.sql   # 4fdae22bca2511ffddf8744416637d762a33bb95c6d772bbe67925a49c186f0e
+$M < sql/015_solicitacao_crm.sql && \
+$M -e "INSERT INTO schema_migrations (versao, arquivo, sha256) VALUES ('015','015_solicitacao_crm.sql','4fdae22bca2511ffddf8744416637d762a33bb95c6d772bbe67925a49c186f0e');" && \
+echo "OK 015"
+$M -e "SHOW GRANTS FOR 'apm_area'@'%';" | grep crm_consultado_em
+docker compose exec area-associado python -m scripts.db_check   # resultado : conforme; migracoes … 015
+```
+
 ## 3. Conferir
 
 ```bash

@@ -19,6 +19,12 @@ espelha o estado atual quando chegar a hora.
 
 Terminais não mudam. `evento_uso` NÃO sai daqui: o chamador registra depois
 do commit (regra 20).
+
+Adenda de 2026-11-04 (ADR-0023): o hub não tem ferramenta de status, então o que
+o associado faz na área depois do envio não chega ao CRM. Com o pedido já no CRM
+(`crm_id`), cancelar e responder pela área são recusados (409 `na_central`) e a
+tela orienta a falar com a Central pelo protocolo. E o CRM pode tirar o pedido de
+`pendente_associado` sem mensagem (a Central resolveu por fora) — P-66.
 """
 
 from __future__ import annotations
@@ -66,6 +72,9 @@ REGRAS: tuple[Regra, ...] = (
     Regra(frozenset({"em_atendimento"}), "pendente_associado", _PARCEIRO_OU_APM, exige_mensagem=True),
     # associado respondeu
     Regra(frozenset({"pendente_associado"}), "em_atendimento", frozenset({("associado", "ui")}), exige_mensagem=True),
+    # a Central seguiu sem a resposta pela área (P-66, ADR-0023): o CRM saiu de
+    # "Aguardando detalhes"; com o caminho intermediário, o CRM também conclui daqui
+    Regra(frozenset({"pendente_associado"}), "em_atendimento", frozenset({("apm", "crm")})),
     # resultado registrado
     Regra(frozenset({"enviada", "em_atendimento"}), "concluida_positiva",
           _PARCEIRO_OU_APM | {("importacao", "importacao")}),
@@ -95,12 +104,16 @@ def exige_mensagem(para: str, ator: str, origem: str) -> bool:
     return any(r.exige_mensagem for r in _regras(para, ator, origem))
 
 
-def pode_cancelar_associado(status: str) -> bool:
-    return pode_transitar(status, "cancelada", "associado", "ui")
+MENSAGEM_NA_CENTRAL = ("Este pedido já está com a Central de Relacionamento. Para cancelar ou responder, "
+                       "fale com a Central e informe o protocolo.")
 
 
-def pode_responder_associado(status: str) -> bool:
-    return pode_transitar(status, "em_atendimento", "associado", "ui")
+def pode_cancelar_associado(status: str, na_central: bool = False) -> bool:
+    return not na_central and pode_transitar(status, "cancelada", "associado", "ui")
+
+
+def pode_responder_associado(status: str, na_central: bool = False) -> bool:
+    return not na_central and pode_transitar(status, "em_atendimento", "associado", "ui")
 
 
 # ---------------------------------------------------------------- exceções
@@ -127,6 +140,7 @@ class Resultado:
     tipo_ativacao: int | None
     evento_id: int
     ator: str
+    origem: str = ""
 
 
 def _agora() -> datetime:
@@ -166,9 +180,12 @@ def _efeitos(sess: Session, r: Resultado, *, agora: datetime) -> None:
     """Comunicação produzida na MESMA transação da transição (RF-NO-04, RF-CM-01)."""
     tipo = rotulos.rotulo_tipo(r.tipo_servico)
     if r.para == "pendente_associado":
+        # Pedido vindo do CRM não tem resposta pela área (ADR-0023): a Central liga.
+        corpo = (f"{tipo}: a Central de Relacionamento precisa de mais informações e vai falar com você."
+                 if r.origem == "crm" else f"{tipo}: responda para seguir com o atendimento.")
         comunicacao.notificar(
             sess, contact_id=r.contact_id, tipo="solicitacao_pendente", chave=f"pendente:{r.evento_id}",
-            titulo="Sua solicitação precisa de uma resposta", corpo=f"{tipo}: responda para seguir com o atendimento.",
+            titulo="Sua solicitação precisa de uma resposta", corpo=corpo,
             link=_link(r.solicitacao_id), referencia_tipo="solicitacao", referencia_id=r.solicitacao_id, agora=agora)
     elif r.para in rotulos.CONCLUIDAS:
         comunicacao.notificar(
@@ -219,6 +236,8 @@ def transitar(sess: Session, *, solicitacao_id: str, para: str, ator: str, orige
     de = str(linha.status)
     if de in TERMINAIS or de not in origens:
         raise TransicaoInvalida()
+    if ator == "associado" and origem == "ui" and linha.crm_id is not None:
+        raise TransicaoInvalida("na_central", MENSAGEM_NA_CENTRAL)
 
     sets = ["status = :para", "atualizada_em = :agora", "sem_retorno_desde = NULL"]
     params: dict[str, object] = {"id": solicitacao_id, "de": de, "para": para, "agora": agora}
@@ -242,7 +261,7 @@ def transitar(sess: Session, *, solicitacao_id: str, para: str, ator: str, orige
         agora=agora, usuario_interno=usuario_interno, justificativa=justificativa, mensagem=mensagem,
         request_id=request_id)
     resultado = Resultado(solicitacao_id, str(linha.contact_id), de, para, linha.tipo_servico,
-                          linha.tipo_ativacao, evento_id, ator)
+                          linha.tipo_ativacao, evento_id, ator, origem)
     _efeitos(sess, resultado, agora=agora)
     return resultado
 

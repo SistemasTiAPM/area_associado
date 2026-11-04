@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from .. import comunicacao, limites_negocio
 from ..ajuda import contato_resumo
-from . import maquina, parametros, rotulos, schemas
+from . import esquema, maquina, parametros, rotulos, schemas
 from .maquina import SolicitacaoNaoEncontrada, TransicaoInvalida
 
 logger = logging.getLogger("area_associado.solicitacoes")
@@ -121,10 +121,15 @@ def decodificar_cursor(cursor: str) -> tuple[datetime, str]:
 
 
 # ------------------------------------------------------------- montagem
-_COLUNAS = (
+_COLUNAS_BASE = (
     "id, tipo_servico, beneficio_id, tipo_ativacao, status, enviada_em, prazo_retorno_dias, sem_retorno_desde, "
-    "dados, avaliacao_nota, avaliacao_comentario, avaliada_em, criada_em, atualizada_em, concluida_em"
+    "dados, avaliacao_nota, avaliacao_comentario, avaliada_em, criada_em, atualizada_em, concluida_em, crm_id"
 )
+
+
+def _colunas() -> str:
+    """`crm_protocolo` só existe depois da sql/015 (ADR-0023)."""
+    return _COLUNAS_BASE + (", crm_protocolo" if esquema.colunas_crm_presentes() else ", NULL AS crm_protocolo")
 
 
 def _prazo_em(linha: Any) -> str | None:
@@ -141,8 +146,10 @@ def _pode_avaliar(linha: Any, prazo_avaliacao_dias: int, agora: datetime) -> boo
 
 def resumo(linha: Any, *, contato: dict[str, str] | None, prazo_avaliacao_dias: int,
            agora: datetime) -> dict[str, Any]:
-    """`Resumo` do contrato da Onda 2. Nunca `contact_id`, `crm_*` nem campos internos."""
+    """`Resumo` do contrato da Onda 2. Nunca `contact_id` nem campos internos; do CRM, só o
+    protocolo (que o associado usa com a Central) e se o pedido já está lá (ADR-0023)."""
     tipo_codigo = linha.tipo_servico or "beneficio"
+    na_central = linha.crm_id is not None
     return {
         "id": linha.id,
         "tipo": {"codigo": tipo_codigo, "rotulo": rotulos.rotulo_tipo(linha.tipo_servico)},
@@ -155,8 +162,10 @@ def resumo(linha: Any, *, contato: dict[str, str] | None, prazo_avaliacao_dias: 
         "contato": contato,
         "criada_em": _iso(linha.criada_em),
         "atualizada_em": _iso(linha.atualizada_em),
-        "pode_cancelar": maquina.pode_cancelar_associado(linha.status),
-        "pode_responder": maquina.pode_responder_associado(linha.status),
+        "protocolo": linha.crm_protocolo,
+        "na_central": na_central,
+        "pode_cancelar": maquina.pode_cancelar_associado(linha.status, na_central),
+        "pode_responder": maquina.pode_responder_associado(linha.status, na_central),
         "pode_avaliar": _pode_avaliar(linha, prazo_avaliacao_dias, agora),
     }
 
@@ -185,7 +194,7 @@ def _linha_do_tempo(db: Session, sid: str, tipo_ativacao: int | None) -> list[di
 
 def _detalhe(db: Session, contact_id: str, sid: str, *, contato: dict[str, str] | None,
              agora: datetime) -> dict[str, Any]:
-    linha = db.execute(text(f"SELECT {_COLUNAS} FROM solicitacao WHERE id = :s AND contact_id = :c"),
+    linha = db.execute(text(f"SELECT {_colunas()} FROM solicitacao WHERE id = :s AND contact_id = :c"),
                        {"s": sid, "c": contact_id}).first()
     if linha is None:
         raise SolicitacaoNaoEncontrada()
@@ -218,7 +227,7 @@ def listar(contact_id: str, *, situacao: str | None = None, cursor: str | None =
         quando, ultimo = decodificar_cursor(cursor)
         condicoes.append("(atualizada_em < :t OR (atualizada_em = :t AND id < :u))")
         params.update(t=quando, u=ultimo)
-    sql = text(f"SELECT {_COLUNAS} FROM solicitacao WHERE " + " AND ".join(condicoes)
+    sql = text(f"SELECT {_colunas()} FROM solicitacao WHERE " + " AND ".join(condicoes)
                + " ORDER BY atualizada_em DESC, id DESC LIMIT :n")
     if expandir:
         sql = sql.bindparams(*expandir)

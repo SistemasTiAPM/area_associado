@@ -32,6 +32,10 @@ export interface ResumoSolicitacao {
   /** AAAA-MM-DD; nulo enquanto não foi enviada (RF-SO-15). */
   prazo_em: string | null;
   contato: { canal: string; texto: string } | null;
+  /** Protocolo da Central no CRM (CAS-######-XXXXXX); nulo até o pedido chegar lá. */
+  protocolo: string | null;
+  /** Já está no CRM: cancelar e complementar são com a Central, pelo protocolo (ADR-0023). */
+  na_central: boolean;
   criada_em: string;
   atualizada_em: string;
   pode_cancelar: boolean;

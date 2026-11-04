@@ -91,8 +91,9 @@ frontend/          # Vite + React + TS: src/{styles,api,shell,components,pages,s
 scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py, check_hub.py
 sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado, 006 associado_perfil,
                    # 007 email_verificacao, 008 partições, 009 flags v2, 010 solicitação, 011 job_execucao,
-                   # 012 comunicação/notificação, 013 ajuda/parâmetros, 014 revogação da carteirinha
-                   # (UPDATE por tabela ou por coluna; allowlist em scripts/db_check.py; 015+ reservadas, REQUISITOS §6.2)
+                   # 012 comunicação/notificação, 013 ajuda/parâmetros, 014 revogação da carteirinha,
+                   # 015 espelho no CRM (UPDATE por tabela ou por coluna; allowlist em scripts/db_check.py;
+                   # 016+ reservadas, REQUISITOS §6.2)
 tests/             # unidades sem rede/banco + integração com MySQL real (marcador `mysql`, TESTE_DB_*)
 deploy/nginx_porteiro/
 docs/              # SPEC, REQUISITOS, PENDENCIAS, CONCLUIDO, adr/, PROVISIONAMENTO, CUTOVER, ACESSO-CONSTRUCAO

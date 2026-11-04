@@ -14,6 +14,8 @@ export function resumo(parcial: Partial<ResumoSolicitacao> = {}): ResumoSolicita
     aguardando_parceiro: false,
     prazo_em: null,
     contato: null,
+    protocolo: null,
+    na_central: false,
     criada_em: '2026-10-20T13:00:00Z',
     atualizada_em: '2026-10-21T15:30:00Z',
     pode_cancelar: true,

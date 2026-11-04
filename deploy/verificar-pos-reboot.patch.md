@@ -1,5 +1,11 @@
 # Trecho para `/home/ubuntu/verificar-pos-reboot.sh` (P-19 / TI-72)
 
+> **Aplicado em 2026-11-03** (ver `docs/CONCLUIDO.md`, P-19), com desvios: lista de 16 containers
+> (inclui `area_associado_jobs`), checagem de container fora da lista, catch-all da 443 testado por
+> host desconhecido em `127.0.0.1` e leitura de log por janela com `_logs_janela` em vez de
+> `docker logs --since`, que não funciona no `nginx_porteiro` (P-71). O texto abaixo fica como
+> histórico; a versão em uso é o próprio script do host.
+
 O script do host (criado em 18/09/2026, só leitura) ainda não conhece `area_associado`, `mcp_hub` e
 `appapm-cron`, não testa `minha.`/`mcp.` e não olha a validade do certificado de origem. Este arquivo
 traz as alterações prontas; **quem edita o script é o operador** (ele fica fora do repositório).

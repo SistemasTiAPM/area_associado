@@ -295,6 +295,8 @@ type Estado =
   | { fase: 'pronta'; dados: Solicitacao };
 
 /** Detalhe da solicitação (`/solicitacoes/{id}`; RF-SO-02, 04, 05, 10, 13). */
+const ENCERRADAS: ReadonlySet<string> = new Set(['concluida_positiva', 'concluida_negativa', 'cancelada']);
+
 export function DetalheSolicitacao({ id }: { id: string }) {
   const { recarregar: recarregarSessao } = useSessao();
   const { mostrar, mostrarErro } = useToast();
@@ -402,6 +404,8 @@ export function DetalheSolicitacao({ id }: { id: string }) {
     : null;
   const prazo = dataDaApi(s.prazo_em);
   const avaliadaEm = dataDaApi(s.avaliacao?.avaliada_em);
+  // Já no CRM da Central (ADR-0023): a área não leva cancelamento nem resposta até lá.
+  const comCentral = s.na_central && !ENCERRADAS.has(s.status);
 
   return (
     <>
@@ -419,7 +423,14 @@ export function DetalheSolicitacao({ id }: { id: string }) {
           </h2>
           <StatusSolicitacao status={s.status} rotulo={s.rotulo_status} />
         </div>
-        {pendente ? (
+        {pendente && s.na_central ? (
+          <div className="aviso aviso--acao" id={idPendencia}>
+            <p>
+              <strong>A Central precisa de mais informações.</strong> Ela vai falar com você pelos contatos do seu
+              cadastro.
+            </p>
+          </div>
+        ) : pendente ? (
           <div className="aviso aviso--acao" id={idPendencia}>
             <p>
               <strong>O parceiro precisa de algo seu.</strong> Responda abaixo para o atendimento continuar.
@@ -442,6 +453,12 @@ export function DetalheSolicitacao({ id }: { id: string }) {
               <dd>{s.beneficio.titulo}</dd>
             </>
           ) : null}
+          {s.protocolo ? (
+            <>
+              <dt>Protocolo na Central</dt>
+              <dd className="dado-protocolo">{s.protocolo}</dd>
+            </>
+          ) : null}
           <dt>Aberta em</dt>
           <dd>{data(s.criada_em)}</dd>
           <dt>Atualizada em</dt>
@@ -461,6 +478,12 @@ export function DetalheSolicitacao({ id }: { id: string }) {
             </>
           ) : null}
         </dl>
+        {comCentral ? (
+          <p className="aviso" id="aviso-central">
+            Este pedido já está com a Central de Relacionamento. Para cancelar ou complementar, fale com a Central
+            {s.protocolo ? ` e informe o protocolo ${s.protocolo}` : ''}.
+          </p>
+        ) : null}
       </section>
 
       {s.pode_responder ? <FormularioResposta key={`r-${s.atualizada_em}`} solicitacao={s} aoConcluir={aoConcluir} aoFalhar={aoFalhar} /> : null}

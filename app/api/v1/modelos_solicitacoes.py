@@ -45,6 +45,10 @@ class SolicitacaoResumo(_Resposta):
     aguardando_parceiro: bool = Field(description="Marcador sem retorno (A05): a APM já está cobrando.")
     prazo_em: str | None = Field(description="AAAA-MM-DD (America/Sao_Paulo); null sem envio ou se encerrada.")
     contato: ContatoSolicitacao | None
+    protocolo: str | None = Field(description="Protocolo da Central (CAS-######-XXXXXX); null até o pedido "
+                                              "chegar ao CRM ou quando o destino não tem protocolo.")
+    na_central: bool = Field(description="O pedido já está no CRM da Central: cancelar e responder são pela "
+                                         "Central, com o protocolo (pode_cancelar/pode_responder ficam false).")
     criada_em: str
     atualizada_em: str
     pode_cancelar: bool

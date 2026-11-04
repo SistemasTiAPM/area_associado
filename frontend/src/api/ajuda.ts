@@ -36,7 +36,8 @@ export type AssuntoFormulario = 'beneficio' | 'cadastro' | 'financeiro' | 'event
 export type MotivoCancelamento = 'nao_uso' | 'preco' | 'mudanca' | 'insatisfacao_servico' | 'outro';
 
 export const BUSCA_FAQ_MAX = 80;
-export const MENSAGEM_MAX = 2000;
+/** Unidades UTF-16 (`String.length`, como o `maxLength` conta): o servidor mede igual (ADR-0023). */
+export const MENSAGEM_MAX = 1700;
 export const COMENTARIO_CANCELAMENTO_MAX = 500;
 
 export function buscarFaq(filtro: { q?: string; categoria?: string | null }, sinal?: AbortSignal) {

@@ -1,4 +1,4 @@
-"""Serviço de jobs com MySQL REAL (migrações 000–014) — frente C da Onda 2.
+"""Serviço de jobs com MySQL REAL (migrações 000–015) — frente C da Onda 2; espelho v2 (ADR-0023).
 
 Rodar com TESTE_DB_HOST/TESTE_DB_USER/TESTE_DB_PASS/TESTE_DB_NAME (usuário da
 aplicação, `apm_area`): os jobs rodam com os grants por coluna de verdade, o
@@ -52,6 +52,9 @@ def ambiente(monkeypatch):
         modulo.limpar_cache()
     base.redefinir_cache_rastro()
     carteirinha.redefinir_cache_colunas()
+    from app.dominio.solicitacoes import esquema
+
+    esquema.redefinir()
     stub = ClienteHubStub()
     redefinir_hub(stub)
     yield stub
@@ -200,49 +203,90 @@ def test_espelho_dry_run_nao_muda_nada(ambiente):
     ctx = _espelhar(ambiente, sid, _agora() + timedelta(seconds=1), aplicar=False)
     s = _sol(sid)
     assert ctx.lidos == 1 and s["status"] == "criada" and s["crm_sync"] == "pendente" and s["crm_id"] is None
-    assert ambiente.espelhar_chamadas == []
+    assert ambiente.criar_chamadas == []
 
 
-def test_espelho_com_stub_promove_enviada_e_leva_o_cancelamento(ambiente):
+def test_espelho_cria_ocorrencia_promove_enviada_e_guarda_protocolo(ambiente):
+    from app.dominio.solicitacoes import catalogo_crm, maquina, servico
+
     cid = _cid()
     sid = _criar(cid)
     agora = _agora() + timedelta(seconds=1)
     ctx = _espelhar(ambiente, sid, agora)
     s = _sol(sid)
+    protocolo = ambiente.registros[sid]["protocolo"]
     assert ctx.gravados == 1 and s["status"] == "enviada" and s["crm_sync"] == "ok" and s["enviada_em"] == agora
-    assert s["crm_id"] == ambiente.espelhos[sid] and s["crm_tentativas"] == 0
-    chamada = ambiente.espelhar_chamadas[-1]
-    assert chamada["contact_id"] == cid and chamada["status"] == "criada" and "cpf" not in chamada
+    assert s["crm_id"] == sid and s["crm_entidade"] == "ocorrencia" and s["crm_protocolo"] == protocolo
+    assert (s["crm_estado"], s["crm_status"], s["crm_consultado_em"]) == (0, 1, agora)
+    chamada = ambiente.criar_chamadas[-1]
+    assert chamada["registro_id"] == sid and chamada["contact_id"] == cid and chamada["tipo"] == "outro"
+    assert (chamada["assunto_id"], chamada["time_id"]) == (catalogo_crm.ASSUNTO_ATENDIMENTO_APM,
+                                                          catalogo_crm.TIME_CENTRAL)
+    assert chamada["titulo"] == "Minha APM: Dúvida"
+    assert "Mensagem:\nQuero saber do seguro." in chamada["descricao"] and "cpf" not in str(chamada).lower()
     ev = _eventos(sid)
-    assert ev[-1]["evento"] == "transicao" and (ev[-1]["de_status"], ev[-1]["para_status"]) == ("criada", "enviada")
-    assert (ev[-1]["ator"], ev[-1]["origem"]) == ("sistema", "job")
+    assert (ev[-1]["de_status"], ev[-1]["para_status"], ev[-1]["ator"], ev[-1]["origem"]) == \
+        ("criada", "enviada", "sistema", "job")
     with _db() as db:
         uso = db.execute(text(
             "SELECT origem, JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.para')) AS para FROM evento_uso "
             "WHERE acao = 'solicitacao_status_alterado' AND entidade_id = :id"), {"id": sid}).first()
     assert uso.origem == "job" and uso.para == "enviada"
+    # O associado vê o protocolo e não cancela mais pela área (a Central não saberia).
+    detalhe = servico.detalhe(cid, sid)
+    assert detalhe["protocolo"] == protocolo and detalhe["na_central"] is True and not detalhe["pode_cancelar"]
+    with pytest.raises(maquina.TransicaoInvalida) as e:
+        servico.cancelar(cid, sid, motivo="Resolvi de outro jeito")
+    assert e.value.codigo == "na_central"
+    assert _sol(sid)["status"] == "enviada" and _sol(sid)["crm_sync"] == "ok"
+    # Repetir o espelho não cria outro registro (já ok: nem chama o hub).
+    _espelhar(ambiente, sid, _agora() + timedelta(seconds=2))
+    assert len(ambiente.criar_chamadas) == 1
 
-    # O associado cancela (enviada → cancelada): a máquina reabre o espelho; o job leva o status.
+
+def test_transicao_local_depois_do_envio_fica_retida(ambiente):
+    from app.dominio.solicitacoes import maquina
+
+    cid = _cid()
+    sid = _criar(cid)
+    _espelhar(ambiente, sid, _agora() + timedelta(seconds=1))
+    with _db() as db:  # a APM cancela pelo backoffice: a máquina reabre a outbox
+        maquina.transitar(db, solicitacao_id=sid, para="cancelada", ator="apm", origem="backoffice",
+                          justificativa="pedido em duplicidade", agora=_agora() + timedelta(seconds=2))
+    assert _sol(sid)["crm_sync"] == "pendente"
+    ctx = _espelhar(ambiente, sid, _agora() + timedelta(seconds=3))
+    s = _sol(sid)
+    assert s["crm_sync"] == "retido" and s["crm_tentativas"] == 0 and ctx.gravados == 1
+    assert len(ambiente.criar_chamadas) == 1  # o hub não foi chamado de novo
+    with _db() as db:
+        log = db.execute(text(
+            "SELECT severidade, JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.status')) AS status, "
+            " JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.protocolo')) AS protocolo FROM evento_log "
+            "WHERE tipo = 'solicitacao_transicao_retida' "
+            "AND JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.solicitacao_id')) = :id"), {"id": sid}).first()
+    assert log.severidade == "aviso" and log.status == "cancelada" and log.protocolo == s["crm_protocolo"]
+    assert _espelhar(ambiente, sid, _agora() + timedelta(seconds=4)).lidos == 0  # sai da fila
+
+
+def test_tipo_sem_destino_fica_na_area(ambiente):
     from app.dominio.solicitacoes import servico
 
-    servico.cancelar(cid, sid, motivo="Resolvi de outro jeito")
-    assert _sol(sid)["crm_sync"] == "pendente"
+    sid = servico.criar(contact_id=_cid(), sub_hash=secrets.token_hex(32), tipo_servico="exclusao_dados", campos={},
+                        chave_idempotencia=str(uuid.uuid4())).id
     _espelhar(ambiente, sid, _agora() + timedelta(seconds=1))
-    assert _sol(sid)["crm_sync"] == "ok" and len(ambiente.espelhar_chamadas) == 1
-    enviado = ambiente.status_enviados[-1]
-    assert enviado["status"] == "cancelada" and enviado["crm_id"] == s["crm_id"]
-    assert enviado["cancel_motivo"] == "Resolvi de outro jeito"
+    s = _sol(sid)
+    assert s["crm_sync"] == "retido" and s["status"] == "criada" and s["crm_id"] is None
+    assert ambiente.criar_chamadas == []
 
 
 def test_espelho_recuo_e_falhou_apos_10_tentativas(ambiente):
     cid = _cid()
     sid = _criar(cid)
-    ambiente.falhar_solicitacoes[sid] = HubError("fonte_indisponivel")
+    ambiente.falhar_solicitacoes[sid] = HubError("escrita_indeterminada", 504)
     agora = _agora() + timedelta(seconds=1)
     _espelhar(ambiente, sid, agora)
     s = _sol(sid)
     assert s["crm_sync"] == "erro" and s["crm_tentativas"] == 1 and s["crm_proxima_em"] == agora + timedelta(minutes=1)
-    # Antes do recuo vencer, nada acontece.
     ctx = _espelhar(ambiente, sid, agora + timedelta(seconds=30))
     assert ctx.lidos == 0 and _sol(sid)["crm_tentativas"] == 1
     for i in range(2, 11):
@@ -250,23 +294,31 @@ def test_espelho_recuo_e_falhou_apos_10_tentativas(ambiente):
         _espelhar(ambiente, sid, agora)
         assert _sol(sid)["crm_tentativas"] == i
     s = _sol(sid)
-    assert s["crm_sync"] == "falhou" and s["status"] == "criada"
+    assert s["crm_sync"] == "falhou" and s["status"] == "criada" and s["crm_id"] is None
     with _db() as db:
         log = db.execute(text(
             "SELECT severidade, contact_id, JSON_EXTRACT(detalhes, '$.tentativas') AS tentativas FROM evento_log "
             "WHERE tipo = 'solicitacao_espelho_falhou' AND JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.solicitacao_id')) "
             "= :id"), {"id": sid}).first()
     assert log.severidade == "erro" and log.contact_id == cid and int(log.tentativas) == 10
-    # `falhou` sai da fila até o reprocessamento manual (docs/JOBS.md §5).
     assert _espelhar(ambiente, sid, agora + timedelta(days=1)).lidos == 0
 
 
-def test_espelho_erro_permanente_vai_direto_a_falhou(ambiente):
+def test_espelho_conflito_vai_direto_a_falhou(ambiente):
     sid = _criar(_cid())
-    ambiente.falhar_solicitacoes[sid] = HubError("entrada_invalida", 400)
+    ambiente.falhar_solicitacoes[sid] = HubError("conflito", 409)
     _espelhar(ambiente, sid, _agora() + timedelta(seconds=1))
     s = _sol(sid)
     assert s["crm_sync"] == "falhou" and s["crm_tentativas"] == 1
+
+
+def test_espelho_catalogo_invalido_para_sem_gastar_tentativa(ambiente):
+    sid = _criar(_cid())
+    ambiente.falhar_solicitacoes[sid] = HubError("catalogo_crm_invalido")
+    ctx = _espelhar(ambiente, sid, _agora() + timedelta(seconds=1))
+    s = _sol(sid)
+    assert ctx.erro_sistemico == "disjuntor: catalogo_crm_invalido"
+    assert s["crm_sync"] == "pendente" and s["crm_tentativas"] == 0
 
 
 def test_janela_de_arrependimento_e_desistencia(ambiente):
@@ -278,72 +330,135 @@ def test_janela_de_arrependimento_e_desistencia(ambiente):
     agora = _agora() + timedelta(seconds=1)
     assert _espelhar(ambiente, sid, agora).lidos == 0  # dentro da janela: nada sai
     _espelhar(ambiente, sid, agora + timedelta(hours=25))
-    assert _sol(sid)["status"] == "enviada" and ambiente.espelhar_chamadas[-1]["tipo"] == "cancelamento_associacao"
+    assert _sol(sid)["status"] == "enviada" and ambiente.criar_chamadas[-1]["tipo"] == "cancelamento_associacao"
+    assert "Motivo: Preço" in ambiente.criar_chamadas[-1]["descricao"]
 
-    # Desistiu dentro da janela: nunca chega ao CRM.
     cid2 = _cid()
     sid2 = _criar(cid2, "cancelamento_associacao", campos)
-    servico.cancelar(cid2, sid2, motivo=None)
-    chamadas = len(ambiente.espelhar_chamadas)
+    servico.cancelar(cid2, sid2, motivo=None)  # desistiu na janela: nunca chega ao CRM
+    chamadas = len(ambiente.criar_chamadas)
     ctx = _espelhar(ambiente, sid2, _agora() + timedelta(hours=25))
     s2 = _sol(sid2)
     assert ctx.gravados == 1 and s2["crm_sync"] == "ok" and s2["crm_id"] is None
-    assert len(ambiente.espelhar_chamadas) == chamadas
+    assert len(ambiente.criar_chamadas) == chamadas
 
 
 # ============================================================ sincronização
-def test_sincronizar_aplica_crm_e_terminal_local_prevalece(ambiente):
-    from app.dominio.solicitacoes import servico
+def _sincronizar(monkeypatch, stub, cid: str, agora: datetime):
+    from app.config import get_settings
     from app.jobs import solicitacoes
+
+    monkeypatch.setenv("JOBS_ENSAIO_CONTATOS", cid)  # a base do ensaio é compartilhada
+    get_settings.cache_clear()
+    monkeypatch.setattr(solicitacoes, "PAUSA_SYNC_S", 0)
+    ctx = _ctx(agora)
+    solicitacoes.sincronizar_solicitacoes(ctx, hub=stub)
+    return ctx
+
+
+def _divergencias(sid: str) -> list[str]:
+    with _db() as db:
+        return [r.motivo for r in db.execute(text(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.motivo')) AS motivo FROM evento_log "
+            "WHERE tipo = 'solicitacao_divergencia_crm' "
+            "AND JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.solicitacao_id')) = :id ORDER BY id"), {"id": sid})]
+
+
+def test_sincronizar_so_transita_quando_o_crm_muda(ambiente, monkeypatch):
+    from app.dominio.solicitacoes import rotulos
 
     cid = _cid()
     sid = _criar(cid)
-    _espelhar(ambiente, sid, _agora() + timedelta(seconds=1))
-    crm_id = _sol(sid)["crm_id"]
-    base = {"solicitacao_id": sid, "crm_id": crm_id, "contact_id": cid, "modificado_em": "2026-10-30T12:00:00Z"}
-    ambiente.alteracoes = [{**base, "situacao": "aguardando_associado", "mensagem_publica": "Envie o diploma."}]
-    ctx = _ctx(_agora() + timedelta(seconds=2))
-    solicitacoes.sincronizar_solicitacoes(ctx, hub=ambiente)
-    assert ctx.posicao == "1" and ctx.gravados == 1
+    t0 = _agora() + timedelta(seconds=1)
+    _espelhar(ambiente, sid, t0)
+    protocolo = _sol(sid)["crm_protocolo"]
+
+    # Antes da cadência (6 h): nem consulta.
+    assert _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=1)).lidos == 0
+    assert ambiente.listar_chamadas == []
+
+    # 0/1 (criação) de novo: consulta, nada muda.
+    ctx = _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=7))
+    assert ctx.lidos == 1 and ctx.gravados == 0 and _sol(sid)["status"] == "enviada"
+    assert _sol(sid)["crm_consultado_em"] == t0 + timedelta(hours=7)
+
+    # A Central pede detalhes (0/3): enviada → em_atendimento → pendente, com a mensagem padrão.
+    ambiente.definir_estado(sid, 0, 3)
+    ctx = _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=14))
     s = _sol(sid)
-    assert s["status"] == "pendente_associado" and s["crm_sync"] == "ok"  # origem crm não reabre o espelho
+    assert ctx.gravados == 1 and s["status"] == "pendente_associado" and (s["crm_estado"], s["crm_status"]) == (0, 3)
+    assert s["crm_sync"] == "ok"  # origem crm não reabre a outbox
     ev = _eventos(sid)
     assert [(e["para_status"], e["origem"]) for e in ev[-2:]] == [("em_atendimento", "crm"),
                                                                  ("pendente_associado", "crm")]
-    assert ev[-1]["mensagem_publica"] == "Envie o diploma."
+    assert ev[-1]["mensagem_publica"] == f"{rotulos.MENSAGEM_PENDENTE_CRM} Protocolo: {protocolo}."
 
-    # Mesma posição de novo: nada muda (idempotente); posição avança só com linha nova.
-    ctx2 = _ctx(_agora() + timedelta(seconds=3), posicao_anterior="1", posicao="1")
-    solicitacoes.sincronizar_solicitacoes(ctx2, hub=ambiente)
-    assert ctx2.lidos == 0 and ctx2.posicao == "1"
+    # Mesmo 0/3 no ciclo seguinte: nenhuma transição (sem oscilação).
+    ctx = _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=21))
+    assert ctx.lidos == 1 and ctx.gravados == 0 and len(_eventos(sid)) == len(ev)
 
-    # Associado cancela (terminal local), espelho leva; o CRM ainda "conclui": local prevalece.
-    servico.cancelar(cid, sid, motivo=None)
-    _espelhar(ambiente, sid, _agora() + timedelta(seconds=4))
-    assert _sol(sid)["crm_sync"] == "ok"
-    ambiente.alteracoes.append({**base, "situacao": "concluida", "mensagem_publica": None})
-    ctx3 = _ctx(_agora() + timedelta(seconds=5), posicao_anterior="1", posicao="1")
-    solicitacoes.sincronizar_solicitacoes(ctx3, hub=ambiente)
+    # A Central resolve por fora (1/5): pendente → em_atendimento → concluída (P-66).
+    ambiente.definir_estado(sid, 1, 5)
+    ctx = _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=28))
     s = _sol(sid)
-    assert s["status"] == "cancelada" and s["crm_sync"] == "pendente" and ctx3.posicao == "2"
-    with _db() as db:
-        aviso = db.execute(text(
-            "SELECT severidade FROM evento_log WHERE tipo = 'solicitacao_divergencia_crm' "
-            "AND JSON_UNQUOTE(JSON_EXTRACT(detalhes, '$.solicitacao_id')) = :id"), {"id": sid}).first()
-    assert aviso.severidade == "aviso"
+    assert s["status"] == "concluida_positiva" and s["concluida_em"] == t0 + timedelta(hours=28)
+    assert [e["para_status"] for e in _eventos(sid)[-2:]] == ["em_atendimento", "concluida_positiva"]
+    # Terminal: sai da fila de consulta.
+    antes = len(ambiente.listar_chamadas)
+    _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=40))
+    assert len(ambiente.listar_chamadas) == antes and _divergencias(sid) == []
 
 
-def test_sincronizar_recusa_identidade_divergente(ambiente):
-    from app.jobs import solicitacoes
-
+def test_sincronizar_volta_para_em_andamento_retoma_o_atendimento(ambiente, monkeypatch):
     cid = _cid()
     sid = _criar(cid)
-    _espelhar(ambiente, sid, _agora() + timedelta(seconds=1))
-    ambiente.alteracoes = [{"solicitacao_id": sid, "crm_id": _sol(sid)["crm_id"], "contact_id": _cid(),
-                            "situacao": "concluida", "modificado_em": "2026-10-30T12:00:00Z"}]
-    ctx = _ctx(_agora() + timedelta(seconds=2))
-    solicitacoes.sincronizar_solicitacoes(ctx, hub=ambiente)
-    assert _sol(sid)["status"] == "enviada" and ctx.gravados == 0
+    t0 = _agora() + timedelta(seconds=1)
+    _espelhar(ambiente, sid, t0)
+    ambiente.definir_estado(sid, 0, 3)
+    _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=7))
+    assert _sol(sid)["status"] == "pendente_associado"
+    ambiente.definir_estado(sid, 0, 1)  # a Central saiu de "Aguardando detalhes"
+    _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=14))
+    s = _sol(sid)
+    assert s["status"] == "em_atendimento" and (s["crm_estado"], s["crm_status"]) == (0, 1)
+    assert _eventos(sid)[-1]["origem"] == "crm" and _divergencias(sid) == []
+
+
+def test_sincronizar_codigo_desconhecido_e_registro_sumido(ambiente, monkeypatch):
+    cid = _cid()
+    sid = _criar(cid)
+    t0 = _agora() + timedelta(seconds=1)
+    _espelhar(ambiente, sid, t0)
+    ambiente.definir_estado(sid, 0, 100000005)  # status customizado do tenant, ativo
+    _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=7))
+    s = _sol(sid)
+    assert s["status"] == "enviada" and s["crm_status"] == 100000005
+    assert _divergencias(sid) == ["codigo_crm_nao_mapeado"]
+    _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=14))  # mesmo código: não repete o aviso
+    assert _divergencias(sid) == ["codigo_crm_nao_mapeado"]
+
+    del ambiente.registros[sid]  # mesclado/fora do alcance do listar
+    _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=21))
+    assert _divergencias(sid)[-1] == "nao_encontrada_no_crm"
+    assert _sol(sid)["crm_consultado_em"] == t0 + timedelta(hours=21)  # não martela o hub
+
+
+def test_sincronizar_amplia_a_pagina_quando_a_central_tem_muitos_registros(ambiente, monkeypatch):
+    cid = _cid()
+    sid = _criar(cid)
+    t0 = _agora() + timedelta(seconds=1)
+    _espelhar(ambiente, sid, t0)
+    ambiente.registros_central(cid, 12)  # mais recentes que o pedido da área
+    ambiente.definir_estado(sid, 0, 2)
+    ctx = _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=7))
+    assert ambiente.listar_chamadas[-2:] == [(cid, 10), (cid, 50)]
+    assert _sol(sid)["status"] == "em_atendimento" and ctx.lidos == 10 + 13
+
+
+def test_linhas_lidas_hoje_le_o_rastro(ambiente):
+    from app.jobs import solicitacoes
+
+    assert solicitacoes.linhas_lidas_hoje(_agora()) >= 0
 
 
 # ============================================================== sem retorno

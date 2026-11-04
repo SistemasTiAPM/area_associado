@@ -46,10 +46,33 @@ REGIAO=sa-east-1
 ALERTAS=()
 alerta() { ALERTAS+=("$*"); }
 cnt() { printf '%s\n' "$1" | grep -cE -- "$2" || true; }   # grep -c, não -q (pipefail)
+# Leitura de log por janela. Achado em 03/11/2026 (Docker 29.1.3, json-file com rotação): no
+# nginx_porteiro, `docker logs --since` não devolve nada e um `--tail` grande demais devolve um trecho
+# ANTIGO (anterior ao restart de 29/10) no lugar das linhas recentes. Por isso: escolhe o maior --tail
+# cuja última linha é a mesma do `--tail 1` (leitura íntegra), filtra pelo carimbo de `-t`
+# (ISO 8601 UTC, comparável como texto) e tira o carimbo para os padrões continuarem valendo.
+_logs_janela() {  # $1 container, $2 corte ISO UTC
+  local ref n
+  ref=$(docker logs -t --tail 1 "$1" 2>/dev/null | cut -d' ' -f1) || true
+  for n in 100000 50000 20000 5000 1000; do
+    if [ "$(docker logs -t --tail "$n" "$1" 2>/dev/null | tail -1 | cut -d' ' -f1)" = "$ref" ]; then
+      { docker logs -t --tail "$n" "$1" 2>&1 || true; } | awk -v c="$2" 'substr($0,1,19) >= c' | cut -d' ' -f2-
+      return 0
+    fi
+  done
+  echo "AVISO: leitura dos logs de $1 inconsistente (docker logs)" >&2
+  return 0
+}
+logs_desde() {  # $1 container; janela = --desde (Nm, Nh ou Nd)
+  local n=${DESDE%[mhd]} u=${DESDE: -1} un
+  case "$u" in m) un=minutes ;; h) un=hours ;; d) un=days ;; *) echo "--desde inválido: $DESDE (use Nm, Nh ou Nd)" >&2; exit 2 ;; esac
+  [[ "$n" =~ ^[0-9]+$ ]] || { echo "--desde inválido: $DESDE (use Nm, Nh ou Nd)" >&2; exit 2; }
+  _logs_janela "$1" "$(date -u -d "-$n $un" +%Y-%m-%dT%H:%M:%S)"
+}
 
 # ------------------------------------------------------------- coleta
-LOG_AREA=$(docker logs --since "$DESDE" area_associado 2>&1 || true)
-LOG_PORT=$(docker logs --since "$DESDE" nginx_porteiro 2>&1 || true)
+LOG_AREA=$(logs_desde area_associado)
+LOG_PORT=$(logs_desde nginx_porteiro)
 
 n_5xx_area=$(cnt "$LOG_AREA" '" 5[0-9]{2}$')
 n_traceback=$(cnt "$LOG_AREA" 'Traceback')

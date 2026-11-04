@@ -60,7 +60,7 @@ class FormularioEntrada(BaseModel):
     @field_validator("mensagem")
     @classmethod
     def _mensagem(cls, v: str) -> str:
-        return schemas.texto_livre(v, maximo=2000, multilinha=True)
+        return schemas.texto_livre(v, maximo=schemas.MENSAGEM_OUTRO_MAX, multilinha=True, utf16=True)
 
 
 class CancelamentoEntrada(BaseModel):

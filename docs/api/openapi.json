@@ -1507,6 +1507,11 @@
             "title": "Linha Do Tempo",
             "type": "array"
           },
+          "na_central": {
+            "description": "O pedido já está no CRM da Central: cancelar e responder são pela Central, com o protocolo (pode_cancelar/pode_responder ficam false).",
+            "title": "Na Central",
+            "type": "boolean"
+          },
           "pode_avaliar": {
             "title": "Pode Avaliar",
             "type": "boolean"
@@ -1530,6 +1535,18 @@
             ],
             "description": "AAAA-MM-DD (America/Sao_Paulo); null sem envio ou se encerrada.",
             "title": "Prazo Em"
+          },
+          "protocolo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Protocolo da Central (CAS-######-XXXXXX); null até o pedido chegar ao CRM ou quando o destino não tem protocolo.",
+            "title": "Protocolo"
           },
           "rotulo_status": {
             "title": "Rotulo Status",
@@ -1561,6 +1578,8 @@
           "aguardando_parceiro",
           "prazo_em",
           "contato",
+          "protocolo",
+          "na_central",
           "criada_em",
           "atualizada_em",
           "pode_cancelar",
@@ -1614,6 +1633,11 @@
             "title": "Id",
             "type": "string"
           },
+          "na_central": {
+            "description": "O pedido já está no CRM da Central: cancelar e responder são pela Central, com o protocolo (pode_cancelar/pode_responder ficam false).",
+            "title": "Na Central",
+            "type": "boolean"
+          },
           "pode_avaliar": {
             "title": "Pode Avaliar",
             "type": "boolean"
@@ -1637,6 +1661,18 @@
             ],
             "description": "AAAA-MM-DD (America/Sao_Paulo); null sem envio ou se encerrada.",
             "title": "Prazo Em"
+          },
+          "protocolo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Protocolo da Central (CAS-######-XXXXXX); null até o pedido chegar ao CRM ou quando o destino não tem protocolo.",
+            "title": "Protocolo"
           },
           "rotulo_status": {
             "title": "Rotulo Status",
@@ -1668,6 +1704,8 @@
           "aguardando_parceiro",
           "prazo_em",
           "contato",
+          "protocolo",
+          "na_central",
           "criada_em",
           "atualizada_em",
           "pode_cancelar",

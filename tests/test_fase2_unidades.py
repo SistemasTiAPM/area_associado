@@ -209,7 +209,12 @@ def test_hub_401_renova_token_uma_vez(monkeypatch):
     (404, {"erro": "ferramenta_inexistente"}, "fonte_indisponivel", 503),
     (409, {"erro": "endereco_indisponivel"}, "endereco_indisponivel", 409),
     (409, {"erro": "outro_conflito"}, "fonte_indisponivel", 503),
-    (504, {"erro": "escrita_indeterminada"}, "fonte_indisponivel", 503),
+    # Resultado incerto ganha código próprio (ADR-0023); na API do associado continua 503.
+    (504, {"erro": "escrita_indeterminada"}, "escrita_indeterminada", 504),
+    (409, {"erro": "conflito"}, "conflito", 409),
+    (403, {"erro": "canal_nao_configurado"}, "canal_nao_configurado", 503),
+    (404, {"erro": "nao_encontrado", "mensagem": "Assunto não encontrado no CRM."}, "catalogo_crm_invalido", 503),
+    (404, {"erro": "nao_encontrado", "mensagem": "Contato não encontrado no CRM."}, "nao_encontrado", 404),
     (403, {"erro": "nao_permitido"}, "fonte_indisponivel", 503),
     (500, {}, "fonte_indisponivel", 503),
     (302, {}, "fonte_indisponivel", 503),

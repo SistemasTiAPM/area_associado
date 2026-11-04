@@ -30,6 +30,140 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-11-04 — Espelho das solicitações por incident/opportunity (P-06 e P-66; ADR-0023)
+
+O mcp_hub implantou `solicitacao.criar`/`solicitacao.listar` com contrato diferente do proposto pela área
+(`task` + três ferramentas). Plano aprovado pelo William em 04/11 com seis decisões: cancelar/responder
+bloqueados depois do envio, regra nova da P-66, texto fixo do pendente vindo do CRM, mensagem livre ≤ 1700
+unidades UTF-16, cadência de 6 h com teto de 5.000 linhas/dia e cota de 25.000, `sql/015` com as reservas
+deslocadas.
+
+- 🗄️ **Atlas** — `sql/015_solicitacao_crm.sql` (sha256 `4fdae22b…186f0e`): `crm_entidade`, `crm_protocolo`,
+  `crm_estado`/`crm_status`, `crm_consultado_em`, `crm_sync` + `retido`, CHECKs `crm_id = id`, par e
+  formato do protocolo, `GRANT UPDATE` nas 5 colunas. REQUISITOS §6.2 renumerado (016–025), PROVISIONAMENTO §2.6.
+- 🔌 **Integrador** — `hub.py`: `PedidoCrm`/`CriacaoCrm`/`RegistroCrm`, `solicitacao_criar` (resposta fora do
+  contrato = `escrita_indeterminada`), `solicitacao_listar` (descarta título/descrição), pausa do processo
+  pelo `Retry-After`, códigos `conflito`, `catalogo_crm_invalido`, `canal_nao_configurado`,
+  `escrita_indeterminada`; `hub_stub.py` no contrato novo; jobs: espelho cria ocorrência ou retém, sincronização
+  por contato com cadência, página ampliada, teto diário e transição só na mudança do par; `JOBS_ENSAIO_CONTATOS`;
+  `scripts/ensaio_espelho.py`.
+- ⚙️ **Maestro** — `catalogo_crm.py`, `crm.py` (texto em UTF-16, pior caso por tipo, corte marcado, CPF),
+  máquina com `(apm, crm)` `pendente_associado → em_atendimento` e 409 `na_central`; API com `protocolo` e
+  `na_central`; limite UTF-16 na mensagem livre (API e Ajuda); OpenAPI regenerado.
+- 🎨 **Vitrine** — detalhe com "Protocolo na Central", orientação para cancelar/complementar pela Central e
+  aviso próprio do pendente vindo do CRM; `MENSAGEM_MAX` 1700.
+- 📦 **Estivador** — `docs/JOBS.md` §2/§3/§4b/§5, `docs/CONTRATO-HUB.md` §Solicitações reescrita, ADR-0023.
+
+| Verificação | Resultado |
+|---|---|
+| pytest na imagem, sem banco | 393 passaram, 52 pulados (MySQL) |
+| pytest com MySQL 8.4.11 descartável, migrações 000–015 | 446 passaram |
+| Ensaio da `015` como `apm_area` | CHECKs recusam `crm_id ≠ id`, par incompleto, protocolo inválido e protocolo em oportunidade; UPDATE de `dados` 1143; DELETE 1142; reaplicação 3822 sem mudança |
+| `db_check` no ensaio | `conforme`, migrações 001–015, partições 26/26 |
+| `npm run check` (tipos, ESLint, Vitest) | 202 testes passaram |
+| e2e Playwright (imagem nova, MySQL 000–015, hub simulado) | 43 passaram, 2 pulados; 0 CSP, 0 axe |
+
+`sql/015` aplicada em produção pelo operador em 04/11 (`OK 015`, registrada em `schema_migrations` com
+o sha256 acima). Ainda não feito: commit, deploy, painel do hub (P-77) e o ensaio com o contato
+sintético. Pendências novas: P-74 (ferramenta de status), P-75 (cursor), P-76 (códigos do tenant e
+`detalhes` no 404), P-77 (painel). Nada foi commitado.
+
+## 2026-11-03 — P-19: pós-reboot conhece a área, o hub e os jobs (TI-72)
+
+`~/verificar-pos-reboot.sh` editado (backup `~/verificar-pos-reboot.sh.bak-20261103`), a partir de
+`deploy/verificar-pos-reboot.patch.md` e com quatro desvios achados ao rodar:
+
+- 16 containers esperados, com `appapm-cron`, `mcp_hub`, `area_associado` e `area_associado_jobs`;
+  saúde declarada dos três serviços novos; **container fora da lista** vira falha (achou `kind_agnesi`, P-73).
+- `/health` de `minha` e `mcp`, `/db-health` 403 na borda e o catch-all da 443 testado por host
+  desconhecido em `127.0.0.1`, com controle `parceiros` = 200.
+- Bloco do certificado de origem (falha de propósito até a P-01) e Tracebacks de área, jobs e hub.
+- **Leitura de log por janela refeita** (P-71): `docker logs --since` não devolvia nada para o
+  porteiro, então `real_ip`, `crit/emerg` e `5xx` passavam sem ler log. Mesmo conserto em
+  `scripts/alertas.sh`, que agora conta de verdade (24 h: 5xx=2, 429=6 no porteiro; 1 h: o 429 da prova
+  da TI-08).
+
+**Evidência:** `bash -n` ok; execução com 23 ok e 5 falhas, todas reais: swap com 1 arquivo (P-72),
+`kind_agnesi` unhealthy e fora da lista (P-73), certificado vencido e temporário (P-01).
+
+## 2026-11-03 — P-61: orientação do monitor externo para o Grafana
+
+Decisão do usuário: o monitor externo fica no Grafana, feito pela sessão do Claude Code do servidor do
+Grafana. Entregue `docs/handoff/MONITOR-EXTERNO-GRAFANA.md`: descoberta do ambiente, três caminhos
+(Synthetic Monitoring, blackbox no Prometheus existente, Prometheus + blackbox novos), 9 checagens
+(7 sites, `/db-health` = 403 como checagem de segurança, validade do certificado de borda), 4 regras de
+alerta e o bloco de resposta. Códigos e tempos medidos da EC2 na mesma data. A P-61 fecha quando o
+bloco voltar preenchido.
+
+## 2026-11-03 — P-34: catch-all na 443 do porteiro (TI-71)
+
+`deploy/nginx_porteiro/_00_padrao.conf.example` copiado para `sites-enabled/_00_padrao.conf`
+(`listen 443 ssl default_server; server_name _; return 444;`). A porta 80 continua com o default em
+`apm_parceiros.conf`. Antes, conferência no DNS do Cloudflare: os únicos registros A para `52.67.3.198`
+são os 7 vhosts (`app`, `formulario`, `login`, `mcp`, `minha`, `parceiros`, `totalpass`); nenhum CNAME
+aponta para eles (`ftp`/`wap` apontam para a raiz, em `179.188.52.197`; `enquete` para host externo).
+**Evidência:** `nginx -t` ok; os 7 hosts com o código de antes (`minha` 303, `app` 302, `mcp` 403, os
+demais 200); pelo próprio host, `--resolve naoexiste.apm.org.br:443:127.0.0.1` = `000` com `444` no log do
+porteiro, e o controle `parceiros` pelo mesmo caminho = 200. **Correção:** o `000` de
+`https://52.67.3.198/` usado na hora não prova o catch-all: é timeout de 10 s (a 443 pública não responde
+à própria EC2; hipótese: security group só com o Cloudflare). Reverter: apagar o arquivo e recarregar.
+Observação lateral: o Cloudflare marca alerta no TXT de SPF da raiz, fora do escopo do porteiro.
+
+## 2026-11-03 — Porteiro: zonas de limite da Onda 2 (TI-08)
+
+O operador copiou `deploy/nginx_porteiro/area_associado.conf.example` sobre o vhost real (backup em
+`~/porteiro-bak/area_associado.conf.20261103`, fora de `sites-enabled`), depois de confirmar com
+`nginx -T` que `area_solicitacoes`, `area_download` e `area_chave_escrita` não existiam em outro vhost.
+**Evidência:** `nginx -t` ok e reload sem `emerg`/`alert`; rajada de 15 POST sem sessão em
+`/api/v1/solicitacoes` = 14 × 401 e o 15.º 429 (5 r/s, burst 10); os 7 hosts com o código de antes
+(`minha` 303, `app` 302, `totalpass`/`parceiros`/`login`/`formulario` 200, `mcp` 403 na raiz) e
+`/health` de `minha` e `mcp` 200. O catch-all da 443 (`_00_padrao.conf`, P-34) ficou para depois de
+conferir no Cloudflare quais nomes apontam para `52.67.3.198`: o log do porteiro não grava o host, e um
+nome sem vhost próprio, que hoje cai em `apm_parceiros.conf`, passaria a receber 444 (520 no Cloudflare).
+
+## 2026-11-03 — Serviço de jobs no ar, em simulação
+
+O operador criou a conta `area-associado-jobs` no painel do hub (M-8) e o `.env.jobs` (0600, fora do
+git, 6 chaves, `JOBS_APLICAR=0`, `HUB_ESCRITA_HABILITADA=false`) e subiu
+`docker compose --profile jobs up -d area-associado-jobs`. **Evidência:** container `(healthy)`; boot
+com `RDS ok` em TLSv1.3, `modo=SIMULAR`, `hub=real`, `escrita_hub=False`, `smtp=stub`,
+`hub_client_id=area-associado-jobs`; os quatro jobs periódicos com `ok`, zero erros e zero abortados
+em `python -m app.jobs --estado`. `situacao_carteirinhas` aparece `PARADO` só porque ainda não teve
+a primeira execução diária, às 03:00 (ver P-70).
+
+**Conta M-8 provada** com `docker compose --profile jobs exec area-associado-jobs python -m scripts.check_hub`:
+`client_id : area-associado-jobs`, `token : ok (ferramentas:ler)`, `edição : desligada`, `sem cpf : ok`,
+`campos : 14/14` no perfil e `situacao : ok (ativo; registro ativo)` com `campos : 12/12`. A varredura
+noturna usa cota própria e não divide a da conta web.
+
+## 2026-11-03 — Migrações `sql/008` a `014` aplicadas no RDS `mysql-producao`
+
+Aplicadas pelo operador, uma por vez, entre 16:11 e 16:12, com snapshot manual antes pelo console.
+Hashes conferidos com os do repositório antes de aplicar e registrados em `schema_migrations`.
+
+| Versão | Arquivo | sha256 (início) |
+|---|---|---|
+| 008 | `008_particao_eventos.sql` | `8c3e26ad` |
+| 009 | `009_flags_v2.sql` | `b9a2a362` |
+| 010 | `010_solicitacao.sql` | `16c9518e` |
+| 011 | `011_job_execucao.sql` | `4e80bba8` |
+| 012 | `012_comunicacao_notificacao.sql` | `1477bd96` |
+| 013 | `013_ajuda_parametro.sql` | `92fa92cd` |
+| 014 | `014_carteirinha_revogacao.sql` | `9595dc35` |
+
+**Evidência:** `scripts/db_check.py` em produção com `resultado : conforme`, 18 tabelas, migrações
+001–014, `evento_log=26 evento_uso=26` partições, UPDATE só nas tabelas e colunas da allowlist;
+`feature_flag` com 15 linhas; `parametro` com 5 chaves; `central_telefone` = `(11) 3188-6200` e `central_horario` = `Segunda a sexta, das 8h às 18h`
+preenchidos em seguida pelo operador (P-69, texto a validar com a Central); `app.prontidao.recursos()` no container = `solicitacoes: True, ajuda: True`. P05 e P14 saem de
+"em construção".
+
+## 2026-10-30 — M-7: grant do hub para `associado.situacao` e `historico_associacao`
+
+Aplicado pelo operador no painel do `mcp_hub` (conta `area-associado`, grant exato nas duas
+ferramentas). **Evidência:** `scripts/check_hub.py` em produção imprime
+`situacao : ok (ativo; registro ativo)` e `campos : 12/12`. Destrava a verificação da carteirinha em
+tempo quase real (TI-45) e o job `situacao_noturna` pela conta web até a M-8 existir.
+
 ## 2026-10-30 — Onda 2: solicitações, Ajuda, carteirinha em tempo quase real e serviço de jobs (no ar)
 
 **Plano:** `docs/PLANO-EXECUCAO.md` §Onda 2 (contrato de API fixado antes do código), aprovado pelo usuário

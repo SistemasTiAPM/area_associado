@@ -1,23 +1,34 @@
-"""Jobs das solicitações (REQUISITOS §7.3 e §7.5; ADR-0003 §5, ADR-0018).
+"""Jobs das solicitações (REQUISITOS §7.3 e §7.5; ADR-0003 §5, ADR-0018, ADR-0023).
 
-- `espelhar_solicitacoes` (1 min, efeito EXTERNO): outbox `crm_*` →
-  `solicitacao.espelhar` (sem `crm_id`) ou `solicitacao.status_atualizar` (com
-  `crm_id`). Sucesso grava `crm_id`/`crm_sync=ok` e promove `criada → enviada`
-  (`canal_envio='crm'`) pela máquina de estados (ator `sistema`, origem `job`).
+- `espelhar_solicitacoes` (1 min, efeito EXTERNO): outbox `crm_*`.
+  Pedido sem `crm_id` e com destino no catálogo (`catalogo_crm`) → `solicitacao.criar`
+  (o `registro_id` é o próprio `id`; idempotente). Sucesso grava `crm_id = id`,
+  entidade, protocolo e o par `statecode/statuscode` da criação e promove
+  `criada → enviada` (`canal_envio='crm'`) pela máquina (ator `sistema`, origem `job`).
+  Pedido COM `crm_id` (mudança local depois do envio) ou sem destino no catálogo →
+  `crm_sync='retido'` + aviso no `evento_log`: o hub não tem ferramenta de status, e o
+  que fica retido é reprocessável quando houver (`WHERE crm_sync = 'retido'`).
   Falha: recuo 1, 2, 4 … 60 min; 10 tentativas (ou erro permanente) → `falhou`
   + `evento_log` severidade `erro`. Respeita `crm_proxima_em` (janela de
   arrependimento do cancelamento da associação). Só chama o hub com
   `JOBS_APLICAR=1` e `HUB_ESCRITA_HABILITADA=true`.
-- `sincronizar_solicitacoes` (5 min, leitura do hub): `solicitacao.alteracoes_consultar`
-  com cursor (guardado em `job_execucao.posicao` da última execução ok) e
-  transições pela máquina com origem `crm`. Terminal local prevalece
-  (divergência em `evento_log`; cancelamento local é reenviado). Só com `JOBS_APLICAR=1`.
+- `sincronizar_solicitacoes` (15 min, leitura do hub): para cada contato com pedido no
+  CRM, não terminal e consultado há mais de `JOBS_SYNC_CADENCIA_H` horas,
+  `solicitacao.listar` (até `JOBS_SYNC_LIMITE` linhas; 50 se o pedido não estiver na
+  página) e casamento por `registro_id`. Transita SÓ quando o par
+  `statecode/statuscode` MUDA em relação ao último visto (`crm_estado/crm_status`):
+  depois de o associado agir na área o CRM continua no estado anterior, e reagir
+  ao estado faria o pedido oscilar. Teto diário de linhas lidas
+  (`JOBS_SYNC_LINHAS_DIA`): a cota PII do hub conta LINHAS. Só com `JOBS_APLICAR=1`.
 - `marcar_sem_retorno` (15 min, efeito local): marcador A05 no 1.º vencimento do
   prazo e fila de ligações no 2.º — `maquina.marcar_sem_retorno` da frente A.
 
+`JOBS_ENSAIO_CONTATOS` (lista de contact_id) restringe espelho e sincronização a esses
+contatos — ensaio em produção sem tocar pedido de associado real.
+
 Nenhuma chamada HTTP acontece com transação aberta: lê → chama o hub → abre
 transação curta, trava a linha e confere se nada mudou no meio (`status` e
-`atualizada_em`); se mudou, o espelho fica `pendente` para levar o estado atual.
+`atualizada_em`); se mudou, o espelho fica `pendente` para tratar o estado novo.
 `evento_uso` sai depois do commit (regra 20).
 """
 
@@ -25,47 +36,66 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import bindparam, text
 
 from .. import audit, uso
 from ..config import get_settings
-from ..dominio.solicitacoes import maquina, rotulos
-from ..integracoes.hub import AlteracaoCrm, ClienteHub, HubError, alteracao_de_linha, obter_hub
+from ..dominio.solicitacoes import catalogo_crm, crm, maquina, rotulos
+from ..dominio.solicitacoes.schemas import FUSO
+from ..integracoes.hub import ClienteHub, CriacaoCrm, HubError, PedidoCrm, RegistroCrm, obter_hub
 from .base import Contexto
 from .politica import DISJUNTOR_SEGUIDAS, PERMANENTE, SISTEMICO, classificar_hub, proxima_tentativa
 
 logger = logging.getLogger("area_associado.jobs.solicitacoes")
 
-LOTE_SYNC = 100
-PAGINAS_SYNC = 5
 LOTE_SEM_RETORNO = 500
+LIMITE_AMPLIADO = 50
+PAUSA_SYNC_S = 0.25  # entre contatos: ≤ 4 chamadas/s, longe dos 300/min da conta
 
-# Situação da `task` (hub) → status da área (REQUISITOS §7.5; P-06 ainda precisa
-# distinguir "não seguiu" de "cancelada pela APM": as duas viram `concluida_negativa`).
-MAPA_CRM: dict[str, str | None] = {
-    "nao_iniciada": None,  # a área não regride (criada/enviada já cobrem)
-    "em_andamento": "em_atendimento",
-    "aguardando_associado": "pendente_associado",
-    "concluida": "concluida_positiva",
-    "nao_seguiu": "concluida_negativa",
-    "cancelada": "concluida_negativa",
+# statecode/statuscode do CRM → status da área. Códigos padrão do Dataverse;
+# customização do tenant a confirmar (pendência no hub). None = não muda a área
+# (0/1 "Em andamento" é o status de CRIAÇÃO: ninguém da Central abriu ainda).
+_OCORRENCIA: dict[tuple[int, int], str | None] = {
+    (0, 1): None,                    # Em andamento (criação)
+    (0, 2): "em_atendimento",        # Em espera
+    (0, 3): "pendente_associado",    # Aguardando detalhes
+    (0, 4): "em_atendimento",        # Pesquisando
+    (1, 5): "concluida_positiva",    # Problema resolvido
+    (1, 1000): "concluida_positiva",  # Informações fornecidas
+    (2, 6): "concluida_negativa",    # Cancelada
+    (2, 2000): None,                 # Mesclada em outra ocorrência: segue lá (divergência)
 }
-_RE_CPF = re.compile(r"(^|[^0-9a-fA-F])[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}([^0-9a-fA-F]|$)")
+_OPORTUNIDADE: dict[tuple[int, int], str | None] = {
+    (0, 1): None,                    # Em andamento (criação)
+    (0, 2): "em_atendimento",        # Em espera
+}
+_ESTADO_FINAL = {1: "concluida_positiva", 2: "concluida_negativa"}  # resolvida/ganha · cancelada/perdida
+
+
+def mapear_crm(entidade: str, statecode: int, statuscode: int) -> tuple[str | None, bool]:
+    """(status alvo da área ou None, código conhecido). Estado final (1/2) com
+    statuscode customizado vale pelo statecode; ativo (0) desconhecido não muda nada."""
+    tabela = _OCORRENCIA if entidade == "ocorrencia" else _OPORTUNIDADE
+    if (statecode, statuscode) in tabela:
+        return tabela[(statecode, statuscode)], (statecode, statuscode) != (2, 2000)
+    if statecode in _ESTADO_FINAL:
+        return _ESTADO_FINAL[statecode], False
+    return None, False
+
+
+def mensagem_pendente_crm(protocolo: str | None) -> str:
+    texto = rotulos.MENSAGEM_PENDENTE_CRM
+    return f"{texto} Protocolo: {protocolo}." if protocolo else texto
 
 
 def _sessao():
     from ..database import session_scope  # import tardio: testes substituem
 
     return session_scope()
-
-
-def _iso(valor: datetime | None) -> str | None:
-    return valor.strftime("%Y-%m-%dT%H:%M:%SZ") if valor else None
 
 
 def _json(valor: Any) -> dict[str, Any]:
@@ -81,15 +111,26 @@ def _registrar_uso(transicoes: Sequence[tuple[str, str, str, str]], origem_detal
                       detalhes={"de": de, "para": para, "origem": origem_detalhe})
 
 
+def _filtro_contatos(params: dict[str, Any], coluna: str = "contact_id") -> str:
+    """Ensaio (`JOBS_ENSAIO_CONTATOS`): só estes contatos; vazio = todos."""
+    contatos = get_settings().jobs_ensaio_contatos_lista
+    if not contatos:
+        return ""
+    params["ensaio"] = list(contatos)
+    return f" AND {coluna} IN :ensaio"
+
+
+def _consulta(sql: str, params: dict[str, Any]) -> Any:
+    consulta = text(sql)
+    expandir = [nome for nome in ("ids", "ensaio", "abertos") if nome in params]
+    return consulta.bindparams(*(bindparam(n, expanding=True) for n in expandir)) if expandir else consulta
+
+
 # =================================================================== espelho
 _SQL_PENDENTES = (
-    "SELECT id, contact_id, tipo_servico, beneficio_id, parceiro_id, tipo_ativacao, canal_envio, status, crm_id, "
-    " crm_tentativas, prazo_retorno_dias, dados, cancel_motivo, criada_em, atualizada_em "
+    "SELECT id, contact_id, tipo_servico, beneficio_id, status, crm_id, crm_protocolo, crm_tentativas, dados, "
+    " atualizada_em "
     "FROM solicitacao WHERE crm_sync IN ('pendente', 'erro') AND crm_proxima_em <= :agora"
-)
-_SQL_ULTIMA_MENSAGEM = text(
-    "SELECT ator, mensagem_publica FROM solicitacao_evento WHERE solicitacao_id = :id AND evento = 'transicao' "
-    "ORDER BY ocorrido_em DESC, id DESC LIMIT 1"
 )
 
 
@@ -99,44 +140,23 @@ def pendentes_do_espelho(agora: datetime, lote: int, ids: Sequence[str] | None =
     if ids is not None:
         sql += " AND id IN :ids"
         params["ids"] = list(ids)
-    consulta = text(sql + " ORDER BY crm_proxima_em, id LIMIT :lote")
-    if ids is not None:
-        consulta = consulta.bindparams(bindparam("ids", expanding=True))
+    sql += _filtro_contatos(params)
     with _sessao() as db:
-        return list(db.execute(consulta, params).all())
+        return list(db.execute(_consulta(sql + " ORDER BY crm_proxima_em, id LIMIT :lote", params), params).all())
 
 
-def payload_espelho(r: Any) -> dict[str, Any]:
-    """Entrada de `solicitacao.espelhar` (docs/CONTRATO-HUB.md). Chave = `contact_id`
-    + `solicitacao_id`; `campos` = o que o associado preencheu (allowlist do tipo,
-    CHECK anti-CPF no banco). Nunca CPF, e-mail ou telefone."""
-    carga: dict[str, Any] = {
-        "contact_id": str(r.contact_id),
-        "solicitacao_id": str(r.id),
-        "tipo": r.tipo_servico,
-        "titulo": f"Minha APM: {rotulos.rotulo_tipo(r.tipo_servico)}"[:200],
-        "status": r.status,
-        "criada_em": _iso(r.criada_em),
-        "prazo_retorno_dias": int(r.prazo_retorno_dias),
-        "campos": _json(r.dados),
-    }
-    if r.beneficio_id:
-        carga["beneficio_id"] = r.beneficio_id
-        carga["parceiro_id"] = r.parceiro_id
-    return carga
-
-
-def payload_status(db: Any, r: Any) -> dict[str, Any]:
-    """Entrada de `solicitacao.status_atualizar`: status atual + a última resposta
-    do associado (se a última transição foi dele) + motivo do cancelamento."""
-    carga: dict[str, Any] = {"contact_id": str(r.contact_id), "solicitacao_id": str(r.id), "crm_id": str(r.crm_id),
-                             "status": r.status}
-    ultima = db.execute(_SQL_ULTIMA_MENSAGEM, {"id": r.id}).first()
-    if ultima is not None and ultima.ator == "associado" and ultima.mensagem_publica:
-        carga["mensagem_associado"] = str(ultima.mensagem_publica)[:2000]
-    if r.status == "cancelada" and r.cancel_motivo:
-        carga["cancel_motivo"] = str(r.cancel_motivo)[:200]
-    return carga
+def pedido_crm(r: Any) -> PedidoCrm | None:
+    """Pedido de `solicitacao.criar` a partir da linha; None = sem destino no catálogo.
+    `crm.ConteudoRecusado` se o texto não puder ir (CPF/tamanho)."""
+    destino = catalogo_crm.destino(r.tipo_servico, r.beneficio_id)
+    if destino is None:
+        return None
+    texto = crm.texto_para_crm(r.tipo_servico, _json(r.dados))
+    if texto.cortado:
+        logger.warning("espelho: texto de %s cortado para caber no CRM (revisar limite na origem)", r.id)
+    return PedidoCrm(contact_id=str(r.contact_id), registro_id=str(r.id), entidade=destino.entidade,
+                     tipo=str(r.tipo_servico), titulo=texto.titulo, descricao=texto.descricao,
+                     assunto_id=destino.assunto_id, time_id=destino.time_id)
 
 
 _SQL_TRAVAR = text(
@@ -144,10 +164,10 @@ _SQL_TRAVAR = text(
 )
 
 
-def _confirmar(r: Any, crm_id: str, agora: datetime) -> list[tuple[str, str, str, str]]:
-    """Sucesso no hub. Mesmo `status`/`atualizada_em` de quando o item foi lido →
-    `crm_sync=ok` (+ promoção a `enviada`); mudou no meio → `pendente` já, para o
-    próximo ciclo levar o estado novo. Devolve as transições (para o evento_uso)."""
+def _confirmar(r: Any, criacao: CriacaoCrm, agora: datetime) -> list[tuple[str, str, str, str]]:
+    """Sucesso no hub. Grava a identidade no CRM (sempre: o registro existe lá) e,
+    se nada mudou desde a leitura, `crm_sync=ok` + promoção a `enviada`; mudou no
+    meio → `pendente`, e o próximo ciclo trata o estado novo (retido)."""
     transicoes: list[tuple[str, str, str, str]] = []
     with _sessao() as db:
         atual = db.execute(_SQL_TRAVAR, {"id": r.id}).first()
@@ -160,9 +180,11 @@ def _confirmar(r: Any, crm_id: str, agora: datetime) -> list[tuple[str, str, str
                                     agora=agora)
             transicoes.append((res.solicitacao_id, res.contact_id, res.de, res.para))
         db.execute(text(
-            "UPDATE solicitacao SET crm_id = :crm, crm_sync = :sync, crm_tentativas = 0, crm_proxima_em = :agora "
-            "WHERE id = :id"
-        ), {"crm": crm_id, "sync": "pendente" if mudou else "ok", "agora": agora, "id": r.id})
+            "UPDATE solicitacao SET crm_id = id, crm_entidade = :ent, crm_protocolo = :prot, crm_estado = :est, "
+            " crm_status = :sts, crm_consultado_em = :agora, crm_sync = :sync, crm_tentativas = 0, "
+            " crm_proxima_em = :agora WHERE id = :id"
+        ), {"ent": criacao.entidade, "prot": criacao.protocolo, "est": criacao.statecode, "sts": criacao.statuscode,
+            "agora": agora, "sync": "pendente" if mudou else "ok", "id": r.id})
     return transicoes
 
 
@@ -187,6 +209,24 @@ def _registrar_falha(r: Any, classe: str, codigo: str, agora: datetime) -> bool:
     return bool(afetadas) and proxima is None
 
 
+def _reter(r: Any, motivo: str, agora: datetime) -> bool:
+    """O CRM não pode receber este estado: fica na área (`retido`), sem tentativa,
+    com aviso. Só se a linha não mudou desde a leitura."""
+    with _sessao() as db:
+        afetadas = db.execute(text(
+            "UPDATE solicitacao SET crm_sync = 'retido', crm_tentativas = 0, crm_proxima_em = :agora "
+            "WHERE id = :id AND crm_sync IN ('pendente', 'erro') AND atualizada_em = :lida"
+        ), {"agora": agora, "id": r.id, "lida": r.atualizada_em}).rowcount
+    if afetadas:
+        tipo = "solicitacao_transicao_retida" if motivo == "sem_ferramenta_status" else "solicitacao_sem_destino_crm"
+        logger.warning("espelho: %s retida na área (%s, status %s)", r.id, motivo, r.status)
+        audit.registrar_sistema(categoria="negocio", tipo=tipo, severidade="aviso", origem="espelhar_solicitacoes",
+                                contact_id=str(r.contact_id),
+                                detalhes={"solicitacao_id": str(r.id), "status": r.status, "motivo": motivo,
+                                          "protocolo": r.crm_protocolo})
+    return bool(afetadas)
+
+
 def _nada_a_espelhar(r: Any, agora: datetime) -> bool:
     """Cancelada antes de existir no CRM (ex.: desistência na janela de
     arrependimento): não há o que espelhar. `crm_sync=ok` com `crm_id` NULL."""
@@ -197,6 +237,14 @@ def _nada_a_espelhar(r: Any, agora: datetime) -> bool:
         ), {"agora": agora, "id": r.id}).rowcount)
 
 
+def _acao_prevista(r: Any) -> str:
+    if r.crm_id is None and r.status == "cancelada":
+        return "nada"
+    if r.crm_id is not None:
+        return "reter"
+    return "criar" if catalogo_crm.destino(r.tipo_servico, r.beneficio_id) else "reter"
+
+
 def espelhar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None, ids: Sequence[str] | None = None) -> None:
     s = get_settings()
     itens = pendentes_do_espelho(ctx.agora, s.jobs_lote, ids)
@@ -204,8 +252,8 @@ def espelhar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None, ids: 
     if not itens:
         return
     if not ctx.aplicar:
-        logger.info("espelho (simulação): %d solicitação(ões) seriam enviadas ao CRM: %s", len(itens),
-                    ", ".join(f"{r.id}:{'status_atualizar' if r.crm_id else 'espelhar'}" for r in itens[:10]))
+        logger.info("espelho (simulação): %d solicitação(ões) na fila do CRM: %s", len(itens),
+                    ", ".join(f"{r.id}:{_acao_prevista(r)}" for r in itens[:10]))
         return
     if not s.hub_escrita_habilitada:
         logger.warning("espelho: HUB_ESCRITA_HABILITADA=false — %d solicitação(ões) aguardando", len(itens))
@@ -221,14 +269,22 @@ def espelhar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None, ids: 
             if _nada_a_espelhar(r, ctx.agora):
                 ctx.gravados += 1
             continue
+        if r.crm_id is not None:
+            if _reter(r, "sem_ferramenta_status", ctx.agora):
+                ctx.gravados += 1
+            continue
         try:
-            if r.crm_id is None:
-                crm_id = hub.solicitacao_espelhar(payload_espelho(r))
-            else:
-                with _sessao() as db:
-                    carga = payload_status(db, r)
-                hub.solicitacao_status_atualizar(carga)
-                crm_id = str(r.crm_id)
+            pedido = pedido_crm(r)
+        except crm.ConteudoRecusado as exc:
+            ctx.erros += 1
+            _registrar_falha(r, PERMANENTE, f"conteudo_{exc.motivo}", ctx.agora)
+            continue
+        if pedido is None:
+            if _reter(r, "sem_destino_no_catalogo", ctx.agora):
+                ctx.gravados += 1
+            continue
+        try:
+            criacao = hub.solicitacao_criar(pedido)
         except HubError as exc:
             falha = classificar_hub(exc)
             if falha.classe == SISTEMICO:
@@ -245,7 +301,7 @@ def espelhar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None, ids: 
                     return
             continue
         seguidas = 0
-        transicoes = _confirmar(r, crm_id, ctx.agora)
+        transicoes = _confirmar(r, criacao, ctx.agora)
         ctx.gravados += 1
         _registrar_uso(transicoes, "sistema")
 
@@ -263,113 +319,158 @@ def _caminho(de: str, para: str) -> list[str]:
     return []
 
 
-def _mensagem_crm(texto: str | None) -> str | None:
-    """Mensagem pública vinda do CRM: uma linha limpa, ≤ 2000, nunca com CPF."""
-    if not texto:
-        return None
-    limpo = " ".join("".join(c if c.isprintable() else " " for c in texto).split())[:2000]
-    if not limpo or _RE_CPF.search(limpo):
-        return None
-    return limpo
-
-
-def _divergencia(alt: AlteracaoCrm, motivo: str, local: str | None, contact_id: str | None) -> None:
-    logger.warning("sync: divergência em %s (%s; local=%s crm=%s)", alt.solicitacao_id, motivo, local, alt.situacao)
+def _divergencia(sid: str, contact_id: str | None, motivo: str, local: str | None,
+                 reg: RegistroCrm | None) -> None:
+    crm_par = f"{reg.statecode}/{reg.statuscode}" if reg else None
+    logger.warning("sync: divergência em %s (%s; local=%s crm=%s)", sid, motivo, local, crm_par)
     audit.registrar_sistema(categoria="negocio", tipo="solicitacao_divergencia_crm", severidade="aviso",
                             origem="sincronizar_solicitacoes", contact_id=contact_id,
-                            detalhes={"solicitacao_id": alt.solicitacao_id, "motivo": motivo, "status_local": local,
-                                      "situacao_crm": alt.situacao})
+                            detalhes={"solicitacao_id": sid, "motivo": motivo, "status_local": local,
+                                      "situacao_crm": crm_par})
 
 
-def aplicar_alteracao(alt: AlteracaoCrm, agora: datetime) -> tuple[bool, list[tuple[str, str, str, str]]]:
-    """Aplica UMA alteração do CRM. Devolve (gravou, transições)."""
+_ABERTOS = list(rotulos.NAO_TERMINAIS)
+
+
+def aplicar_registro(sid: str, reg: RegistroCrm, agora: datetime) -> tuple[bool, list[tuple[str, str, str, str]]]:
+    """Aplica UM registro do CRM ao pedido `sid`. Devolve (transitou, transições).
+    Sempre grava o par visto e `crm_consultado_em`; só transita se o par MUDOU."""
     transicoes: list[tuple[str, str, str, str]] = []
-    pendencia: tuple[str, str | None, str | None] | None = None
+    pendencia: tuple[str, str | None] | None = None
     with _sessao() as db:
         r = db.execute(text(
-            "SELECT id, contact_id, status, crm_id, crm_sync FROM solicitacao WHERE id = :id FOR UPDATE"
-        ), {"id": alt.solicitacao_id}).first()
+            "SELECT id, contact_id, status, crm_entidade, crm_protocolo, crm_estado, crm_status "
+            "FROM solicitacao WHERE id = :id AND crm_id IS NOT NULL FOR UPDATE"
+        ), {"id": sid}).first()
         if r is None:
-            logger.warning("sync: alteração de solicitação desconhecida (%s) — ignorada", alt.solicitacao_id)
             return False, []
         local, cid = str(r.status), str(r.contact_id)
-        if cid != alt.contact_id or (r.crm_id is not None and str(r.crm_id) != alt.crm_id):
-            pendencia = ("identidade_divergente", local, None)
-        else:
-            alvo = MAPA_CRM[alt.situacao]
-            if alvo is None or alvo == local:
-                return False, []
+        mudou = (reg.statecode, reg.statuscode) != (r.crm_estado, r.crm_status)
+        if mudou:
+            alvo, conhecido = mapear_crm(str(r.crm_entidade), reg.statecode, reg.statuscode)
+            if (alvo is None and (reg.statecode, reg.statuscode) == (0, 1) and r.crm_estado is not None
+                    and (r.crm_estado, r.crm_status) != (0, 1)):
+                # 0/1 só é "nada" na criação; voltando de outro estado (ex.: a Central saiu de
+                # "Aguardando detalhes"), o atendimento retomou.
+                alvo = "em_atendimento"
             if local in rotulos.TERMINAIS:
-                pendencia = ("terminal_local_prevalece", local, cid)
-                if local == "cancelada" and r.crm_sync == "ok" and r.crm_id is not None:
-                    # Cancelamento local reenviado ao CRM (REQUISITOS §7.3).
-                    db.execute(text(
-                        "UPDATE solicitacao SET crm_sync = 'pendente', crm_tentativas = 0, crm_proxima_em = :agora "
-                        "WHERE id = :id AND crm_sync = 'ok'"), {"agora": agora, "id": r.id})
-            elif r.crm_sync != "ok":
-                # Mudança local ainda não espelhada: o local prevalece; o CRM recebe o
-                # estado atual no próximo espelho e a task volta pelo cursor.
-                logger.info("sync: %s com espelho pendente — alteração do CRM adiada", alt.solicitacao_id)
-                return False, []
-            else:
+                if alvo is not None and alvo != local:
+                    pendencia = ("terminal_local_prevalece", local)
+            elif alvo is None:
+                if not conhecido:
+                    pendencia = ("codigo_crm_nao_mapeado", local)
+            elif alvo != local:
                 passos = _caminho(local, alvo)
-                mensagem = _mensagem_crm(alt.mensagem_publica)
                 if not passos:
-                    pendencia = ("transicao_nao_prevista", local, cid)
-                elif "pendente_associado" in passos and mensagem is None:
-                    pendencia = ("pendente_sem_mensagem", local, cid)
-                else:
-                    for passo in passos:
-                        res = maquina.transitar(db, solicitacao_id=alt.solicitacao_id, para=passo, ator="apm",
-                                                origem="crm", agora=agora,
-                                                mensagem=mensagem if passo == "pendente_associado" else None)
-                        transicoes.append((res.solicitacao_id, res.contact_id, res.de, res.para))
+                    pendencia = ("transicao_nao_prevista", local)
+                for passo in passos:
+                    mensagem = mensagem_pendente_crm(r.crm_protocolo) if passo == "pendente_associado" else None
+                    res = maquina.transitar(db, solicitacao_id=sid, para=passo, ator="apm", origem="crm",
+                                            agora=agora, mensagem=mensagem)
+                    transicoes.append((res.solicitacao_id, res.contact_id, res.de, res.para))
+        db.execute(text(
+            "UPDATE solicitacao SET crm_estado = :est, crm_status = :sts, crm_consultado_em = :agora "
+            "WHERE id = :id"), {"est": reg.statecode, "sts": reg.statuscode, "agora": agora, "id": sid})
     if pendencia is not None:
-        motivo, status_local, contato = pendencia
-        _divergencia(alt, motivo, status_local, contato)
-        return False, []
+        _divergencia(sid, cid, pendencia[0], pendencia[1], reg)
     return bool(transicoes), transicoes
 
 
-def sincronizar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None) -> None:
-    if not ctx.aplicar:
-        logger.info("sync (simulação): consultaria alterações no CRM desde a posição %s",
-                    ctx.posicao_anterior or "inicial")
+def _marcar_consultado(ids: Sequence[str], agora: datetime) -> None:
+    if not ids:
         return
+    with _sessao() as db:
+        db.execute(text("UPDATE solicitacao SET crm_consultado_em = :agora WHERE id IN :ids")
+                   .bindparams(bindparam("ids", expanding=True)), {"agora": agora, "ids": list(ids)})
+
+
+def contatos_a_consultar(agora: datetime, cadencia_h: int, lote: int) -> list[str]:
+    """Contatos com pedido no CRM, não terminal, cuja consulta mais antiga passou da cadência."""
+    params: dict[str, Any] = {"limite": agora - timedelta(hours=cadencia_h), "lote": int(lote),
+                              "abertos": _ABERTOS}
+    sql = ("SELECT contact_id, MIN(COALESCE(crm_consultado_em, '1970-01-01')) AS mais_antiga FROM solicitacao "
+           "WHERE crm_id IS NOT NULL AND status IN :abertos" + _filtro_contatos(params) +
+           " GROUP BY contact_id HAVING mais_antiga < :limite ORDER BY mais_antiga, contact_id LIMIT :lote")
+    with _sessao() as db:
+        return [str(linha.contact_id) for linha in db.execute(_consulta(sql, params), params)]
+
+
+def _abertos_do_contato(contact_id: str) -> list[Any]:
+    with _sessao() as db:
+        return list(db.execute(_consulta(
+            "SELECT id, status FROM solicitacao WHERE contact_id = :c AND crm_id IS NOT NULL AND status IN :abertos",
+            {"abertos": _ABERTOS}), {"c": contact_id, "abertos": _ABERTOS}))
+
+
+def linhas_lidas_hoje(agora: datetime) -> int:
+    """Linhas do CRM já lidas hoje (dia de São Paulo) pela sincronização: a cota do hub conta linhas."""
+    local = agora.replace(tzinfo=timezone.utc).astimezone(FUSO)
+    meia_noite = local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
+    with _sessao() as db:
+        total = db.execute(text(
+            "SELECT COALESCE(SUM(itens_lidos), 0) FROM job_execucao WHERE job = 'sincronizar_solicitacoes' "
+            "AND iniciado_em >= :desde AND modo = 'aplicar'"), {"desde": meia_noite}).scalar()
+    return int(total or 0)
+
+
+def sincronizar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None) -> None:
+    s = get_settings()
+    contatos = contatos_a_consultar(ctx.agora, s.jobs_sync_cadencia_h, s.jobs_lote)
+    if not ctx.aplicar:
+        logger.info("sync (simulação): consultaria %d contato(s) no CRM (cadência %d h)", len(contatos),
+                    s.jobs_sync_cadencia_h)
+        return
+    if not contatos:
+        return
+    teto = s.jobs_sync_linhas_dia
+    ja_lidas = linhas_lidas_hoje(ctx.agora)
     hub = hub or obter_hub()
-    posicao = ctx.posicao_anterior
-    for _ in range(PAGINAS_SYNC):
+    for indice, cid in enumerate(contatos):
         if ctx.parar():
             return
-        try:
-            linhas = hub.solicitacao_alteracoes_consultar(posicao, LOTE_SYNC)
-        except HubError as exc:
-            ctx.erro_sistemico = f"hub: {classificar_hub(exc).codigo}"
+        if ja_lidas + ctx.lidos + s.jobs_sync_limite > teto:
+            ctx.erro_sistemico = f"teto diário de linhas do CRM ({teto}) atingido"
+            logger.warning("sync: teto diário de %d linhas atingido — %d contato(s) ficam para amanhã", teto,
+                           len(contatos) - indice)
             return
-        for linha in linhas:
+        if indice and ctx.esperar(PAUSA_SYNC_S):
+            return
+        abertos = _abertos_do_contato(cid)
+        if not abertos:
+            continue
+        try:
+            registros = hub.solicitacao_listar(cid, s.jobs_sync_limite)
+            ctx.lidos += len(registros)
+            por_id = {reg.registro_id: reg for reg in registros}
+            faltando = [a for a in abertos if str(a.id) not in por_id]
+            if faltando and len(registros) >= s.jobs_sync_limite and s.jobs_sync_limite < LIMITE_AMPLIADO:
+                ampliado = hub.solicitacao_listar(cid, LIMITE_AMPLIADO)
+                ctx.lidos += len(ampliado)
+                por_id.update({reg.registro_id: reg for reg in ampliado})
+        except HubError as exc:
+            falha = classificar_hub(exc)
+            ctx.erro_sistemico = f"hub: {falha.codigo}"
+            logger.warning("sync: rodada interrompida (%s)", falha.codigo)
+            return
+        nao_achados: list[str] = []
+        for aberto in abertos:
             ctx.pulso()
-            ctx.lidos += 1
-            alt = alteracao_de_linha(linha)
-            if alt is None:
-                ctx.erros += 1
-                logger.error("sync: linha fora do contrato descartada (revisar contrato do hub)")
-                # Sem cursor válido não dá para avançar com segurança: para aqui.
-                ctx.erro_sistemico = "sync: linha fora do contrato"
-                ctx.posicao = posicao
-                return
+            reg = por_id.get(str(aberto.id))
+            if reg is None:
+                nao_achados.append(str(aberto.id))
+                _divergencia(str(aberto.id), cid, "nao_encontrada_no_crm", str(aberto.status), None)
+                continue
             try:
-                gravou, transicoes = aplicar_alteracao(alt, ctx.agora)
+                transitou, transicoes = aplicar_registro(str(aberto.id), reg, ctx.agora)
             except (maquina.TransicaoInvalida, maquina.SolicitacaoNaoEncontrada):
                 ctx.erros += 1
-                _divergencia(alt, "transicao_recusada", None, alt.contact_id)
-                gravou, transicoes = False, []
-            if gravou:
+                _divergencia(str(aberto.id), cid, "transicao_recusada", str(aberto.status), reg)
+                _marcar_consultado([str(aberto.id)], ctx.agora)
+                continue
+            if transitou:
                 ctx.gravados += 1
             _registrar_uso(transicoes, "apm")
-            posicao = alt.cursor
-            ctx.posicao = posicao
-        if len(linhas) < LOTE_SYNC:
-            return
+        _marcar_consultado(nao_achados, ctx.agora)
 
 
 # ============================================================== sem retorno

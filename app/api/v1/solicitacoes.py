@@ -45,6 +45,8 @@ _MENSAGENS_409: dict[str, str] = {
     "estado_invalido": "Esta solicitação mudou de situação. Atualizamos a página.",
     "ja_avaliada": "Esta solicitação já foi avaliada.",
     "prazo_expirado": "O prazo para avaliar esta solicitação terminou.",
+    "na_central": ("Este pedido já está com a Central de Relacionamento. Para cancelar ou responder, "
+                   "fale com a Central e informe o protocolo."),
 }
 
 ChaveIdempotencia = Annotated[str, StringConstraints(

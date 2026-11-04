@@ -34,6 +34,8 @@ for de in ("criada", "enviada"):
 for a, o in _PAR:
     ESPERADAS.add(("em_atendimento", "pendente_associado", a, o))
 ESPERADAS.add(("pendente_associado", "em_atendimento", "associado", "ui"))
+# P-66 (ADR-0023): a Central segue sem a resposta pela área — o CRM sai de "Aguardando detalhes".
+ESPERADAS.add(("pendente_associado", "em_atendimento", "apm", "crm"))
 for de in ("enviada", "em_atendimento"):
     for para in ("concluida_positiva", "concluida_negativa"):
         for a, o in _PAR | {("importacao", "importacao")}:
@@ -55,7 +57,7 @@ def test_tabela_de_transicoes_exaustiva():
     ("em_atendimento", "cancelada", "associado", "ui"),          # nunca depois que o parceiro atende (DIV-24)
     ("criada", "concluida_positiva", "apm", "backoffice"),       # não pula etapas
     ("criada", "enviada", "associado", "ui"),                    # associado não promove
-    ("pendente_associado", "em_atendimento", "apm", "crm"),      # só o associado responde
+    ("pendente_associado", "em_atendimento", "apm", "backoffice"),  # backoffice não pula a resposta
     ("concluida_positiva", "cancelada", "apm", "backoffice"),    # terminal não muda
     ("cancelada", "criada", "associado", "ui"),
     ("enviada", "enviada", "sistema", "job"),
@@ -129,12 +131,12 @@ def test_transitar_update_condicional_limpa_marcador_e_reabre_espelho(monkeypatc
 
     monkeypatch.setattr(comunicacao, "suprimir_pendentes", lambda *a, **k: 0)
     monkeypatch.setattr(comunicacao, "notificar", lambda *a, **k: True)
-    sess = _SessFalsa(_linha("pendente_associado", crm_id="11111111-2222-3333-4444-555555555555"))
-    r = maquina.transitar(sess, solicitacao_id=SID, contact_id=GUID, para="cancelada", ator="associado",
-                          origem="ui", cancel_motivo="mudei de ideia")
-    assert (r.de, r.para, r.evento_id) == ("pendente_associado", "cancelada", 42)
+    sess = _SessFalsa(_linha("pendente_associado", crm_id=SID))
+    r = maquina.transitar(sess, solicitacao_id=SID, para="cancelada", ator="apm", origem="backoffice",
+                          justificativa="pedido duplicado", cancel_motivo="duplicado")
+    assert (r.de, r.para, r.evento_id, r.origem) == ("pendente_associado", "cancelada", 42, "backoffice")
     select, update, insert = (s for s, _ in sess.sqls)
-    assert "FOR UPDATE" in select and "contact_id = :c" in select
+    assert "FOR UPDATE" in select and "contact_id = :c" not in select
     assert "WHERE id = :id AND status = :de" in update and "sem_retorno_desde = NULL" in update
     assert "crm_sync = 'pendente'" in update and "cancel_motivo" in update
     assert insert.startswith("INSERT INTO solicitacao_evento")
@@ -142,6 +144,20 @@ def test_transitar_update_condicional_limpa_marcador_e_reabre_espelho(monkeypatc
     sess = _SessFalsa(_linha("criada"))
     maquina.transitar(sess, solicitacao_id=SID, contact_id=GUID, para="cancelada", ator="associado", origem="ui")
     assert "crm_sync" not in sess.sqls[1][0]
+
+
+def test_associado_nao_cancela_nem_responde_pedido_que_ja_esta_na_central(monkeypatch):
+    """ADR-0023: sem ferramenta de status no hub, a ação não chegaria ao CRM."""
+    for para, extra in (("cancelada", {}), ("em_atendimento", {"mensagem": "segue o documento"})):
+        sess = _SessFalsa(_linha("pendente_associado", crm_id=SID))
+        with pytest.raises(maquina.TransicaoInvalida) as e:
+            maquina.transitar(sess, solicitacao_id=SID, contact_id=GUID, para=para, ator="associado", origem="ui",
+                              **extra)
+        assert e.value.codigo == "na_central" and "protocolo" in e.value.mensagem
+        assert [s for s, _ in sess.sqls if not s.startswith("SELECT")] == []  # nada gravado
+    assert maquina.pode_cancelar_associado("enviada") and not maquina.pode_cancelar_associado("enviada", True)
+    assert maquina.pode_responder_associado("pendente_associado")
+    assert not maquina.pode_responder_associado("pendente_associado", True)
 
 
 # ============================================================== schemas
@@ -244,7 +260,7 @@ def _linha_resumo(**k):
                 enviada_em=datetime(2026, 10, 30, 2, 0), prazo_retorno_dias=10, sem_retorno_desde=None,
                 dados='{"assunto":"A","mensagem":"B"}', avaliacao_nota=None, avaliacao_comentario=None,
                 avaliada_em=None, criada_em=datetime(2026, 10, 29, 12), atualizada_em=datetime(2026, 10, 30, 2),
-                concluida_em=None)
+                concluida_em=None, crm_id=None, crm_protocolo=None)
     base.update(k)
     return SimpleNamespace(**base)
 
@@ -262,6 +278,15 @@ def test_resumo_prazo_marcador_e_pode_avaliar():
     assert servico.resumo(concluida, contato=None, prazo_avaliacao_dias=30, agora=agora)["pode_avaliar"] is True
     assert servico.resumo(concluida, contato=None, prazo_avaliacao_dias=28, agora=agora)["pode_avaliar"] is False
     assert servico.resumo(concluida, contato=None, prazo_avaliacao_dias=30, agora=agora)["prazo_em"] is None
+    assert (r["protocolo"], r["na_central"]) == (None, False)
+    # Já no CRM: protocolo para a Central e nada de cancelar/responder pela área (ADR-0023).
+    na_central = servico.resumo(_linha_resumo(crm_id=SID, crm_protocolo="CAS-285497-M7P9T5"), contato=None,
+                                prazo_avaliacao_dias=30, agora=agora)
+    assert na_central["protocolo"] == "CAS-285497-M7P9T5" and na_central["na_central"] is True
+    assert not na_central["pode_cancelar"] and not na_central["pode_responder"]
+    pendente = servico.resumo(_linha_resumo(status="pendente_associado", crm_id=SID), contato=None,
+                              prazo_avaliacao_dias=30, agora=agora)
+    assert not pendente["pode_responder"] and not pendente["pode_cancelar"]
 
 
 class _DbFiliacao:

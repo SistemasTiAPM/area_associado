@@ -355,7 +355,14 @@ def test_prontidao_dos_jobs(monkeypatch):
     for nome in ("espelhar_solicitacoes", "sincronizar_solicitacoes", "marcar_sem_retorno", "enviar_comunicacao"):
         assert jobs[nome].pronto() and "ausente" in jobs[nome].pronto()
     monkeypatch.setattr(prontidao, "tabelas_presentes", lambda: prontidao.RECURSOS["solicitacoes"])
-    assert jobs["espelhar_solicitacoes"].pronto() is None
+    from app.dominio.solicitacoes import esquema
+
+    monkeypatch.setattr(esquema, "colunas_crm_presentes", lambda: False)
+    for nome in ("espelhar_solicitacoes", "sincronizar_solicitacoes"):
+        assert "015" in jobs[nome].pronto()
+    assert jobs["marcar_sem_retorno"].pronto() is None
+    monkeypatch.setattr(esquema, "colunas_crm_presentes", lambda: True)
+    assert jobs["espelhar_solicitacoes"].pronto() is None and jobs["sincronizar_solicitacoes"].pronto() is None
     monkeypatch.setattr(dom_carteirinha, "colunas_revogacao_presentes", lambda: False)
     assert "014" in carteirinha.pronto()
     monkeypatch.setattr(dom_carteirinha, "colunas_revogacao_presentes", lambda: True)
@@ -373,7 +380,7 @@ def test_registro_tabela_de_jobs():
                                                          "enviar_comunicacao"}
     q = registro.por_nome()
     assert q["espelhar_solicitacoes"].quando.intervalo_s == 60
-    assert q["sincronizar_solicitacoes"].quando.intervalo_s == 300
+    assert q["sincronizar_solicitacoes"].quando.intervalo_s == 900  # cadência por contato: JOBS_SYNC_CADENCIA_H
     assert q["marcar_sem_retorno"].quando.intervalo_s == 900
     assert q["situacao_carteirinhas"].quando.horario == dtime(3)
 
@@ -392,7 +399,8 @@ class _HubProibido:
 
 def _linha_solicitacao(**kw):
     base = dict(id=SID, contact_id=CID, tipo_servico="outro", beneficio_id=None, parceiro_id=None, tipo_ativacao=3,
-                canal_envio="crm", status="criada", crm_id=None, crm_tentativas=0, prazo_retorno_dias=10,
+                canal_envio="crm", status="criada", crm_id=None, crm_protocolo=None, crm_tentativas=0,
+                prazo_retorno_dias=10,
                 dados='{"assunto":"Dúvida","mensagem":"Oi"}', cancel_motivo=None,
                 criada_em=datetime(2026, 10, 30, 11, 0), atualizada_em=datetime(2026, 10, 30, 11, 0))
     base.update(kw)
@@ -403,7 +411,7 @@ def test_espelho_em_dry_run_nao_chama_o_hub_nem_muda_estado(monkeypatch):
     from app.jobs import solicitacoes
 
     monkeypatch.setattr(solicitacoes, "pendentes_do_espelho", lambda *a, **k: [_linha_solicitacao()])
-    for nome in ("_confirmar", "_registrar_falha", "_nada_a_espelhar"):
+    for nome in ("_confirmar", "_registrar_falha", "_nada_a_espelhar", "_reter"):
         monkeypatch.setattr(solicitacoes, nome, lambda *a, **k: pytest.fail("mudou estado em dry-run"))
     ctx = _ctx(aplicar=False)
     solicitacoes.espelhar_solicitacoes(ctx, hub=_HubProibido())
@@ -418,112 +426,6 @@ def test_espelho_com_escrita_desligada_espera_sem_gastar_tentativa(monkeypatch):
     ctx = _ctx(aplicar=True)
     solicitacoes.espelhar_solicitacoes(ctx, hub=_HubProibido())
     assert "escrita no hub desligada" in ctx.erro_sistemico
-
-
-class _HubFalho:
-    def __init__(self, erro):
-        self.erro = erro
-        self.chamadas = 0
-
-    def solicitacao_espelhar(self, dados):
-        self.chamadas += 1
-        raise self.erro
-
-
-def _espelho_aplicar(monkeypatch, linhas, hub):
-    from app.jobs import solicitacoes
-
-    monkeypatch.setenv("HUB_ESCRITA_HABILITADA", "true")
-    from app.config import get_settings
-
-    get_settings.cache_clear()
-    falhas = []
-    monkeypatch.setattr(solicitacoes, "pendentes_do_espelho", lambda *a, **k: linhas)
-    monkeypatch.setattr(solicitacoes, "_registrar_falha", lambda r, classe, codigo, agora: falhas.append(
-        (r.id, classe, codigo)))
-    ctx = _ctx(aplicar=True)
-    solicitacoes.espelhar_solicitacoes(ctx, hub=hub)
-    return ctx, falhas
-
-
-def test_espelho_disjuntor_apos_tres_transitorias(monkeypatch):
-    linhas = [_linha_solicitacao(id=f"0b9c3c6e-5d0f-4a5e-8b1a-2f3c4d5e6f7{i}") for i in range(6)]
-    hub = _HubFalho(HubError("fonte_indisponivel"))
-    ctx, falhas = _espelho_aplicar(monkeypatch, linhas, hub)
-    assert hub.chamadas == 3 and len(falhas) == 3 and all(f[1] == "transitorio" for f in falhas)
-    assert ctx.erro_sistemico.startswith("disjuntor: 3 falhas seguidas") and ctx.erros == 3
-
-
-def test_espelho_limite_de_taxa_para_sem_gastar_tentativa(monkeypatch):
-    hub = _HubFalho(HubError("limite_taxa", 429))
-    ctx, falhas = _espelho_aplicar(monkeypatch, [_linha_solicitacao(), _linha_solicitacao()], hub)
-    assert hub.chamadas == 1 and falhas == [] and ctx.erro_sistemico == "disjuntor: limite_taxa"
-
-
-def test_espelho_erro_permanente_nao_conta_para_o_disjuntor(monkeypatch):
-    linhas = [_linha_solicitacao(id=f"0b9c3c6e-5d0f-4a5e-8b1a-2f3c4d5e6f7{i}") for i in range(4)]
-    hub = _HubFalho(HubError("entrada_invalida", 400))
-    ctx, falhas = _espelho_aplicar(monkeypatch, linhas, hub)
-    assert hub.chamadas == 4 and [f[1] for f in falhas] == ["permanente"] * 4 and ctx.erro_sistemico is None
-
-
-def test_payload_do_espelho_sem_dado_de_contato():
-    from app.jobs.solicitacoes import payload_espelho
-
-    carga = payload_espelho(_linha_solicitacao())
-    assert carga == {"contact_id": CID, "solicitacao_id": SID, "tipo": "outro", "titulo": "Minha APM: Outro assunto",
-                     "status": "criada", "criada_em": "2026-10-30T11:00:00Z", "prazo_retorno_dias": 10,
-                     "campos": {"assunto": "Dúvida", "mensagem": "Oi"}}
-    assert not {"cpf", "email", "celular", "telefone"} & set(json.dumps(carga).lower().split('"'))
-
-
-def test_sync_em_dry_run_nao_consulta_o_hub():
-    from app.jobs import solicitacoes
-
-    ctx = _ctx(aplicar=False, posicao_anterior="12")
-    solicitacoes.sincronizar_solicitacoes(ctx, hub=_HubProibido())
-    assert ctx.lidos == 0 and ctx.erro_sistemico is None
-
-
-def test_sync_linha_fora_do_contrato_para_sem_avancar(monkeypatch):
-    from app.jobs import solicitacoes
-
-    class Hub:
-        def solicitacao_alteracoes_consultar(self, cursor, limite):
-            return [{"solicitacao_id": "x", "situacao": "concluida", "cursor": "1"}]
-
-    monkeypatch.setattr(solicitacoes, "aplicar_alteracao", lambda *a: pytest.fail("aplicou linha inválida"))
-    ctx = _ctx(aplicar=True, posicao_anterior="7", posicao="7")
-    solicitacoes.sincronizar_solicitacoes(ctx, hub=Hub())
-    assert ctx.posicao == "7" and ctx.erro_sistemico and ctx.erros == 1
-
-
-def test_sync_hub_fora_e_erro_sistemico():
-    from app.jobs import solicitacoes
-
-    class Hub:
-        def solicitacao_alteracoes_consultar(self, cursor, limite):
-            raise HubError("fonte_indisponivel")
-
-    ctx = _ctx(aplicar=True)
-    solicitacoes.sincronizar_solicitacoes(ctx, hub=Hub())
-    assert ctx.erro_sistemico == "hub: fonte_indisponivel"
-
-
-def test_mapa_e_caminho_do_crm():
-    from app.jobs.solicitacoes import MAPA_CRM, _caminho, _mensagem_crm
-
-    from app.integracoes.hub import SITUACOES_TASK
-
-    assert set(MAPA_CRM) == SITUACOES_TASK
-    assert _caminho("enviada", "em_atendimento") == ["em_atendimento"]
-    assert _caminho("enviada", "pendente_associado") == ["em_atendimento", "pendente_associado"]
-    assert _caminho("criada", "concluida_positiva") == ["em_atendimento", "concluida_positiva"]
-    assert _caminho("pendente_associado", "em_atendimento") == []  # só o associado responde
-    assert _caminho("cancelada", "concluida_negativa") == []
-    assert _mensagem_crm("  Envie\n o comprovante  ") == "Envie o comprovante"
-    assert _mensagem_crm("CPF 123.456.789-09") is None
-    assert _mensagem_crm("") is None
 
 
 def _linha_com(**kw):
@@ -633,73 +535,6 @@ def test_comunicacao_smtp_sistemico_devolve_e_para(monkeypatch):
     assert devolvidos == [1] and falhas == [] and ctx.erro_sistemico == "disjuntor: smtp_autenticacao"
 
 
-# ======================================================= contrato do hub
-def test_alteracao_de_linha_valida_tudo():
-    from app.integracoes.hub import alteracao_de_linha
-
-    boa = {"solicitacao_id": SID.upper(), "crm_id": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", "contact_id": CID,
-           "situacao": "aguardando_associado", "mensagem_publica": "Envie o diploma", "modificado_em":
-           "2026-10-30T12:00:00Z", "cursor": "MjAyNi0xMC0zMA=="}
-    alt = alteracao_de_linha(boa)
-    assert alt.solicitacao_id == SID and alt.crm_id == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    for chave, valor in (("situacao", "outra"), ("cursor", "tem espaço"), ("solicitacao_id", "x"),
-                         ("contact_id", None), ("modificado_em", "ontem"), ("mensagem_publica", 3)):
-        assert alteracao_de_linha({**boa, chave: valor}) is None, chave
-
-
-def test_hub_stub_solicitacoes(monkeypatch):
-    from app.config import get_settings
-    from app.integracoes.hub_stub import ClienteHubStub
-
-    stub = ClienteHubStub()
-    with pytest.raises(HubError) as e:
-        stub.solicitacao_espelhar({"solicitacao_id": SID})
-    assert e.value.codigo == "edicao_desligada"
-    monkeypatch.setenv("HUB_ESCRITA_HABILITADA", "true")
-    get_settings.cache_clear()
-    crm = stub.solicitacao_espelhar({"solicitacao_id": SID, "contact_id": CID, "campos": {}})
-    assert crm == stub.solicitacao_espelhar({"solicitacao_id": SID, "contact_id": CID, "campos": {}})  # idempotente
-    stub.solicitacao_status_atualizar({"solicitacao_id": SID, "crm_id": crm, "status": "cancelada"})
-    with pytest.raises(HubError):
-        stub.solicitacao_status_atualizar({"solicitacao_id": SID, "crm_id": CID, "status": "cancelada"})
-    with pytest.raises(HubError):
-        stub.solicitacao_espelhar({"solicitacao_id": SID, "campos": {"cpf": "1"}})
-    stub.alteracoes = [{"n": 1}, {"n": 2}, {"n": 3}]
-    pagina = stub.solicitacao_alteracoes_consultar(None, 2)
-    assert [p["cursor"] for p in pagina] == ["1", "2"]
-    assert stub.solicitacao_alteracoes_consultar("2", 2) == [{"n": 3, "cursor": "3"}]
-
-
-def test_hub_real_solicitacoes_contrato_e_ferramenta_ausente(monkeypatch):
-    monkeypatch.setenv("HUB_MODE", "real")
-    monkeypatch.setenv("HUB_CLIENT_SECRET", "s" * 32)
-    monkeypatch.setenv("HUB_ESCRITA_HABILITADA", "true")
-    from app.config import get_settings
-    from app.integracoes.hub import ClienteHubReal
-
-    get_settings.cache_clear()
-    pedidos = []
-
-    def tratar(req):
-        pedidos.append(req)
-        if req.url.path == "/oauth/token":
-            return httpx.Response(200, json={"access_token": "tok", "expires_in": 600})
-        nome = req.url.path.rsplit("/", 1)[-1]
-        if nome == "solicitacao.espelhar":
-            return httpx.Response(200, json={"colunas": [], "linhas": [{"crm_id": "AAAAAAAA-BBBB-CCCC-DDDD-"
-                                                                                 "EEEEEEEEEEEE", "criada": True}]})
-        return httpx.Response(404, json={"erro": "ferramenta_inexistente"})
-
-    hub = ClienteHubReal(transporte=httpx.MockTransport(tratar))
-    assert hub.solicitacao_espelhar({"solicitacao_id": SID}) == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    corpo = json.loads(pedidos[-1].content)
-    assert corpo == {"argumentos": {"solicitacao_id": SID}}
-    assert "ferramentas%3Aescrever" in pedidos[0].content.decode()
-    with pytest.raises(HubError) as e:
-        hub.solicitacao_alteracoes_consultar(None, 100)
-    assert e.value.codigo == "fonte_indisponivel"  # ferramenta ainda não existe (P-06): o job registra e recua
-
-
 # ================================================================== e-mails
 def test_textos_transacionais_voz_da_apm():
     from app.integracoes import email
@@ -739,6 +574,8 @@ def test_email_error_compativel_e_tipado():
     ("JOBS_HEARTBEAT", "relativo/arquivo"), ("JOBS_HEARTBEAT", "/tmp/../etc/x"),
     ("JOBS_INTERVALO_ESPELHO", "5"), ("JOBS_LOTE", "500"), ("JOBS_SITUACAO_HORA", "24"),
     ("JOBS_SITUACAO_LOTE", "201"), ("JOBS_SITUACAO_PAUSA", "0"), ("CENTRAL_EMAIL", "Central <c@apm.org.br>"),
+    ("JOBS_SYNC_CADENCIA_H", "0"), ("JOBS_SYNC_LIMITE", "51"), ("JOBS_SYNC_LINHAS_DIA", "50"),
+    ("JOBS_ENSAIO_CONTATOS", "8eb5da36-3847-ee11-be6f-00224837e097,nao-guid"),
 ])
 def test_settings_dos_jobs_recusam_valor_invalido(monkeypatch, chave, valor):
     from pydantic import ValidationError
@@ -757,6 +594,12 @@ def test_settings_dos_jobs_padroes_e_aplicar_com_stub(monkeypatch):
 
     s = Settings()
     assert s.jobs_aplicar is False and s.jobs_heartbeat == "/tmp/jobs.heartbeat" and s.central_email is None
+    assert (s.jobs_intervalo_sync, s.jobs_sync_cadencia_h, s.jobs_sync_limite, s.jobs_sync_linhas_dia) == \
+        (900, 6, 10, 5000)
+    assert s.jobs_ensaio_contatos is None and s.jobs_ensaio_contatos_lista == ()
+    monkeypatch.setenv("JOBS_ENSAIO_CONTATOS", " 8EB5DA36-3847-EE11-BE6F-00224837E097 , ")
+    assert Settings().jobs_ensaio_contatos_lista == ("8eb5da36-3847-ee11-be6f-00224837e097",)
+    monkeypatch.delenv("JOBS_ENSAIO_CONTATOS")
     monkeypatch.setenv("CENTRAL_EMAIL", " Central@APM.org.br ")
     assert Settings().central_email == "central@apm.org.br"
     monkeypatch.setenv("CENTRAL_EMAIL", "")

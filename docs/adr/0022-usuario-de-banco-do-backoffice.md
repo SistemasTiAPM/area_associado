@@ -57,7 +57,7 @@ depende de P-65/P-62 (`docs/LEVANTAMENTO-TECNICO-spec-v2.md` §4, DEC-03). O usu
 
 ### Obrigações decorrentes
 - `scripts/db_check.py` com allowlist por usuário (TI-03, Onda 1).
-- Migração de criação de `apm_area_bo` e `apm_area_painel` junto da `sql/012` (catálogo) e `sql/022` (views).
+- Migração de criação de `apm_area_bo` e `apm_area_painel` junto da `sql/012` (catálogo) e `sql/023` (views).
 - `docs/PROVISIONAMENTO.md`: credenciais separadas, cofre, rotação.
 - ADR futura (Onda 6): hospedagem, identidade (Entra ID), 2FA, perfis → grupos.
 

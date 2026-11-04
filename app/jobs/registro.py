@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import time as dtime
 
 from .. import prontidao
+from ..dominio.solicitacoes import esquema
 from ..config import get_settings
 from . import carteirinha, comunicacao, solicitacoes
 from .agenda import Quando
@@ -19,16 +20,24 @@ def _solicitacoes_prontas() -> str | None:
     return None if prontidao.disponivel("solicitacoes") else "sql/010, 012 ou 013 ausente (solicitações)"
 
 
+def _crm_pronto() -> str | None:
+    """Espelho e sincronização dependem das colunas da sql/015 (ADR-0023)."""
+    motivo = _solicitacoes_prontas()
+    if motivo is None and not esquema.colunas_crm_presentes():
+        motivo = "sql/015 ausente (espelho no CRM)"
+    return motivo
+
+
 def jobs() -> tuple[Job, ...]:
     s = get_settings()
     return (
         Job("espelhar_solicitacoes", Quando(intervalo_s=s.jobs_intervalo_espelho),
-            lambda ctx: solicitacoes.espelhar_solicitacoes(ctx), pronto=_solicitacoes_prontas, efeito_externo=True,
-            descricao="outbox crm_* → solicitacao.espelhar / status_atualizar; promove criada→enviada"),
+            lambda ctx: solicitacoes.espelhar_solicitacoes(ctx), pronto=_crm_pronto, efeito_externo=True,
+            descricao="outbox crm_* → solicitacao.criar (ocorrência); promove criada→enviada; retém o resto"),
         Job("sincronizar_solicitacoes", Quando(intervalo_s=s.jobs_intervalo_sync),
-            lambda ctx: solicitacoes.sincronizar_solicitacoes(ctx), pronto=_solicitacoes_prontas,
+            lambda ctx: solicitacoes.sincronizar_solicitacoes(ctx), pronto=_crm_pronto,
             efeito_externo=True,
-            descricao="solicitacao.alteracoes_consultar(cursor) → transições com origem crm"),
+            descricao="solicitacao.listar por contato (cadência + teto de linhas) → transições na mudança do CRM"),
         Job("marcar_sem_retorno", Quando(intervalo_s=s.jobs_intervalo_sem_retorno),
             solicitacoes.marcar_sem_retorno, pronto=_solicitacoes_prontas,
             descricao="marcador A05 no 1º vencimento do prazo; fila de ligações no 2º"),

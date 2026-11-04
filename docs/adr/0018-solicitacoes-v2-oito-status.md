@@ -1,6 +1,6 @@
 # ADR-0018: Solicitações v2 — oito status da spec, marcador `sem_retorno` e atores
 
-- **Status:** Aceita
+- **Status:** Aceita — o espelho no CRM e o item 6 (P-66) foram alterados pela [ADR-0023](0023-espelho-de-solicitacoes-por-incident.md) em 2026-11-04
 - **Data:** 2026-10-30
 - **Decisores:** Sistemas TI (William) · Claude Code (Maestro/Atlas/Sentinela)
 - **Relacionadas:** ADR-0003 (adenda aos itens 1–3; o resto da 0003 continua válido), ADR-0004, ADR-0009, ADR-0014

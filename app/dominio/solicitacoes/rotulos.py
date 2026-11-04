@@ -27,6 +27,10 @@ _ROTULO_STATUS_TIPO3: dict[str, str] = {
     "enviada": "Encaminhada à equipe",
 }
 ROTULO_MARCADOR = "Aguardando o parceiro, a APM já está cobrando"
+# Mensagem pública de `pendente_associado` vindo do CRM, que não manda texto
+# (ADR-0023; decisão de 2026-11-04). O job acrescenta o protocolo.
+MENSAGEM_PENDENTE_CRM = ("A Central de Relacionamento precisa de mais informações sobre este pedido e vai "
+                         "falar com você pelos contatos do seu cadastro.")
 
 ROTULO_TIPO: dict[str, str] = {
     "alteracao_cadastro": "Alteração de cadastro",

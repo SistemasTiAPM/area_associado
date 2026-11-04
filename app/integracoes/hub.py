@@ -48,12 +48,14 @@ class HubError(Exception):
     """Falha do hub com código estável. `status` é o HTTP a devolver à SPA."""
 
     def __init__(self, codigo: str, status: int = 503, mensagem: str | None = None,
-                 detalhes: list[dict[str, str]] | None = None) -> None:
+                 detalhes: list[dict[str, str]] | None = None, retry_after: int | None = None) -> None:
         super().__init__(codigo)
         self.codigo = codigo
         self.status = status
         self.mensagem = mensagem
         self.detalhes = detalhes
+        # 429: segundos até a próxima chamada valer a pena (Retry-After do hub, 1..60).
+        self.retry_after = retry_after
 
 
 def escopos_do_token() -> str:
@@ -133,42 +135,113 @@ class SituacaoCrm:
         return self.situacao_normalizada == "ativo" and self.statecode == 0
 
 
-# Solicitações (Onda 5, P-06 — docs/CONTRATO-HUB.md "Solicitações"). O hub mapeia a `task`
-# do CRM para estas situações; a área traduz para os status dela (REQUISITOS §7.5).
-SITUACOES_TASK = frozenset({"nao_iniciada", "em_andamento", "aguardando_associado", "concluida", "nao_seguiu",
-                            "cancelada"})
+# Solicitações no CRM (docs/CONTRATO-HUB.md "Solicitações"; ADR-0023). O hub cria
+# `incident` (ocorrência) ou `opportunity` (oportunidade) com o `registro_id` da área
+# como chave primária, e lista por contato. Devolve `statecode`/`statuscode` crus: quem
+# normaliza é a área (`app/jobs/solicitacoes.py`).
+ENTIDADES_CRM = frozenset({"ocorrencia", "oportunidade"})
 _RE_UUID4 = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-_RE_CURSOR = re.compile(r"^[A-Za-z0-9_.:+=/-]{1,200}$")
-_RE_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$")
+_RE_TIPO_CRM = re.compile(r"^[a-z0-9_]{2,50}$")
+_RE_PROTOCOLO = re.compile(r"^[A-Z]{2,5}-[0-9]{3,10}-[A-Z0-9]{3,10}$")
+_RE_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|[+-]\d{2}:\d{2})$")
+LISTAR_LIMITE_MAX = 50
 
 
 @dataclass(frozen=True)
-class AlteracaoCrm:
-    """Uma linha de `solicitacao.alteracoes_consultar`, já validada (ids, enum, cursor)."""
+class PedidoCrm:
+    """Entrada de `solicitacao.criar`. Texto já formatado e medido pela área
+    (`app/dominio/solicitacoes/crm.py`); canal e origem o hub deriva da conta."""
 
-    solicitacao_id: str
-    crm_id: str
     contact_id: str
-    situacao: str
-    mensagem_publica: str | None
-    modificado_em: str
-    cursor: str
+    registro_id: str
+    entidade: str
+    tipo: str
+    titulo: str
+    descricao: str
+    assunto_id: str | None
+    time_id: str
+
+    def argumentos(self) -> dict[str, Any]:
+        if (_guid(self.contact_id) != self.contact_id or not _RE_UUID4.match(self.registro_id)
+                or self.entidade not in ENTIDADES_CRM or not _RE_TIPO_CRM.match(self.tipo)
+                or _guid(self.time_id) != self.time_id
+                or (self.entidade == "ocorrencia") != (self.assunto_id is not None)
+                or (self.assunto_id is not None and _guid(self.assunto_id) != self.assunto_id)):
+            raise ValueError("pedido ao CRM fora do contrato")
+        return {"contact_id": self.contact_id, "registro_id": self.registro_id, "entidade": self.entidade,
+                "tipo": self.tipo, "titulo": self.titulo, "descricao": self.descricao,
+                "assunto_id": self.assunto_id, "time_id": self.time_id}
 
 
-def alteracao_de_linha(linha: dict[str, Any]) -> AlteracaoCrm | None:
-    """None = linha fora do contrato (descartada pelo chamador com log, nunca aplicada)."""
-    sid = linha.get("solicitacao_id")
-    sid = sid.strip().lower() if isinstance(sid, str) else ""
-    crm_id, cid = _guid(linha.get("crm_id")), _guid(linha.get("contact_id"))
-    situacao, cursor, modificado = linha.get("situacao"), linha.get("cursor"), linha.get("modificado_em")
-    if (not _RE_UUID4.match(sid) or crm_id is None or cid is None or situacao not in SITUACOES_TASK
-            or not isinstance(cursor, str) or not _RE_CURSOR.match(cursor)
-            or not isinstance(modificado, str) or not _RE_ISO.match(modificado)):
+@dataclass(frozen=True)
+class CriacaoCrm:
+    """Saída de `solicitacao.criar`. `criada=False`: o registro já existia (repetição)."""
+
+    registro_id: str
+    entidade: str
+    criada: bool
+    protocolo: str | None
+    statecode: int
+    statuscode: int
+
+
+@dataclass(frozen=True)
+class RegistroCrm:
+    """Uma linha de `solicitacao.listar`, sem `titulo`/`descricao` (a área não guarda
+    texto do CRM). `canal` NULL = aberto pela Central, não pela área."""
+
+    registro_id: str
+    entidade: str
+    protocolo: str | None
+    statecode: int
+    statuscode: int
+    canal: int | None
+    criado_em: str | None
+    atualizado_em: str | None
+
+
+def _codigo_crm(valor: Any) -> int | None:
+    numero = _inteiro(valor)
+    return numero if numero is not None and 0 <= numero <= 4_294_967_295 else None
+
+
+def _protocolo(valor: Any) -> str | None:
+    texto = valor.strip().upper() if isinstance(valor, str) else ""
+    return texto if _RE_PROTOCOLO.match(texto) else None
+
+
+def _iso(valor: Any) -> str | None:
+    return valor if isinstance(valor, str) and _RE_ISO.match(valor) else None
+
+
+def criacao_de_linha(linha: dict[str, Any], pedido: PedidoCrm) -> CriacaoCrm | None:
+    """None = resposta fora do contrato (o chamador trata como resultado incerto e
+    repete: `criar` é idempotente pelo `registro_id`)."""
+    rid = _guid(linha.get("registro_id"))
+    estado, status, criada = _codigo_crm(linha.get("statecode")), _codigo_crm(linha.get("statuscode")), \
+        linha.get("criada")
+    entidade = linha.get("entidade", pedido.entidade)
+    if (rid != pedido.registro_id or entidade != pedido.entidade or estado is None or status is None
+            or not isinstance(criada, bool)):
         return None
-    mensagem = linha.get("mensagem_publica")
-    if mensagem is not None and not isinstance(mensagem, str):
+    protocolo = _protocolo(linha.get("protocolo"))
+    if pedido.entidade == "ocorrencia" and protocolo is None:
+        return None  # toda ocorrência tem ticketnumber; sem ele, algo mudou no hub
+    return CriacaoCrm(rid, pedido.entidade, criada, protocolo if pedido.entidade == "ocorrencia" else None,
+                      estado, status)
+
+
+def registro_de_linha(linha: dict[str, Any]) -> RegistroCrm | None:
+    """None = linha fora do contrato (descartada pelo chamador, com log)."""
+    rid = _guid(linha.get("registro_id"))
+    entidade = linha.get("entidade")
+    estado, status = _codigo_crm(linha.get("statecode")), _codigo_crm(linha.get("statuscode"))
+    if rid is None or entidade not in ENTIDADES_CRM or estado is None or status is None:
         return None
-    return AlteracaoCrm(sid, crm_id, cid, situacao, mensagem, modificado, cursor)
+    canal = linha.get("canal")
+    return RegistroCrm(rid, entidade, _protocolo(linha.get("protocolo")) if entidade == "ocorrencia" else None,
+                       estado, status, _codigo_crm(canal) if canal is not None else None,
+                       _iso(linha.get("criado_em")), _iso(linha.get("atualizado_em")))
 
 
 class ClienteHub(Protocol):
@@ -177,9 +250,8 @@ class ClienteHub(Protocol):
     def contato_atualizar(self, contact_id: str, campos: dict[str, Any]) -> list[str]: ...
     def foto_obter(self, contact_id: str) -> bytes | None: ...
     def foto_atualizar(self, contact_id: str, jpeg: bytes | None) -> None: ...
-    def solicitacao_espelhar(self, dados: dict[str, Any]) -> str: ...
-    def solicitacao_status_atualizar(self, dados: dict[str, Any]) -> None: ...
-    def solicitacao_alteracoes_consultar(self, cursor: str | None, limite: int) -> list[dict[str, Any]]: ...
+    def solicitacao_criar(self, pedido: PedidoCrm) -> CriacaoCrm: ...
+    def solicitacao_listar(self, contact_id: str, limite: int) -> list[RegistroCrm]: ...
 
 
 def _texto(valor: Any, limite: int) -> str | None:
@@ -270,6 +342,9 @@ class ClienteHubReal:
         self._timeout_escrita = httpx.Timeout(s.hub_timeout_escrita, connect=min(5.0, s.hub_timeout))
         self._lock = threading.Lock()
         self._token: tuple[str, float] | None = None
+        # 429 do hub (CRM limitado ou cota da conta): ninguém neste processo chama
+        # de novo antes do Retry-After — nem gasta a cota nem martela o CRM.
+        self._pausa_ate = 0.0
 
     # ------------------------------------------------------------- token
     def _http(self, timeout: httpx.Timeout | None = None) -> httpx.Client:
@@ -308,6 +383,10 @@ class ClienteHubReal:
             raise ValueError("nome de ferramenta inválido")
         if escrita:
             exigir_escrita_habilitada()
+        with self._lock:
+            restante = self._pausa_ate - time.monotonic()
+        if restante > 0:
+            raise HubError("limite_taxa", 429, retry_after=max(1, int(restante + 0.999)))
         for tentativa in (1, 2):
             token = self._obter_token(renovar=tentativa == 2)
             try:
@@ -349,13 +428,28 @@ class ClienteHubReal:
             detalhes = corpo.get("detalhes") if isinstance(corpo.get("detalhes"), list) else None
             raise HubError("entrada_invalida", 400, detalhes=detalhes)
         if r.status_code == 429:
-            raise HubError("limite_taxa", 429)
+            espera = _retry_after(r.headers.get("Retry-After"))
+            with self._lock:
+                self._pausa_ate = max(self._pausa_ate, time.monotonic() + espera)
+            raise HubError("limite_taxa", 429, retry_after=espera)
         if r.status_code == 404 and codigo == "nao_encontrado":
+            alvo = _alvo_nao_encontrado(corpo)
+            if alvo in ("assunto_id", "time_id"):
+                # Catálogo da área aponta para assunto/time que não existe no CRM:
+                # erro de configuração, não do pedido (o job para a rodada).
+                logger.error("hub: %s recusou o catálogo (%s inexistente no CRM)", ferramenta, alvo)
+                raise HubError("catalogo_crm_invalido", 503, detalhes=[{"campo": alvo}])
             raise HubError("nao_encontrado", 404)
         if r.status_code == 409 and codigo == "endereco_indisponivel":
             raise HubError("endereco_indisponivel", 409)
+        if r.status_code == 409 and codigo == "conflito":
+            raise HubError("conflito", 409)
+        if r.status_code == 403 and codigo == "canal_nao_configurado":
+            logger.error("hub: conta sem canal de solicitação no hub (CRM_SOLICITACAO_CONTAS)")
+            raise HubError("canal_nao_configurado", 503)
         if r.status_code == 504 and codigo in ("escrita_indeterminada", "tempo_esgotado"):
             logger.error("hub: %s sem confirmação do CRM (%s) — resultado incerto", ferramenta, codigo)
+            raise HubError("escrita_indeterminada", 504)
         # 401/403/404 de ferramenta/5xx: problema de integração, não do associado.
         raise HubError("fonte_indisponivel")
 
@@ -388,24 +482,58 @@ class ClienteHubReal:
         b64 = base64.b64encode(jpeg).decode("ascii") if jpeg else None
         self.chamar("associado.foto_atualizar", {"contact_id": contact_id, "imagem_jpeg_b64": b64}, escrita=True)
 
-    # ------------------------------------- solicitações (Onda 5, P-06)
-    # Ferramentas ainda inexistentes no hub: até a P-06, o hub responde 404
-    # genérico → `HubError("fonte_indisponivel")`, e o job registra e recua.
-    def solicitacao_espelhar(self, dados: dict[str, Any]) -> str:
-        """Cria (ou devolve, pela `solicitacao_id`) a `task` regarding contact. Devolve o `crm_id`."""
-        linhas = self.chamar("solicitacao.espelhar", dados, escrita=True)
-        crm_id = _guid(linhas[0].get("crm_id")) if linhas else None
-        if crm_id is None:
-            logger.error("hub: solicitacao.espelhar sem crm_id válido — resultado incerto (repete, idempotente)")
-            raise HubError("fonte_indisponivel")
-        return crm_id
+    # ------------------------------------------ solicitações (ADR-0023)
+    def solicitacao_criar(self, pedido: PedidoCrm) -> CriacaoCrm:
+        """Cria (ou devolve, pelo `registro_id`) a ocorrência/oportunidade. Resposta fora
+        do contrato = resultado incerto: `escrita_indeterminada` (repetir é seguro)."""
+        linhas = self.chamar("solicitacao.criar", pedido.argumentos(), escrita=True)
+        criacao = criacao_de_linha(linhas[0], pedido) if len(linhas) == 1 else None
+        if criacao is None:
+            logger.error("hub: solicitacao.criar com resposta fora do contrato — resultado incerto (repete)")
+            raise HubError("escrita_indeterminada", 504)
+        return criacao
 
-    def solicitacao_status_atualizar(self, dados: dict[str, Any]) -> None:
-        self.chamar("solicitacao.status_atualizar", dados, escrita=True)
+    def solicitacao_listar(self, contact_id: str, limite: int) -> list[RegistroCrm]:
+        """Registros do contato, mais recentes primeiro. Linha fora do contrato é
+        descartada com log (nunca aplicada)."""
+        if _guid(contact_id) != contact_id:
+            raise ValueError("contact_id inválido")
+        limite = max(1, min(int(limite), LISTAR_LIMITE_MAX))
+        linhas = self.chamar("solicitacao.listar", {"contact_id": contact_id, "limite": limite})
+        registros = [registro_de_linha(linha) for linha in linhas]
+        if any(r is None for r in registros):
+            logger.error("hub: solicitacao.listar devolveu %d linha(s) fora do contrato (descartadas)",
+                         sum(r is None for r in registros))
+        return [r for r in registros if r is not None]
 
-    def solicitacao_alteracoes_consultar(self, cursor: str | None, limite: int) -> list[dict[str, Any]]:
-        """Linhas cruas (o job valida cada uma com `alteracao_de_linha`)."""
-        return self.chamar("solicitacao.alteracoes_consultar", {"cursor": cursor, "limite": int(limite)})
+
+def _retry_after(valor: str | None) -> int:
+    """Segundos do Retry-After (só a forma numérica), entre 1 e 60; ausente ou
+    inválido = 60 (o teto que o hub usa para a cota da conta)."""
+    try:
+        return max(1, min(60, int(str(valor).strip())))
+    except (TypeError, ValueError):
+        return 60
+
+
+def _alvo_nao_encontrado(corpo: Any) -> str | None:
+    """Qual entrada o hub não achou: `detalhes[].campo` quando vier; senão a
+    mensagem fixa do hub ("Contato/Assunto/Time não encontrado no CRM.")."""
+    if not isinstance(corpo, dict):
+        return None
+    detalhes = corpo.get("detalhes")
+    if isinstance(detalhes, list):
+        for item in detalhes:
+            campo = item.get("campo") if isinstance(item, dict) else None
+            if campo in ("contact_id", "assunto_id", "time_id"):
+                return campo
+    mensagem = corpo.get("mensagem")
+    if isinstance(mensagem, str):
+        inicio = mensagem.strip().lower()
+        for prefixo, campo in (("assunto", "assunto_id"), ("time", "time_id"), ("contato", "contact_id")):
+            if inicio.startswith(prefixo):
+                return campo
+    return None
 
 
 _instancia: ClienteHub | None = None
