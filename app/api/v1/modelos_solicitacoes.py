@@ -15,6 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 StatusSolicitacao = Literal["criada", "enviada", "em_atendimento", "pendente_associado", "concluida_positiva",
                             "concluida_negativa", "cancelada"]
 AtorPublico = Literal["voce", "equipe_apm", "parceiro", "sistema"]
+# Paridade com o App APM (ADR-0024): situação normalizada do registro no CRM.
+SituacaoCrm = Literal["aberta", "em_andamento", "aguardando_associado", "concluida", "cancelada"]
+CanalAbertura = Literal["app", "minha_apm"]
+QuemResponde = Literal["central", "apm"]
 
 
 class _Resposta(BaseModel):
@@ -54,6 +58,13 @@ class SolicitacaoResumo(_Resposta):
     pode_cancelar: bool
     pode_responder: bool
     pode_avaliar: bool
+    # --- paridade com o App (ADR-0024); com a flag `solicitacoes_crm` desligada ficam no padrão.
+    situacao: SituacaoCrm | None = Field(None, description="Situação do registro no CRM (a mesma do App); null "
+                                                           "enquanto o pedido não chegou ao CRM.")
+    canal: CanalAbertura | None = Field(None, description="Por onde o associado abriu: App APM ou Minha APM.")
+    responde: QuemResponde | None = Field(None, description="Quem fala com o associado na conversa.")
+    pode_enviar_mensagem: bool = Field(False, description="A conversa aceita mensagem do associado agora.")
+    nova_resposta: bool = Field(False, description="Há mensagem da Central/APM que o associado ainda não abriu.")
 
 
 class ItemLinhaDoTempo(_Resposta):
@@ -79,6 +90,38 @@ class Solicitacao(SolicitacaoResumo):
 class ListaSolicitacoes(_Resposta):
     itens: list[SolicitacaoResumo]
     proximo_cursor: str | None
+    parcial: bool = Field(False, description="O CRM não respondeu: a lista traz só o que foi aberto pela "
+                                             "Minha APM (o que veio do App pode estar faltando).")
+
+
+class TipoCatalogo(_Resposta):
+    codigo: str = Field(description="Slug do tipo (o mesmo do App APM).")
+    rotulo: str
+    grupo: str | None
+    grupo_rotulo: str | None
+    ordem: int
+    responde: QuemResponde
+    carencia_meses: int
+
+
+class CatalogoTipos(_Resposta):
+    itens: list[TipoCatalogo]
+
+
+class MensagemConversa(_Resposta):
+    id: str
+    autor: Literal["voce", "central"]
+    texto: str
+    quando: str | None
+    estado: Literal["enviada", "enviando", "falhou"]
+
+
+class Conversa(_Resposta):
+    mensagens: list[MensagemConversa]
+    pode_enviar: bool
+    motivo_bloqueio: Literal["aguardando_envio", "encerrada", "nao_permitida"] | None
+    responde: QuemResponde
+    truncado: bool = Field(description="Há mensagens anteriores que não foram trazidas.")
 
 
 # ------------------------------------------------------------------- ajuda

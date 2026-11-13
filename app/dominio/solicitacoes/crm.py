@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from . import rotulos, schemas
+from . import catalogo_crm, rotulos, schemas
 
 TITULO_MAX = 200
 DESCRICAO_MIN = 10
@@ -164,9 +164,21 @@ def descricao(tipo_servico: str | None, dados: Mapping[str, Any]) -> tuple[str, 
 
 def texto_para_crm(tipo_servico: str | None, dados: Mapping[str, Any]) -> TextoCrm:
     """Título e descrição prontos para `solicitacao.criar`. `ConteudoRecusado` se o
-    texto final tiver padrão de CPF ou não couber."""
-    t = titulo(tipo_servico, dados)
-    d, cortado = descricao(tipo_servico, dados)
+    texto final tiver padrão de CPF ou não couber.
+
+    Tipo do catálogo comum com o App (ADR-0024): igual ao App — título = nome do tipo,
+    descrição = o texto do associado, sem cabeçalho (o canal já vai no campo Canal do CRM).
+    Tipo antigo da área (traduzido para outro slug): mantém `Minha APM: <rótulo>` e os
+    campos do formulário, para a Central ver o que foi pedido."""
+    if tipo_servico in catalogo_crm.TIPOS_NOVOS:
+        t = _cortar_unidades(_normalizar(rotulos.rotulo_tipo(tipo_servico)), TITULO_MAX)
+        mensagem = dados.get("mensagem")
+        d, cortado = _normalizar(mensagem) if isinstance(mensagem, str) else "", False
+        if unidades_utf16(d) > DESCRICAO_MAX:
+            raise ConteudoRecusado("tamanho")
+    else:
+        t = titulo(tipo_servico, dados)
+        d, cortado = descricao(tipo_servico, dados)
     if schemas.RE_CPF.search(t) or schemas.RE_CPF.search(d):
         raise ConteudoRecusado("cpf")
     if unidades_utf16(d) < DESCRICAO_MIN or not t:

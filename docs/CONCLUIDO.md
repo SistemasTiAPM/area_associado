@@ -30,6 +30,146 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-11-13 — `pode_enviar_mensagem` do hub e contato excluído na sincronização (P-85)
+
+Aprovado pelo William em 13/11 ("sim, junto"), com a opção "a coluna do hub manda".
+
+**Adendo do hub (bloqueio de mensagens na lista)**
+- 🔌 `app/integracoes/hub.py`: `RegistroCrm.pode_enviar_mensagem` (`bool | None`; só booleano é aceito, o resto
+  = coluna ausente). `hub_stub.py` devolve a coluna (`sem_coluna_envio` simula o hub anterior).
+- ⚙️ `app/dominio/solicitacoes/leitura_crm.py`: `_bloqueados` passa a combinar a coluna com o 403 visto na
+  outbox; este só vale se a lista não respondeu, não trouxe o registro ou a coluna, ou é anterior à falha
+  (`Leitura.lida_em`). O bloqueio deixou de ser definitivo: a Central desbloqueia e a caixa volta. Contrato da
+  API e OpenAPI inalterados.
+- 🎨 `frontend/src/components/Conversa.tsx`: com `nao_permitida`, o texto do App ("Esta conversa foi encerrada
+  pela Central. Para falar conosco, abra uma nova solicitação.") e o link "Abrir nova solicitação".
+
+**P-85 (contato excluído do CRM)**
+- 🔌 `app/jobs/solicitacoes.py`: 404 `nao_encontrado` em `solicitacao.listar` deixou de encerrar a rodada da
+  sincronização; os pedidos do contato viram divergência `nao_encontrada_no_crm`, são marcados como consultados
+  e a rodada segue. Os demais erros do hub continuam parando a rodada.
+- `scripts/ensaio_espelho.py encerrar-antigo`: cancela na área (máquina de estados, ator APM, com
+  justificativa) o que ficou aberto do contato sintético antigo. Falta rodar em produção depois do deploy.
+
+**Verificação:** pytest com MySQL 8.4 descartável (000–016): 539 passaram; Vitest (Node 24): 215; `tsc -b` e
+ESLint limpos. Testes novos: leitura da coluna (6 casos), bloqueio/desbloqueio com cache, hub sem a coluna,
+contato excluído na sincronização, texto na conversa. Build da imagem e e2e não refeitos. `encerrar-antigo`
+não tem teste automatizado (só as peças que ele usa).
+
+## 2026-11-13 — Contato sintético trocado (correção do hub)
+
+O hub avisou em 13/11 que o contato sintético `8eb5da36-3847-ee11-be6f-00224837e097` foi excluído do CRM
+pelo William, com todas as ocorrências e oportunidades dele. O novo é
+**`1538029d-dbde-f111-84e8-7ced8db12239`**.
+
+- Trocado onde o id ainda é usado: `scripts/ensaio_espelho.py` (`CONTATO_SINTETICO` e o cabeçalho),
+  `docs/JOBS.md` (§4b e §4c) e os valores de exemplo de `tests/test_jobs_unidades.py` e
+  `tests/test_fase2_unidades.py`. `scripts/check_hub.py` recebe o contato por argumento (nada a trocar);
+  `.env`, `.env.jobs` e `.env.example` não guardam o id.
+- As entradas antigas deste arquivo e a resposta já enviada ao hub
+  (`docs/RESPOSTA-HUB-SOLICITACOES-2026-11-13.md`, com nota) mantêm o id antigo como histórico.
+- **P-82 fechada**: a `CAS-285559-X6N4J7` foi excluída junto com o contato; nada a cancelar nem a migrar.
+- **P-84 aberta e fechada no mesmo dia**: o hub confirmou que o contato novo já tem associação ativa no CRM
+  (data 01/01/2026; passa em todas as carências). O ensaio pode usá-lo.
+- `docs/JOBS.md` §4c: lista do contato começa vazia, hub sempre por `contact_id` (o CPF de teste não está
+  liberado nas contas da área).
+
+## 2026-11-13 — Retorno do hub à resposta da área: cinco ajustes (adenda da ADR-0024)
+
+O hub aceitou contas, grants e cota (web 30.000/dia) e respondeu às cinco perguntas. Decisões do William:
+**aceitar** a regra de unicidade do App em `outros` (DIV-49, nada muda na área) e executar os cinco ajustes.
+
+| Ajuste | Onde |
+|---|---|
+| Rótulo pela **entidade** (ocorrência → "a Central"; oportunidade → "a APM"); `aberta()` para unicidade e caixa de envio | `situacao_crm.py`, `leitura_crm.py` |
+| 429 `cota_pii_esgotada` → `cota_esgotada`: leituras pessoais da conta suspensas por 15 min; escritas e `produtos` seguem; sistêmico nos jobs | `integracoes/hub.py`, `jobs/politica.py` |
+| Conversa com limite 20 e cache em memória; relê só quando `ultima_interacao_em` muda, quando o job acabou de publicar ou em `?atualizar=true` | `mensagens.py`, `api/v1/solicitacoes.py`, `Conversa.tsx`; `HUB_CONVERSA_LIMITE`, `HUB_CONVERSA_TTL` |
+| Bloqueio pela Central aprendido no 403 `interacao_nao_permitida` e guardado por registro (sem migração: lido da outbox); canal restrito a App/Minha APM | `leitura_crm.py` |
+| Cancelamento com o registro aberto: "escreva na conversa"; aviso some quando o CRM já encerrou | `SolicitacaoDetalhe.tsx` |
+
+**Pendências fechadas:** **P-83** — produto no ar no hub desde 12/11 (`CRM_PRODUTO_HABILITADO=true`, aceite feito
+pelo App); o merge que falta é só do repositório. **P-74** — sem ferramenta de status **por desenho** (a
+credencial do hub não altera ocorrência nem oportunidade): a resposta do associado é a conversa e o
+cancelamento é pedido por mensagem; a divergência com a spec fica na DIV-48. P-78 e P-79 aceitas pelo hub
+(falta aplicar no painel); P-80 e P-81 confirmadas em parte; P-82 com o William.
+
+| Verificação | Resultado |
+|---|---|
+| pytest com MySQL 8.4 descartável (000–016) | 531 passaram, 0 falhas |
+| pytest sem banco | 462 passaram |
+| `tsc -b` + ESLint | sem erros |
+| Vitest (imagem `node:24`) | 215 passaram |
+| OpenAPI versionado | regenerado (parâmetro `atualizar`) |
+
+Não refeitos depois destes ajustes: build da imagem e e2e Playwright (rodam no deploy). Nada commitado.
+
+## 2026-11-13 — Solicitações em paridade com o App APM (contrato do hub de 13/11; ADR-0024)
+
+O `mcp_hub` publicou o contrato para a Minha APM oferecer o mesmo serviço do App (catálogo comum, produto na
+oportunidade, mensagens na Timeline, regra D-14). Plano aprovado pelo William em 13/11 com quatro decisões:
+**web lê e job escreve**; tipos antigos fora do catálogo vão como **`outros`**; **paridade completa** atrás de
+flag; **rótulos do App** em tudo que está no CRM. Código pronto e testado; **nada foi commitado nem implantado**
+(aguarda pedido), `sql/016` ainda não aplicada, flag desligada.
+
+**🔌 Integrador** — `app/integracoes/hub.py`: `produto_id` no pedido (só oportunidade; `sem_produto()`),
+`solicitacao_produtos`, `solicitacao_interacoes_listar`, `solicitacao_interagir`, `RegistroCrm` com tipo, canal
+e última interação (descrição só em trânsito, fora do `repr`; título descartado), erros tipados novos
+(`interacao_nao_permitida`, `registro_fechado`, `produto_inativo`, `produto_indisponivel`,
+`interacao_desabilitada`, `limite_titular` sem pausa do processo). `hub_stub.py` simula App, produtos, conversa,
+bloqueio e limite. `catalogo_crm.py` reescrito com o §2 do contrato e a tradução dos tipos antigos
+(`outro → outros`, `alteracao_cadastro → alteracao_cadastral`). `app/jobs/solicitacoes.py`: slug e produto no
+espelho, 503 → reenvio sem produto, 422 → cancelamento pelo sistema, sincronização com 100000001/100000002.
+`app/jobs/mensagens.py` (novo job `enviar_mensagens`, 20 s).
+
+**🗄️ Atlas** — `sql/016_solicitacao_paridade.sql` (sha256 `428d0d99…dca0e`): 15 tipos no ENUM,
+`solicitacao_mensagem` (outbox; texto apagado ao confirmar) e `solicitacao_leitura`, UPDATE por coluna, flag
+`solicitacoes_crm`. `scripts/db_check.py` com as duas tabelas na allowlist. Roteiro em `PROVISIONAMENTO.md` §2.7.
+
+**⚙️ Maestro** — domínio `situacao_crm.py` (situação/rótulo iguais ao BFF do App), `catalogo.py` (cache de
+produtos), `leitura_crm.py` (fusão área ∪ CRM, cache por contato, `parcial`), `mensagens.py` (outbox,
+idempotência, limites); carência e schemas dos tipos novos; regra `criada → cancelada` por `sistema/job`. API:
+`GET /solicitacoes/tipos`, `GET|POST /solicitacoes/{id}/mensagens`, lista e detalhe fundidos, tudo atrás da flag
+(404 `recurso_desligado`); `docs/api/openapi.json` regenerado; ação `solicitacao_mensagem_enviar`.
+
+**🎨 Vitrine** — `pages/NovaSolicitacao.tsx` (catálogo com grupo Seguros, formulário único), `components/Conversa.tsx`
+(sem polling; 429 com horário de liberação; encerrada = só leitura), lista com "Aberta pelo app", protocolo, selo
+de resposta nova e aviso de lista parcial; `ApiError.retryAfter`; atalho na Ajuda.
+
+**🛡️ Sentinela** — web segue sem escopo de escrita (teste prova que `interagir` não sai nem pede token);
+`contact_id` sempre o da sessão; id de outro associado = 404; texto do CRM só em trânsito; CHECK anti-CPF na
+outbox; nenhuma rota pública nova, CSP inalterada.
+
+**📦 Estivador** — `scripts/check_hub.py --solicitacoes` (grants de leitura por conta, só contagens) e
+`scripts/ensaio_espelho.py` (`criar --tipo`, `listar`, `mensagem`); `docs/JOBS.md` §4c (ensaio da paridade).
+
+| Verificação | Resultado |
+|---|---|
+| pytest sem banco (imagem derivada, `/dev/null` sobre `.env`) | sem falhas; integração pulada |
+| pytest com MySQL 8.4 descartável, migrações 000–016 em ordem | 528 passaram, 0 falhas (14 novos em `test_paridade_integracao.py`, 53 em `test_paridade_unidades.py`) |
+| `sql/016` como root + reaplicação | aplicou limpa; reaplicação sem erro e sem mudança |
+| Grants como `apm_area` | UPDATE de `contact_id`/`registro_id` e DELETE recusados nas duas tabelas; CHECKs recusam CPF, texto ausente em `pendente` e texto guardado em `enviada` |
+| `db_check` no ensaio | `conforme` (UPDATE por coluna nas duas tabelas novas) |
+| `tsc -b` + ESLint | sem erros |
+| Vitest (imagem `node:24`) | 214 passaram (12 novos em `Paridade.test.tsx`) |
+| Scripts no ensaio | `ensaio_espelho criar --tipo seguro_carro` / `estado` / `listar` / `mensagem` e `check_hub --solicitacoes` (stub) executados |
+| Build da imagem (`DOCKER_BUILDKIT=0`, tag de conferência `area-associado-teste:build`) | ok: `npm run check` em Node 24, `vite build` e verificação do OpenAPI dentro do build |
+| e2e Playwright (imagem nova, MySQL 000–016, hub simulado, flag **ligada**) | 46 passaram, 5 pulados (3 = cenário "flag desligada"); 0 CSP, 0 axe; `e2e/paridade.spec.ts` nos 3 viewports |
+| e2e com a flag **desligada** (`paridade` + `fase3`) | 12 passaram, 3 pulados: sem "Nova solicitação", rotas novas em 404 `recurso_desligado`, telas da Onda 2 inalteradas |
+
+O e2e exige `HUB_ESCRITA_HABILITADA=true` no container local (perfil editável): sem isso, `fase2` (perfil) e o
+teste de foco em celular falham por configuração, não por código.
+
+**`sql/016` aplicada em produção pelo operador em 13/11** (`OK 016`, registrada em `schema_migrations` com o
+sha256 acima; migrações 001–016): UPDATE por coluna em `solicitacao_mensagem` e `solicitacao_leitura` conferido em
+`SHOW GRANTS`, flag `solicitacoes_crm = 0`. O `db_check` do container em produção (imagem `4a8eabf3`, anterior a
+esta entrega) acusa as duas tabelas fora da allowlist — esperado até o deploy, que leva a allowlist nova.
+
+**Não feito nesta entrega:** commit e deploy; grants no hub; ensaio com o contato sintético
+(conversa e lista dos dois canais com o hub real só são prováveis nele: o hub simulado não é compartilhado
+entre o processo web e o de jobs). Pendências novas: P-78 a P-83. Divergências registradas: DIV-47
+(rótulos do App × spec §8.5) e DIV-48 (resposta vira conversa). Resposta ao hub (§8 do contrato) em
+`docs/RESPOSTA-HUB-SOLICITACOES-2026-11-13.md`.
+
 ## 2026-11-04 — Espelho das solicitações por incident/opportunity (P-06 e P-66; ADR-0023)
 
 O mcp_hub implantou `solicitacao.criar`/`solicitacao.listar` com contrato diferente do proposto pela área
@@ -64,9 +204,18 @@ deslocadas.
 | e2e Playwright (imagem nova, MySQL 000–015, hub simulado) | 43 passaram, 2 pulados; 0 CSP, 0 axe |
 
 `sql/015` aplicada em produção pelo operador em 04/11 (`OK 015`, registrada em `schema_migrations` com
-o sha256 acima). Ainda não feito: commit, deploy, painel do hub (P-77) e o ensaio com o contato
-sintético. Pendências novas: P-74 (ferramenta de status), P-75 (cursor), P-76 (códigos do tenant e
-`detalhes` no 404), P-77 (painel). Nada foi commitado.
+o sha256 acima). Commit `4a8eabf` com push; deploy `4a8eabf3` em 04/11 16:16 (healthy, smoke `db_check`/`check_oidc`/
+`csp_check`/`/health` ok; anterior `d5f2a642`); jobs recriados na imagem nova, `modo=SIMULAR`,
+`escrita_hub=False`, espelho e sincronização sem erro (0 pedidos, 0 contatos).
+
+**Ensaio em produção (04/11, contato sintético, execução avulsa com `JOBS_ENSAIO_CONTATOS`):**
+P-77 escopo provado (`check_hub` → `ferramentas:ler ferramentas:escrever`). 16:33 — pedido
+`97ac2479-daac-4272-a921-e9c5544cdaa6` (tipo `outro`, sem comunicação) espelhado em 2,0 s (`lidos=1 gravados=1
+erros=0`): `enviada`, `crm_sync=ok`, ocorrência **`CAS-285559-X6N4J7`**, par 0/1 (grant `solicitacao.criar`
+provado). `repetir` → `criada=False`, mesmo protocolo (idempotência do hub provada). Faltam: sincronização
+após a Central pôr em "Aguardando detalhes" (prova `solicitacao.listar` e a transição 0/3) e o cancelamento.
+Pendências abertas nesta entrega: P-74 (ferramenta de status), P-75 (cursor), P-76 (códigos do tenant e
+`detalhes` no 404), P-77 (painel: falta a cota e a correção do RUNBOOK do hub).
 
 ## 2026-11-03 — P-19: pós-reboot conhece a área, o hub e os jobs (TI-72)
 

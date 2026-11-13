@@ -223,6 +223,8 @@ CATALOGO: dict[str, Acao] = {
     "solicitacao_criar": _a("solicitacao", "servidor"),
     "solicitacao_cancelar": _a("solicitacao", "servidor"),
     "solicitacao_responder": _a("solicitacao", "servidor"),
+    # Mensagem do associado na conversa com a Central (ADR-0024); sem o texto.
+    "solicitacao_mensagem_enviar": _a("solicitacao", "servidor"),
     "solicitacao_status_alterado": _a("solicitacao", "servidor job", de=_STATUS, para=_STATUS,
                                       origem=_enum("sistema", "parceiro", "importacao", "associado", "apm")),
     "solicitacao_avaliar": _a("solicitacao", "servidor", nota=_int_ate(10)),

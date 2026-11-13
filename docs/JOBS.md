@@ -49,6 +49,7 @@ cada volta (≤ 15 s) e a cada item processado.
 |---|---|---|---|---|
 | `espelhar_solicitacoes` | 1 min (`JOBS_INTERVALO_ESPELHO`) | **externo** (CRM) | conta e loga `<id>:criar|reter|nada`; nada muda | `crm_sync ∈ {pendente, erro}` com `crm_proxima_em ≤ agora` (respeita a janela de arrependimento do cancelamento). Sem `crm_id` e com destino no catálogo (`catalogo_crm.py`) → `solicitacao.criar` (ocorrência da Central; `registro_id` = id, idempotente); sucesso grava `crm_id = id`, entidade, protocolo e o par `statecode/statuscode` e promove `criada → enviada` (ator `sistema`, origem `job`, `evento_uso solicitacao_status_alterado`). Com `crm_id` (mudança local depois do envio) ou sem destino (`exclusao_dados`, benefício) → `crm_sync=retido` + aviso no `evento_log`, sem chamar o hub (não existe ferramenta de status, ADR-0023). Falha recua 1, 2, 4, 8, 16, 32, 60… min e, na 10ª (ou erro permanente: `conflito`, contato inexistente, texto recusado), `falhou` + `evento_log` erro; 429/catálogo inválido/conta sem canal param a rodada sem gastar tentativa. Cancelada antes de existir no CRM → `crm_sync=ok` sem chamar o hub. Exige `HUB_ESCRITA_HABILITADA=true` (senão: espera, execução `erro` "escrita no hub desligada") e a `sql/015` (senão: pulado) |
 | `sincronizar_solicitacoes` | 15 min (`JOBS_INTERVALO_SYNC`) | leitura do hub → local | só conta os contatos que consultaria | Contatos com pedido no CRM, não terminal, consultados há mais de `JOBS_SYNC_CADENCIA_H` (6 h): `solicitacao.listar` com `JOBS_SYNC_LIMITE` (10) linhas, 50 se o pedido não estiver na página; casa por `registro_id`; transita **só quando o par `statecode/statuscode` muda** (0/1 de criação não move nada; 0/3 → `pendente_associado` com mensagem padrão + protocolo; resolvida/cancelada → concluída, inclusive de `pendente_associado`). Código desconhecido, registro sumido e terminal local → divergência no `evento_log`. Para no teto diário `JOBS_SYNC_LINHAS_DIA` (5.000 linhas lidas, dia de São Paulo; a cota PII do hub conta linhas) com execução `erro` "teto diário" |
+| `enviar_mensagens` | 20 s (`JOBS_INTERVALO_MENSAGENS`) | **externo** (CRM) | só conta a fila; a purga do texto de falhas antigas roda | ADR-0024. Outbox `solicitacao_mensagem` (`pendente`/`erro` com `proxima_em ≤ agora`) → `solicitacao.interagir` (`interacao_id` = id da linha, idempotente). Sucesso → `enviada` e **`texto = NULL`**. 429 `limite_titular` (10/h e 40/dia por associado, App + Minha APM) → tudo do contato espera o `Retry-After`, sem gastar tentativa. `registro_fechado`, `interacao_nao_permitida`, `nao_encontrado`, `conflito`, `entrada_invalida` → `falhou` (a tela mostra "Não enviada"). `interacao_desabilitada`, `canal_nao_configurado`, `limite_taxa`, escrita desligada → param a rodada. Demais → recuo 1…60 min, 10 tentativas. Ordem preservada dentro de cada solicitação. Texto de `falhou` há mais de 7 dias é apagado. Precisa da `sql/016` |
 | `marcar_sem_retorno` | 15 min (`JOBS_INTERVALO_SEM_RETORNO`) | local | **roda** | igual: 1º vencimento do prazo → marcador `sem_retorno_desde`, evento, notificação, outbox A05 (associado, equipe, RD); 2º (prazo × 2) → `fila_ligacao` |
 | `enviar_comunicacao` | 1 min (`JOBS_INTERVALO_COMUNICACAO`) | **externo** (e-mail) | supressões locais (RD `sem_credencial`; interno sem `CENTRAL_EMAIL` `sem_credencial`; fato mudou `fato_mudou`) acontecem; e-mails só são logados | A04/A05/A06/A16 ao associado (endereço lido do cache `associado_perfil` na hora, nunca gravado na outbox); A05 equipe / A16 Central para `CENTRAL_EMAIL`; `app` → `enviado`; recuo e 10 tentativas como o espelho; `comunicacao_envio` a cada envio/falha. Com `SMTP_MODE=stub` em **staging** nada é marcado (o e-mail espera o SMTP real, P-27); em development/test o stub marca `enviado` com `externo_id=smtp_stub` |
 | `situacao_carteirinhas` | diário 03h local (`JOBS_SITUACAO_HORA`) | leitura do hub → local | **roda** | igual: quem tem carteirinha e acessou em 90 dias, leitura com mais de 20 h; lotes ≤ 200 (`JOBS_SITUACAO_LOTE`) × `JOBS_SITUACAO_RODADAS`, pausa `JOBS_SITUACAO_PAUSA` entre chamadas; `cancelado` revoga a carteirinha, `ativo` reativa; 5 leituras seguidas sem resposta → execução `erro` |
@@ -119,7 +120,7 @@ sincronização ao contato sintético. Nenhuma alteração no `.env.jobs`.
 ```bash
 cd /home/ubuntu/area_associado
 J="docker compose --profile jobs exec area-associado-jobs"
-E="-e JOBS_APLICAR=1 -e HUB_ESCRITA_HABILITADA=true -e JOBS_ENSAIO_CONTATOS=8eb5da36-3847-ee11-be6f-00224837e097"
+E="-e JOBS_APLICAR=1 -e HUB_ESCRITA_HABILITADA=true -e JOBS_ENSAIO_CONTATOS=1538029d-dbde-f111-84e8-7ced8db12239"
 $J python -m scripts.ensaio_espelho criar                        # pedido local de ensaio, sem e-mail
 docker compose --profile jobs exec $E area-associado-jobs python -m app.jobs --uma-vez espelhar_solicitacoes
 $J python -m scripts.ensaio_espelho estado                       # enviada, sync ok, protocolo CAS-…, crm 0/1
@@ -139,6 +140,51 @@ $J python -m scripts.ensaio_espelho estado                       # pendente_asso
 
 Por fim a Central **cancela** a ocorrência (nunca apaga); a próxima sincronização leva o pedido a
 `concluida_negativa`. Registrar protocolo, horários e saídas em `docs/CONCLUIDO.md`.
+
+## 4c. Ensaio da paridade com o App (ADR-0024) — só o contato sintético
+
+Pré-requisitos: `sql/016` aplicada (`docs/PROVISIONAMENTO.md` §2.7); deploy com a flag `solicitacoes_crm`
+**desligada**; no painel do hub (P-78): conta `area-associado` com grants exatos em `solicitacao.listar`,
+`solicitacao.interacoes_listar` e `solicitacao.produtos`; conta `area-associado-jobs` com `solicitacao.interagir`
+(além de `criar` e `listar`); `feat/produto-oportunidade` no ar no hub (P-83); janela combinada com o William,
+que confere no CRM. **Nunca usar CPF nem contato real.**
+
+Contato sintético desde 13/11: `1538029d-dbde-f111-84e8-7ced8db12239` (o anterior, `8eb5da36-…`, foi excluído do
+CRM com todos os registros dele). Tem associação ativa no CRM desde 01/01/2026 (passa em todas as carências;
+confirmado pelo hub em 13/11). A lista dele começa vazia: registros "do App" só aparecem depois de o William abrir
+um pelo App. Chamar o hub sempre por `contact_id`; o CPF de teste não está liberado nas contas da área.
+**Antes do ensaio, uma vez:** `$J python -m scripts.ensaio_espelho encerrar-antigo` cancela na área o pedido de
+04/11 do contato antigo (só efeito local; não chama o hub).
+
+```bash
+cd /home/ubuntu/area_associado
+C=1538029d-dbde-f111-84e8-7ced8db12239
+J="docker compose --profile jobs exec area-associado-jobs"
+E="-e JOBS_APLICAR=1 -e HUB_ESCRITA_HABILITADA=true -e JOBS_ENSAIO_CONTATOS=$C"
+# 1. Grants de leitura nas duas contas (só contagens e nomes de campos)
+docker compose exec area-associado python -m scripts.check_hub --solicitacoes $C   # web: as três ok
+$J python -m scripts.check_hub --solicitacoes $C                                   # jobs: listar ok
+# 2. Abrir "Seguro Auto" (oportunidade com produto) e "Dúvida" (ocorrência)
+$J python -m scripts.ensaio_espelho criar --tipo seguro_carro
+$J python -m scripts.ensaio_espelho criar --tipo duvida
+docker compose --profile jobs exec $E area-associado-jobs python -m app.jobs --uma-vez espelhar_solicitacoes
+$J python -m scripts.ensaio_espelho estado     # as duas `enviada`, sync ok; a dúvida com protocolo CAS-…
+$J python -m scripts.ensaio_espelho listar     # as duas (canal minha_apm) e as abertas pelo App (canal app)
+# 3. Uma mensagem em cada (use os ids do passo anterior; pode ser um registro aberto pelo App)
+$J python -m scripts.ensaio_espelho mensagem <id-seguro-auto>
+sleep 31; $J python -m scripts.ensaio_espelho mensagem <id-duvida>      # a área aceita 1 a cada 30 s
+docker compose --profile jobs exec $E area-associado-jobs python -m app.jobs --uma-vez enviar_mensagens
+$J python -m scripts.ensaio_espelho estado     # mensagens `enviada`, sem texto guardado
+$J python -m scripts.ensaio_espelho listar     # crm 0/100000001, ultima=associado
+```
+
+O William confere no CRM: tipo (`seguro_carro`, `duvida`), Canal "Minha APM", Origem Web, a linha do produto
+na oportunidade e as duas mensagens na Timeline; responde a uma delas e a Central cancela os registros ao
+final (nunca apaga). Para ver na TELA com o contato sintético é preciso uma sessão dele (contato de teste do
+Login APM, P-37): ligar a flag só durante a janela (`UPDATE feature_flag SET ligada = 1 …`), conferir lista
+(os dois canais), detalhe, conversa e a resposta da Central, e desligar se o ensaio não fechar. Registrar
+protocolos, horários e saídas em `docs/CONCLUIDO.md`. Ligar para todos = flag ligada + `JOBS_APLICAR=1` e
+`HUB_ESCRITA_HABILITADA=true` no `.env.jobs` (sem isso as mensagens ficam em "Enviando…").
 
 ## 5. Reprocessar (SQL administrativo)
 

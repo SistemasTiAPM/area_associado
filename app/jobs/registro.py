@@ -11,7 +11,7 @@ from datetime import time as dtime
 from .. import prontidao
 from ..dominio.solicitacoes import esquema
 from ..config import get_settings
-from . import carteirinha, comunicacao, solicitacoes
+from . import carteirinha, comunicacao, mensagens, solicitacoes
 from .agenda import Quando
 from .base import Job
 
@@ -28,6 +28,14 @@ def _crm_pronto() -> str | None:
     return motivo
 
 
+def _mensagens_prontas() -> str | None:
+    """A outbox de mensagens nasce na sql/016 (ADR-0024)."""
+    motivo = _crm_pronto()
+    if motivo is None and not esquema.paridade_presente():
+        motivo = "sql/016 ausente (mensagens)"
+    return motivo
+
+
 def jobs() -> tuple[Job, ...]:
     s = get_settings()
     return (
@@ -38,6 +46,9 @@ def jobs() -> tuple[Job, ...]:
             lambda ctx: solicitacoes.sincronizar_solicitacoes(ctx), pronto=_crm_pronto,
             efeito_externo=True,
             descricao="solicitacao.listar por contato (cadência + teto de linhas) → transições na mudança do CRM"),
+        Job("enviar_mensagens", Quando(intervalo_s=s.jobs_intervalo_mensagens),
+            lambda ctx: mensagens.enviar_mensagens(ctx), pronto=_mensagens_prontas, efeito_externo=True,
+            descricao="outbox solicitacao_mensagem → solicitacao.interagir (conversa com a Central); purga do texto"),
         Job("marcar_sem_retorno", Quando(intervalo_s=s.jobs_intervalo_sem_retorno),
             solicitacoes.marcar_sem_retorno, pronto=_solicitacoes_prontas,
             descricao="marcador A05 no 1º vencimento do prazo; fila de ligações no 2º"),

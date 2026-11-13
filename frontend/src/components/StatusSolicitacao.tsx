@@ -1,4 +1,4 @@
-import type { StatusSolicitacao as Status } from '../api/solicitacoes';
+import type { SituacaoCrm, StatusSolicitacao as Status } from '../api/solicitacoes';
 import { Icon, type NomeIcone } from './Icon';
 
 /**
@@ -40,12 +40,37 @@ export const ROTULO_STATUS_PADRAO: Record<Status, string> = {
   cancelada: 'Cancelada',
 };
 
-export function StatusSolicitacao({ status, rotulo }: { status: Status; rotulo?: string | null | undefined }) {
-  const tom = TOM[status] ?? 'neutro';
+/** Situação do registro no CRM (paridade com o App, ADR-0024): tom e ícone próprios. */
+const TOM_SITUACAO: Record<SituacaoCrm, Tom> = {
+  aberta: 'info',
+  em_andamento: 'info',
+  aguardando_associado: 'atencao',
+  concluida: 'ok',
+  cancelada: 'neutro',
+};
+
+const ICONE_SITUACAO: Record<SituacaoCrm, NomeIcone> = {
+  aberta: 'caixa',
+  em_andamento: 'relogio',
+  aguardando_associado: 'alerta',
+  concluida: 'check',
+  cancelada: 'fechar',
+};
+
+interface Props {
+  status: Status;
+  rotulo?: string | null | undefined;
+  /** Quando presente, decide tom e ícone no lugar do `status` da área. */
+  situacao?: SituacaoCrm | null | undefined;
+}
+
+export function StatusSolicitacao({ status, rotulo, situacao }: Props) {
+  const tom = (situacao ? TOM_SITUACAO[situacao] : undefined) ?? TOM[status] ?? 'neutro';
+  const icone = (situacao ? ICONE_SITUACAO[situacao] : undefined) ?? ICONE[status] ?? 'info';
   const texto = rotulo?.trim() || ROTULO_STATUS_PADRAO[status] || 'Situação indisponível';
   return (
-    <span className={`status-solicitacao status-solicitacao--${tom}`} data-status={status}>
-      <Icon nome={ICONE[status] ?? 'info'} tamanho={14} />
+    <span className={`status-solicitacao status-solicitacao--${tom}`} data-status={status} data-situacao={situacao ?? undefined}>
+      <Icon nome={icone} tamanho={14} />
       <span>{texto}</span>
     </span>
   );

@@ -15,6 +15,7 @@ import {
 import { ROTULOS_ASSUNTO, ROTULOS_FINALIDADE, ROTULOS_MOTIVO } from '../api/rotulos';
 import { Avaliacao } from '../components/Avaliacao';
 import { Campo } from '../components/Campo';
+import { Conversa } from '../components/Conversa';
 import { Dialogo } from '../components/Dialogo';
 import { EstadoErro } from '../components/EstadoErro';
 import { EstadoVazio } from '../components/EstadoVazio';
@@ -298,7 +299,7 @@ type Estado =
 const ENCERRADAS: ReadonlySet<string> = new Set(['concluida_positiva', 'concluida_negativa', 'cancelada']);
 
 export function DetalheSolicitacao({ id }: { id: string }) {
-  const { recarregar: recarregarSessao } = useSessao();
+  const { sessao, recarregar: recarregarSessao } = useSessao();
   const { mostrar, mostrarErro } = useToast();
   const [estado, setEstado] = useState<Estado>({ fase: 'carregando' });
   const [tentativa, setTentativa] = useState(0);
@@ -397,7 +398,11 @@ export function DetalheSolicitacao({ id }: { id: string }) {
   }
 
   const s = estado.dados;
-  const pendente = s.status === 'pendente_associado';
+  // Paridade com o App (ADR-0024): com a flag, o que está no CRM tem conversa e situação do App.
+  const paridade = sessao.flags.solicitacoes_crm === true;
+  const comConversa = paridade && s.na_central;
+  const pendente = comConversa && s.situacao ? s.situacao === 'aguardando_associado' : s.status === 'pendente_associado';
+  const quem = s.responde === 'central' ? 'A Central' : 'A APM';
   // Mensagem pública do pedido ao associado: a mais recente em `pendente_associado`.
   const pedido = pendente
     ? [...s.linha_do_tempo].reverse().find((e) => e.status === 'pendente_associado' && e.mensagem)?.mensagem ?? null
@@ -405,7 +410,9 @@ export function DetalheSolicitacao({ id }: { id: string }) {
   const prazo = dataDaApi(s.prazo_em);
   const avaliadaEm = dataDaApi(s.avaliacao?.avaliada_em);
   // Já no CRM da Central (ADR-0023): a área não leva cancelamento nem resposta até lá.
-  const comCentral = s.na_central && !ENCERRADAS.has(s.status);
+  // Com a paridade, "encerrada" é o que o CRM diz agora (o status da área pode estar atrasado).
+  const encerradaNoCrm = comConversa && (s.situacao === 'concluida' || s.situacao === 'cancelada');
+  const comCentral = s.na_central && !ENCERRADAS.has(s.status) && !encerradaNoCrm;
 
   return (
     <>
@@ -421,9 +428,15 @@ export function DetalheSolicitacao({ id }: { id: string }) {
           <h2 className="secao__titulo" id="titulo-situacao">
             Situação
           </h2>
-          <StatusSolicitacao status={s.status} rotulo={s.rotulo_status} />
+          <StatusSolicitacao status={s.status} rotulo={s.rotulo_status} situacao={s.situacao} />
         </div>
-        {pendente && s.na_central ? (
+        {pendente && comConversa ? (
+          <div className="aviso aviso--acao" id={idPendencia}>
+            <p>
+              <strong>{quem} aguarda seu retorno.</strong> Veja a conversa abaixo e responda por lá.
+            </p>
+          </div>
+        ) : pendente && s.na_central ? (
           <div className="aviso aviso--acao" id={idPendencia}>
             <p>
               <strong>A Central precisa de mais informações.</strong> Ela vai falar com você pelos contatos do seu
@@ -447,6 +460,12 @@ export function DetalheSolicitacao({ id }: { id: string }) {
         <dl className="dados-perfil">
           <dt>Pedido</dt>
           <dd>{s.tipo.rotulo}</dd>
+          {s.canal === 'app' ? (
+            <>
+              <dt>Aberta por</dt>
+              <dd>App APM</dd>
+            </>
+          ) : null}
           {s.beneficio ? (
             <>
               <dt>Benefício</dt>
@@ -478,13 +497,28 @@ export function DetalheSolicitacao({ id }: { id: string }) {
             </>
           ) : null}
         </dl>
-        {comCentral ? (
+        {comCentral && comConversa && s.pode_enviar_mensagem ? (
+          <p className="aviso" id="aviso-central">
+            Para complementar ou cancelar este pedido, escreva na conversa abaixo.
+          </p>
+        ) : comCentral ? (
           <p className="aviso" id="aviso-central">
             Este pedido já está com a Central de Relacionamento. Para cancelar ou complementar, fale com a Central
             {s.protocolo ? ` e informe o protocolo ${s.protocolo}` : ''}.
           </p>
         ) : null}
       </section>
+
+      {comConversa ? (
+        <Conversa
+          key={`c-${s.id}`}
+          solicitacaoId={s.id}
+          aoEnviar={() => {
+            void atualizar();
+            void recarregarSessao();
+          }}
+        />
+      ) : null}
 
       {s.pode_responder ? <FormularioResposta key={`r-${s.atualizada_em}`} solicitacao={s} aoConcluir={aoConcluir} aoFalhar={aoFalhar} /> : null}
 

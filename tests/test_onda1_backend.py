@@ -341,8 +341,9 @@ def test_flags_v2_conhecidas_nascem_desligadas_e_forcadas_continuam_validadas(mo
 
     novas = {"notificacoes", "encaminhamento_parceiro", "reservas", "inscricoes", "comunicacao_outbox",
              "cancelamento_online", "lgpd_consentimentos"}
-    assert novas <= set(flags.FLAGS_CONHECIDAS) and len(flags.FLAGS_CONHECIDAS) == 15
-    assert len(set(flags.FLAGS_CONHECIDAS)) == 15
+    # 15 até a sql/009 + `solicitacoes_crm` (sql/016, ADR-0024).
+    assert novas <= set(flags.FLAGS_CONHECIDAS) and len(flags.FLAGS_CONHECIDAS) == 16
+    assert len(set(flags.FLAGS_CONHECIDAS)) == 16 and "solicitacoes_crm" in flags.FLAGS_CONHECIDAS
     assert all(re.fullmatch(r"[a-z][a-z0-9_]{1,47}", f) for f in flags.FLAGS_CONHECIDAS)
 
     monkeypatch.setattr(flags, "_ler_tabela", lambda: {})  # 009 ainda não aplicada

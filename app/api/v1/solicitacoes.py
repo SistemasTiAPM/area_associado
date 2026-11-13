@@ -8,6 +8,14 @@ do domínio, por contagem no banco (ADR-0020).
 
 Respostas nunca carregam `contact_id`, `sub`, CPF, e-mail nem `crm_*`
 (RF-SO-06; teste de contrato). `evento_uso` sai depois do commit (regra 20).
+
+Paridade com o App APM (ADR-0024), só com a flag `solicitacoes_crm` ligada e a
+`sql/016` aplicada (senão 404 `recurso_desligado` nas rotas novas e o
+comportamento da Onda 2 nas antigas): `GET /solicitacoes/tipos` (catálogo
+comum, sem os tipos de produto inativo), lista e detalhe fundidos com o CRM
+(o que o associado abriu pelo App também aparece) e a conversa em
+`/solicitacoes/{id}/mensagens`. O web só LÊ o CRM; a mensagem do associado vai
+para a outbox e o serviço de jobs publica.
 """
 
 from __future__ import annotations
@@ -24,23 +32,32 @@ from starlette.concurrency import run_in_threadpool
 from ... import audit, prontidao, uso
 from ...csrf import exigir_csrf
 from ...dominio.limites_negocio import LimiteNegocioExcedido, PedidoAbertoExistente
-from ...dominio.solicitacoes import schemas, servico
+from ...dominio.solicitacoes import catalogo, catalogo_crm, esquema, leitura_crm, mensagens, schemas, servico
+from ...dominio.solicitacoes.leitura_crm import FonteIndisponivel
 from ...dominio.solicitacoes.maquina import Resultado, SolicitacaoNaoEncontrada, TransicaoInvalida
+from ...dominio.solicitacoes.mensagens import LimiteMensagens, MensagemNaoPermitida
 from ...dominio.solicitacoes.servico import CursorInvalido, NaoElegivel
 from ...limites import LimiteJanela
 from ...session_guard import require_associado
 from ..erros import MENSAGENS_PADRAO, ApiError
 from .deps import Contexto, contexto
-from .modelos_solicitacoes import ListaSolicitacoes, Solicitacao
+from .modelos_solicitacoes import CatalogoTipos, Conversa, ListaSolicitacoes, MensagemConversa, Solicitacao
 
 logger = logging.getLogger("area_associado.api.solicitacoes")
 router = APIRouter(tags=["solicitacoes"])
 
 # Abuso por minuto (por processo; × 2 workers). O teto de negócio é do banco.
 limite_escrita = LimiteJanela(maximo=20, janela_s=60)
+# Conversa: cada leitura consulta o hub (cota PII por LINHA) — teto por associado.
+limite_conversa = LimiteJanela(maximo=30, janela_s=60)
+limite_mensagem = LimiteJanela(maximo=10, janela_s=60)
 
 MENSAGEM_INDISPONIVEL = "As solicitações estão sendo preparadas. Tente de novo mais tarde."
 MENSAGEM_NAO_ENCONTRADA = "Não encontramos esta solicitação."
+MENSAGEM_PARIDADE_DESLIGADA = "Este recurso ainda não está disponível."
+MENSAGEM_SERVICO_INDISPONIVEL = "Este serviço não está disponível no momento."
+MENSAGEM_MENSAGENS_INDISPONIVEIS = "Mensagens temporariamente indisponíveis. Tente de novo em instantes."
+MENSAGEM_ABERTA_NO_CRM = "Você já tem uma solicitação deste tipo em andamento."
 _MENSAGENS_409: dict[str, str] = {
     "estado_invalido": "Esta solicitação mudou de situação. Atualizamos a página.",
     "ja_avaliada": "Esta solicitação já foi avaliada.",
@@ -66,8 +83,18 @@ def _texto(maximo: int, *, multilinha: bool = False, minimo: int = 1):
 class NovaSolicitacao(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    tipo_servico: Literal["outro", "declaracao_associado", "alteracao_cadastro"]
+    # `outro`, `declaracao_associado`, `alteracao_cadastro` e, com a paridade ligada, os
+    # tipos de `GET /solicitacoes/tipos`. A allowlist é conferida na rota (depende da flag).
+    tipo_servico: Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{1,49}$")]
     campos: dict[str, Any] = Field(default_factory=dict, max_length=8)
+    chave_idempotencia: ChaveIdempotencia
+
+
+class MensagemEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Teto bruto generoso; o limite real (2–2000 unidades UTF-16) é do domínio.
+    texto: str = Field(max_length=4000)
     chave_idempotencia: ChaveIdempotencia
 
 
@@ -116,6 +143,16 @@ def exigir_limite_escrita(ctx: Contexto) -> None:
         raise ApiError(429, "limite_taxa")
 
 
+async def paridade_ativa() -> bool:
+    return await run_in_threadpool(esquema.paridade_ativa)
+
+
+async def exigir_paridade() -> None:
+    """Regra 19: flag desligada (ou `sql/016` ausente) = 404 `recurso_desligado`."""
+    if not await paridade_ativa():
+        raise ApiError(404, "recurso_desligado", MENSAGEM_PARIDADE_DESLIGADA)
+
+
 def erro_de_dominio(exc: Exception) -> ApiError:
     """Exceção do domínio → contrato único de erro. Desconhecida → propaga (500)."""
     if isinstance(exc, SolicitacaoNaoEncontrada):
@@ -129,6 +166,15 @@ def erro_de_dominio(exc: Exception) -> ApiError:
                         detalhes=[{"campo": "libera_em", "mensagem": exc.libera_em.isoformat()}])
     if isinstance(exc, PedidoAbertoExistente):
         return ApiError(409, "estado_invalido", exc.mensagem)
+    if isinstance(exc, FonteIndisponivel):
+        cabecalhos = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
+        if exc.codigo == "mensagens_indisponiveis":
+            return ApiError(503, exc.codigo, MENSAGEM_MENSAGENS_INDISPONIVEIS, headers=cabecalhos)
+        return ApiError(503, "fonte_indisponivel", MENSAGENS_PADRAO[503][1], headers=cabecalhos)
+    if isinstance(exc, MensagemNaoPermitida):
+        return ApiError(403, "mensagem_nao_permitida", mensagens.MENSAGEM_NAO_PERMITIDA)
+    if isinstance(exc, LimiteMensagens):
+        return ApiError(429, "limite_mensagens", exc.mensagem, headers={"Retry-After": str(exc.retry_after)})
     if isinstance(exc, LimiteNegocioExcedido):
         return ApiError(429, "limite_negocio", exc.mensagem)
     if isinstance(exc, schemas.EntradaInvalida):
@@ -166,8 +212,8 @@ def _errno(exc: Exception) -> int | None:
 
 
 _ERROS_DOMINIO = (SolicitacaoNaoEncontrada, TransicaoInvalida, NaoElegivel, PedidoAbertoExistente,
-                  LimiteNegocioExcedido, schemas.EntradaInvalida, CursorInvalido, ProgrammingError,
-                  OperationalError)
+                  LimiteNegocioExcedido, schemas.EntradaInvalida, CursorInvalido, FonteIndisponivel,
+                  MensagemNaoPermitida, LimiteMensagens, ProgrammingError, OperationalError)
 
 
 async def executar(funcao, *args: Any, **kwargs: Any) -> Any:
@@ -236,13 +282,27 @@ async def listar_solicitacoes(
     limite: int = Query(servico.LIMITE_PADRAO, ge=1, le=servico.LIMITE_MAX),
     ctx: Contexto = Depends(contexto),
 ) -> dict[str, Any]:
+    if await paridade_ativa():
+        # Fusão com o CRM (ADR-0024): sem paginação — até 200 da área + a página do hub.
+        itens, parcial = await executar(leitura_crm.listar, ctx.contact_id, situacao=situacao)
+        return {"itens": itens, "proximo_cursor": None, "parcial": parcial}
     itens, proximo = await executar(servico.listar, ctx.contact_id, situacao=situacao, cursor=cursor, limite=limite)
     return {"itens": itens, "proximo_cursor": proximo}
+
+
+# Antes de `/solicitacoes/{solicitacao_id}`: senão "tipos" seria lido como id.
+@router.get("/solicitacoes/tipos", response_model=CatalogoTipos,
+            dependencies=[Depends(require_associado), Depends(exigir_solicitacoes_prontas),
+                          Depends(exigir_paridade)])
+async def listar_tipos(ctx: Contexto = Depends(contexto)) -> dict[str, Any]:
+    return {"itens": await run_in_threadpool(catalogo.publico)}
 
 
 @router.get("/solicitacoes/{solicitacao_id}", response_model=Solicitacao,
             dependencies=[Depends(exigir_solicitacoes_prontas)])
 async def obter_solicitacao(solicitacao_id: str, ctx: Contexto = Depends(contexto)) -> dict[str, Any]:
+    if await paridade_ativa():
+        return await executar(leitura_crm.detalhe, ctx.contact_id, solicitacao_id)
     return await executar(servico.detalhe, ctx.contact_id, solicitacao_id)
 
 
@@ -255,7 +315,18 @@ _RESPOSTA_REPETICAO = {200: {"model": Solicitacao, "description": "Repetição d
 async def criar_solicitacao(entrada: NovaSolicitacao, request: Request,
                             ctx: Contexto = Depends(contexto)) -> JSONResponse:
     exigir_limite_escrita(ctx)
-    return await criar_e_responder(request, ctx, tipo_servico=entrada.tipo_servico, campos=entrada.campos,
+    tipo = entrada.tipo_servico
+    if tipo in catalogo_crm.TIPOS_NOVOS and await paridade_ativa():
+        # Catálogo comum com o App: o CRM pode ter desligado o serviço, e o associado
+        # pode já ter um registro aberto deste tipo pelo App (unicidade entre canais).
+        if not await run_in_threadpool(catalogo.disponivel, tipo):
+            raise ApiError(422, "servico_indisponivel", MENSAGEM_SERVICO_INDISPONIVEL)
+        if await run_in_threadpool(leitura_crm.aberto_no_crm, ctx.contact_id, tipo):
+            raise ApiError(409, "estado_invalido", MENSAGEM_ABERTA_NO_CRM)
+    elif tipo not in schemas.TIPOS_CRIAVEIS_API:
+        raise ApiError(400, "entrada_invalida", MENSAGENS_PADRAO[400][1],
+                       detalhes=[{"campo": "tipo_servico", "mensagem": "tipo de solicitação inválido"}])
+    return await criar_e_responder(request, ctx, tipo_servico=tipo, campos=entrada.campos,
                                    chave=entrada.chave_idempotencia)
 
 
@@ -290,3 +361,34 @@ async def avaliar_solicitacao(solicitacao_id: str, entrada: AvaliarEntrada, requ
                             [("solicitacao_avaliar", "solicitacao", sid, {"nota": entrada.nota})])
     return resposta_solicitacao(dados, 200)
 
+
+
+# ------------------------------------------------- conversa (ADR-0024)
+@router.get("/solicitacoes/{solicitacao_id}/mensagens", response_model=Conversa,
+            dependencies=[Depends(exigir_solicitacoes_prontas), Depends(exigir_paridade)])
+async def listar_mensagens(solicitacao_id: str, atualizar: bool = Query(False),
+                           ctx: Contexto = Depends(contexto)) -> dict[str, Any]:
+    """`atualizar=true` (botão "Atualizar conversa"): relê a lista do associado no hub antes de
+    decidir se a conversa mudou. Sem ele, a conversa vem do cache enquanto não há mensagem nova."""
+    if not limite_conversa.permitir(ctx.contact_id):
+        raise ApiError(429, "limite_taxa", headers={"Retry-After": "60"})
+    return await executar(mensagens.listar, ctx.contact_id, solicitacao_id, atualizar=atualizar)
+
+
+@router.post("/solicitacoes/{solicitacao_id}/mensagens", status_code=202, response_model=MensagemConversa,
+             dependencies=[*_ESCRITA, Depends(exigir_paridade)],
+             responses={200: {"model": MensagemConversa,
+                              "description": "Repetição da mesma `chave_idempotencia`."}})
+async def enviar_mensagem(solicitacao_id: str, entrada: MensagemEntrada, request: Request,
+                          ctx: Contexto = Depends(contexto)) -> JSONResponse:
+    """Aceita a mensagem (202): ela entra na fila e o serviço de jobs publica na conversa
+    do CRM. O texto nunca vai para `evento_uso` nem para log."""
+    if not limite_mensagem.permitir(ctx.contact_id):
+        raise ApiError(429, "limite_taxa", headers={"Retry-After": "60"})
+    envio = await executar(mensagens.enviar, ctx.contact_id, solicitacao_id, texto=entrada.texto,
+                           chave_idempotencia=entrada.chave_idempotencia, request_id=_request_id(request))
+    if envio.criada:
+        await run_in_threadpool(registrar_pos_commit, request, ctx,
+                                [("solicitacao_mensagem_enviar", "solicitacao", envio.registro_id, {})])
+    return JSONResponse(MensagemConversa.model_validate(envio.mensagem).model_dump(mode="json"),
+                        status_code=202 if envio.criada else 200)

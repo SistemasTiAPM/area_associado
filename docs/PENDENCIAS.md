@@ -24,17 +24,19 @@ demonstração". Fases 1, 2a e 2b implantadas; RDS com `sql/001`–`007`.
 | 1 — Fundação (SPA, sessão cifrada, API, flags, analytics) | **no ar** em minha.apm.org.br (construção) | — |
 | 2a — Perfil, e-mail por código, foto, carteirinha | **no ar** (hub e SMTP simulados) | CRM real em leitura desde 21/10; e-mail: P-27 |
 | 2b — mcp_hub com perfil, contato e foto no CRM | **no ar** com `HUB_MODE=real`, só leitura (21/10) | P-41; escrita real só depois de P-29; P-30, P-31 |
-| 3 — Solicitações | **não iniciada**, pode começar já (fila local não depende do hub) | P-06 só para o espelho no CRM |
+| 3 — Solicitações | **no ar** desde 30/10 (Onda 2); espelho no CRM em simulação (ADR-0023); **paridade com o App APM pronta no código** (ADR-0024, 13/11), atrás da flag `solicitacoes_crm` | P-77/P-78 (painel do hub), `sql/016`, ensaio (`docs/JOBS.md` §4c) |
 | 4 a 8 | não iniciadas | ver roteiro no fim deste arquivo |
 
 **O que está nas mãos de quem**
-- **Operador (você):** P-01, certificado de origem; P-77, painel do hub para o espelho; deploy e
-  ensaio do espelho (ação 7 abaixo; `sql/015` aplicada em 04/11). P-36 (cofre) adiada por decisão sua.
+- **Operador (você):** P-01, certificado de origem; P-77 e **P-78/P-79**, painel do hub (grants e cotas das
+  duas contas); `sql/016`; ensaio da paridade (ação 8 abaixo); encaminhar ao hub a resposta
+  `docs/RESPOSTA-HUB-SOLICITACOES-2026-11-13.md`; P-80 e P-81 (rótulos e carências do App); P-85 (encerrar o pedido órfão do contato sintético antigo, depois do deploy). P-36 (cofre)
+  adiada por decisão sua.
 - **TI / infra:** P-27, credencial SMTP.
 - **CRM admin:** P-37, contatos de teste no CRM para a agência entrar pelo Login APM; P-29, flows em
   update de `contact`; P-30, homologar a foto (`CanStoreFullImage=False` hoje); P-76, códigos de status
   do tenant e assunto por tipo.
-- **mcp_hub:** P-74 (ferramenta de status), P-75 (consulta por cursor), P-76 (`detalhes` no 404).
+- **mcp_hub:** P-75 (consulta por cursor), P-76 (`detalhes` no 404). P-74 fechada em 13/11 (sem ferramenta de status, por desenho).
 - **Negócio:** P-31 (confirmar os campos do endereço), P-32 (formato de telefone), P-10 e P-22.
 
 **2026-10-21:** P-02 e P-05 concluídas. A área roda com `HUB_MODE=real` e
@@ -76,8 +78,14 @@ ar desde 30/10; `sql/008`–`014` aplicadas em 2026-11-03, P05 e P14 disponívei
    novas; P-59/P-60; WebKit no host de e2e (root).
 6. Ligar `cancelamento_online` é decisão de negócio (ADR-0021).
 7. **Espelho no CRM (ADR-0023, 2026-11-04), em ordem:** ~~snapshot e `sql/015`~~ (aplicada em 04/11) →
-   commit → deploy da área (`scripts/deploy.sh`) e recriar o serviço de jobs → painel do hub (P-77) → ensaio com o
+   ~~commit → deploy da área e recriar o serviço de jobs~~ (`4a8eabf3`, 04/11) → painel do hub (P-77) → ensaio com o
    contato sintético em janela combinada (`docs/JOBS.md` §4b) → decidir `JOBS_APLICAR=1`.
+8. **Paridade com o App APM (ADR-0024, 2026-11-13), em ordem:** enviar a resposta ao hub → ~~`sql/016`~~
+   (aplicada em 13/11; o `db_check` fica "não conforme" até o deploy, por causa da allowlist antiga na imagem
+   em produção) → commit e deploy (flag desligada; conferir `db_check` conforme) → grants e cota no painel do hub
+   (P-78, P-79; aceitos pelo hub em 13/11, falta aplicar) → `check_hub --solicitacoes` nas duas contas → P-85 (`ensaio_espelho encerrar-antigo`) →
+   ensaio com o contato sintético (`docs/JOBS.md` §4c), William confere no CRM → ligar `solicitacoes_crm` e
+   `JOBS_APLICAR=1` + `HUB_ESCRITA_HABILITADA=true` no `.env.jobs`.
 
 **Para retomar:** **Onda 3** = Fase 3b (P13: preferências, consentimentos versionados, exportação e
 exclusão por anonimização; RD Station em stub). Decidir antes DEC-06, DEC-26, DEC-27 (levantamento §11).
@@ -172,10 +180,14 @@ o que a TI faz enquanto espera). Estado inicial: aguardando terceiro.
 | P-71 | P2 | **`docker logs` ilegível no `nginx_porteiro`** (Docker 29.1.3, json-file com rotação 3×50m): `--since` não devolve nada em nenhuma janela e `--tail` acima de ~100 mil linhas devolve um trecho anterior ao restart de 29/10 no lugar das linhas recentes. Contornado em 03/11 em `scripts/alertas.sh` e `~/verificar-pos-reboot.sh` (leitura com conferência da última linha e filtro pelo carimbo). Antes disso as checagens de 5xx/crit/real_ip do porteiro passavam sem ler nada. Causa raiz não investigada (arquivo rotacionado corrompido? bug do Docker 29.1). | Estivador / operador | qualquer leitura de log do porteiro por janela | contornada, causa aberta | 2026-11-03 |
 | P-72 | P3 | **Swap com 1 arquivo de 2 GB**; em 02/09 eram 6 GB em dois arquivos (`PENDENCIAS_AWS.md`). O segundo sumiu, provavelmente no upgrade para t4g.large (8 GB de RAM; 0,6 GB de swap em uso em 03/11). Decidir: recriar ou baixar a expectativa do pós-reboot para 1. | operador | `verificar-pos-reboot.sh` acusa `swap: 1 arquivos (esperado 2)` | aberta | 2026-11-03 |
 | P-73 | P3 | **Container de teste esquecido `kind_agnesi`**: criado em 30/10 por uma frente da Onda 2 (`pytest` de jobs e `db_check`, repositório montado, `.env` = `/dev/null`, sem porta), travado há 4 dias e `unhealthy`. Remover: `docker rm -f kind_agnesi`. | operador | pós-reboot acusa container fora da lista | aberta | 2026-11-03 |
-| P-74 | P1 | **Ferramenta de status no hub** (`solicitacao.status_atualizar` ou equivalente): o app user do hub não tem Write em incident/opportunity, então cancelamento e resposta do associado não chegam ao CRM. Enquanto isso a área recusa cancelar/responder pedido já no CRM (409 `na_central`, tela com protocolo) — **divergência com a spec** (cancelar "enquanto o parceiro não atendeu", DIV-24) — e mudança local depois do envio fica `crm_sync='retido'` (reprocessável). Pedir plano no mcp_hub. | mcp_hub / William | autoatendimento de cancelamento e resposta após o envio | aberta | 2026-11-04 |
 | P-75 | P2 | **Consulta por cursor no hub** (`solicitacao.alteracoes_desde(cursor)` filtrada pelo canal Minha APM): hoje a sincronização usa `listar` por contato, que gasta cota pelo histórico do contato (registros da Central também contam). Com cursor, dezenas de linhas/dia; cadência poderia cair de 6 h para minutos. | mcp_hub | custo de cota e atraso de até 6 h no status | aberta | 2026-11-04 |
 | P-76 | P2 | **Confirmações do hub/CRM para a sincronização**: (a) option set `statuscode` de `incident` e `opportunity` do tenant (a área usa os códigos padrão do Dataverse: 0/1, 0/2, 0/3, 0/4, 1/5, 1/1000, 2/6, 2/2000; customizado ativo = sem transição + divergência); (b) `detalhes: [{"campo": "contact_id\|assunto_id\|time_id"}]` no 404 `nao_encontrado` do `criar` (hoje a área distingue pela mensagem fixa); (c) escolha final de assunto por tipo pela Central (candidatos: Declarações, Cancelamento associativo). | mcp_hub / Central | precisão do mapeamento | aberta | 2026-11-04 |
-| P-77 | P1 | **Painel do hub para o espelho**: conta `area-associado-jobs` com escopo `ferramentas:escrever` e grants exatos `solicitacao.criar` e `solicitacao.listar` (nunca `solicitacao.*`); cota PII de 15.000 → **25.000/dia** (situação noturna até 10.000 + sincronização até 10.000 + margem). O mapa `CRM_SOLICITACAO_CONTAS` já tem `area-associado-jobs` (conferido em 04/11). Corrigir no RUNBOOK do hub o §3.1 passo 4b, que diz que os jobs da área só leem. | William (painel) / sessão do hub | ensaio e ligar o espelho | aberta | 2026-11-04 |
+| P-77 | P1 | **Painel do hub para o espelho**: conta `area-associado-jobs` com escopo `ferramentas:escrever` e grants exatos `solicitacao.criar` e `solicitacao.listar` (nunca `solicitacao.*`); cota PII de 15.000 → **25.000/dia** (situação noturna até 10.000 + sincronização até 10.000 + margem). O mapa `CRM_SOLICITACAO_CONTAS` já tem `area-associado-jobs` (conferido em 04/11). Corrigir no RUNBOOK do hub o §3.1 passo 4b, que diz que os jobs da área só leem. | William (painel) / sessão do hub | ensaio e ligar o espelho | em andamento: escopo `escrever` provado em 04/11 (`check_hub` com `HUB_ESCRITA_HABILITADA=true` só no processo → `ferramentas:ler ferramentas:escrever`); grants provados no ensaio; RUNBOOK do hub ainda por corrigir | 2026-11-04 |
+| P-78 | P1 | **Grants da paridade com o App (ADR-0024)**, exatos, no painel do hub: conta `area-associado` (só `ferramentas:ler`) → `solicitacao.listar`, `solicitacao.interacoes_listar`, `solicitacao.produtos`; conta `area-associado-jobs` → `solicitacao.interagir` (além de `criar` e `listar`). Nunca `solicitacao.*`. Confirmar o mapa de canal das duas contas (`CRM_SOLICITACAO_CONTAS` → Minha APM / Web). | William (painel) / sessão do hub | lista dos dois canais, conversa e catálogo | **aceita pelo hub em 13/11**; falta o William aplicar no painel e a área conferir (`check_hub --solicitacoes` nas duas contas). A conta web fica fora do mapa de canal (só lê) | 2026-11-13 |
+| P-79 | P1 | **Cota PII da conta web `area-associado`**: `solicitacao.listar` gasta 1 por linha (até 50 por abertura da lista) e `interacoes_listar` 1 por mensagem; com 5.000/dia a lista degrada para `parcial` em ~100 aberturas. Pedir **30.000/dia** (como a `appapm`) e rever com o uso real; a área já usa cache de 60 s por contato e teto de 30 leituras de conversa por minuto. | William (painel) | ligar `solicitacoes_crm` para todos | **aceita pelo hub em 13/11** (30.000/dia, zera às 00:00 de Brasília); falta aplicar no painel | 2026-11-13 |
+| P-80 | P2 | **Rótulos do App para `aberta`, `concluida` e `cancelada`**: o servidor do App só documenta os de "aguardando" e "em andamento"; os outros três estão no app (pedido A4 §4.1), fora deste servidor. Provisórios na área: "Aberta", "Concluída", "Cancelada" (`situacao_crm.py`). | William (sessão do App) | texto idêntico nos dois canais | aberta — o hub confirmou: os textos de `aberta`, `em_andamento`, `concluida` e `cancelada` estão no app Flutter; o William pede ao App. Regra de situação e os dois textos de "aguarda seu retorno" confirmados (por entidade) | 2026-11-13 |
+| P-81 | P2 | **Carências por tipo iguais às do App**: a área copiou as sementes do App (Defesa Profissional 3 meses, Assessoria para Aposentadoria 3, Contabilidade 2, Despachante 2; demais 0). Confirmar com o banco de produção do App (as sementes podem ter sido ajustadas) e se a regra "um aberto por tipo" vale para todos os tipos. | William (sessão do App) | elegibilidade idêntica nos dois canais | aberta — o hub confirmou os valores do SQL do App (3/3/2/2, meses de calendário desde a associação; um aberto por slug); o William confirma os de produção antes do aceite | 2026-11-13 |
+| P-85 | P1 | **Encerrar na área o pedido órfão do contato sintético antigo**: depois do deploy, rodar uma vez `docker compose --profile jobs exec area-associado-jobs python -m scripts.ensaio_espelho encerrar-antigo` (cancela pela máquina de estados a linha do ensaio de 04/11; não chama o hub, nada é apagado). O job de sincronização já não trava com contato excluído (código de 13/11); sem este passo a linha só seria consultada a cada ciclo, gerando divergência. | William (operador) | higiene da sincronização | código pronto; falta o deploy e o comando | 2026-11-13 |
 
 ### Decisões pendentes da spec v2
 

@@ -1976,6 +1976,11 @@ na visão 360.
 
 ### 7.5 Espelho no CRM e canais
 
+> **Superado em 2026-11-04 e 2026-11-13.** O que segue descreve a proposta original (`task`,
+> `solicitacao.espelhar` / `status_atualizar` / `alteracoes_consultar`). O que vale hoje está em
+> `docs/CONTRATO-HUB.md` "Solicitações", na ADR-0023 (espelho por `incident`/`opportunity`) e na ADR-0024
+> (paridade com o App APM: catálogo comum, lista dos dois canais, conversa pela Timeline, web lê e job escreve).
+
 - **Outbox CRM:** `crm_sync ∈ {pendente, ok, erro, falhou}`, `crm_tentativas`, `crm_proxima_em`.
   Job `espelhar` (1 min; `HUB_MODE=stub` até P-06) processa `pendente`/`erro` vencidos: sem
   `crm_id` → `solicitacao.espelhar`; com `crm_id` → `solicitacao.status_atualizar` (cancelamento,

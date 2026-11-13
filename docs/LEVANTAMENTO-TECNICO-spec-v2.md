@@ -734,6 +734,9 @@ mantida; a divergência vai à agência/Marketing como registro.
 | DIV-44 | Comunidade (F3) e Onboarding visíveis no menu antes da fase | Vitrine | | DEC-24 |
 | DIV-45 | Carteirinha sem número de associado × spec pede | Vitrine | | TI-46 |
 | DIV-46 | P-41 estimou consumo do hub só pelo web × jobs (perfis diários, CSV em lote) mudam a cota | Integrador/Estivador | | conta própria de jobs (TI-51); resposta à P-41 refeita |
+| DIV-47 | Rótulos de status da spec §8.5 (7 rótulos) × rótulos do App APM em tudo que está no CRM ("Aberta", "A Central aguarda seu retorno", "Aguardando a APM"…) | Vitrine/Maestro | o associado vê dois vocabulários: o da spec enquanto o pedido não chegou ao CRM e o do App depois | decisão do William em 13/11 (ADR-0024): mesmo texto nos dois canais; P-80 para os três rótulos ainda provisórios |
+| DIV-48 | Spec/ADR-0018: "responder" em `pendente_associado` e cancelar pela área × com o pedido no CRM a resposta é a **conversa** (Timeline, comum ao App) e o cancelamento segue com a Central | Maestro/Integrador | `POST …/responder` só vale antes do espelho; não há cancelamento pelo associado depois do envio (P-74) | ADR-0024; cancelamento depende de ferramenta de status no hub |
+| DIV-49 | App: um registro aberto por slug × área traduz declaração, cancelamento da associação e o formulário da Ajuda para `outros` (e o formulário da Ajuda não tem unicidade, só teto de 5/24 h) | Maestro | enquanto houver um desses aberto na Minha APM, o App recusa "Outros assuntos"; o inverso não bloqueia nada na área | aceito pelo William em 13/11 (adenda da ADR-0024); rever se a Central reclamar |
 
 ## 11. Decisões pendentes DEC-nn
 

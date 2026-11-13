@@ -137,7 +137,7 @@ def test_flags_forcadas_vencem_a_tabela_e_desconhecidas_somem(ctx):
     flags = ctx["c"].get("/api/v1/sessao").json()["flags"]
     assert flags["fatura_valor"] is False  # forçada desligada por padrão
     assert flags["totalpass"] is True
-    assert "inventada" not in flags and len(flags) == 15  # 8 da sql/003 + 7 da sql/009 (TI-13)
+    assert "inventada" not in flags and len(flags) == 16  # 8 da sql/003 + 7 da sql/009 (TI-13) + 1 da sql/016
 
 
 def test_flags_com_banco_fora_ficam_todas_desligadas(ctx, monkeypatch):

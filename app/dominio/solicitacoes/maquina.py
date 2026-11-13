@@ -84,6 +84,9 @@ REGRAS: tuple[Regra, ...] = (
     Regra(frozenset({"criada", "enviada", "pendente_associado"}), "cancelada", frozenset({("associado", "ui")})),
     # APM cancela qualquer não terminal, com justificativa (CHECK no banco + conferência aqui)
     Regra(frozenset(rotulos.NAO_TERMINAIS), "cancelada", frozenset({("apm", "backoffice")})),
+    # O CRM recusou o produto do tipo (422 `produto_inativo`, ADR-0024): o pedido nunca
+    # chegou à Central; o espelho encerra com a mensagem pública do motivo.
+    Regra(frozenset({"criada"}), "cancelada", frozenset({("sistema", "job")}), exige_mensagem=True),
 )
 
 

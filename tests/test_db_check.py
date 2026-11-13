@@ -27,7 +27,8 @@ _WEB = [
 def test_allowlist_so_com_tabelas_migradas():
     # Prospectivas (noticia_cache, job_execucao...) entram com a migração, não antes.
     assert TABELAS_COM_UPDATE == frozenset({"associado", "associado_perfil", "email_verificacao",
-                                            "solicitacao", "job_execucao", "comunicacao_evento", "notificacao"})
+                                            "solicitacao", "job_execucao", "comunicacao_evento", "notificacao",
+                                            "solicitacao_mensagem", "solicitacao_leitura"})
     assert POLITICAS["apm_area"].tabelas_com_update == TABELAS_COM_UPDATE
     # Trilhas e configuração da Onda 2 nunca recebem UPDATE do processo web (ADR-0004, ADR-0022).
     for tabela in ("solicitacao_evento", "comunicacao_envio", "comunicacao_supressao", "fila_ligacao",

@@ -31,8 +31,14 @@ PERMANENTE, TRANSITORIO, SISTEMICO = "permanente", "transitorio", "sistemico"
 # catálogo apontando para assunto/time inexistente e conta sem canal no hub são
 # configuração — param a rodada sem gastar tentativa de nenhum pedido.
 # `escrita_indeterminada` (504) é transitório: repetir com o mesmo id é seguro.
-_HUB_PERMANENTES = frozenset({"entrada_invalida", "nao_encontrado", "conflito"})
-_HUB_SISTEMICOS = frozenset({"limite_taxa", "edicao_desligada", "catalogo_crm_invalido", "canal_nao_configurado"})
+# ADR-0024: registro fechado, mensagem bloqueada pela Central e produto inativo são
+# respostas definitivas do CRM; mensagens desligadas no hub (`interacao_desabilitada`) é
+# configuração e para a rodada. `limite_titular` (por associado) é tratado pelo job de
+# mensagens antes de chegar aqui; `produto_indisponivel` é repetido sem o produto.
+_HUB_PERMANENTES = frozenset({"entrada_invalida", "nao_encontrado", "conflito", "registro_fechado",
+                              "interacao_nao_permitida", "produto_inativo"})
+_HUB_SISTEMICOS = frozenset({"limite_taxa", "cota_esgotada", "edicao_desligada", "catalogo_crm_invalido",
+                             "canal_nao_configurado", "interacao_desabilitada"})
 
 
 @dataclass(frozen=True)

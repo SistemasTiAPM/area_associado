@@ -2,7 +2,10 @@
 
 - `espelhar_solicitacoes` (1 min, efeito EXTERNO): outbox `crm_*`.
   Pedido sem `crm_id` e com destino no catálogo (`catalogo_crm`) → `solicitacao.criar`
-  (o `registro_id` é o próprio `id`; idempotente). Sucesso grava `crm_id = id`,
+  (o `registro_id` é o próprio `id`; idempotente) com o slug do catálogo comum com o App
+  e, em oportunidade, o `produto_id` (ADR-0024). 503 `produto_indisponivel` → o MESMO
+  pedido sem `produto_id`; 422 `produto_inativo` → o pedido é cancelado pelo sistema com
+  "Este serviço não está disponível no momento.". Sucesso grava `crm_id = id`,
   entidade, protocolo e o par `statecode/statuscode` da criação e promove
   `criada → enviada` (`canal_envio='crm'`) pela máquina (ator `sistema`, origem `job`).
   Pedido COM `crm_id` (mudança local depois do envio) ou sem destino no catálogo →
@@ -68,11 +71,17 @@ _OCORRENCIA: dict[tuple[int, int], str | None] = {
     (1, 1000): "concluida_positiva",  # Informações fornecidas
     (2, 6): "concluida_negativa",    # Cancelada
     (2, 2000): None,                 # Mesclada em outra ocorrência: segue lá (divergência)
+    # Conversa na Timeline (ADR-0024): fluxos do CRM marcam quem falou por último.
+    (0, 100000001): "em_atendimento",      # Respondido pelo associado
+    (0, 100000002): "pendente_associado",  # Respondido pela Central
 }
 _OPORTUNIDADE: dict[tuple[int, int], str | None] = {
     (0, 1): None,                    # Em andamento (criação)
     (0, 2): "em_atendimento",        # Em espera
+    (0, 100000001): "em_atendimento",      # Respondido pelo associado
+    (0, 100000002): "pendente_associado",  # Respondido pela Central
 }
+STATUS_RESPONDIDO_CENTRAL = 100000002
 _ESTADO_FINAL = {1: "concluida_positiva", 2: "concluida_negativa"}  # resolvida/ganha · cancelada/perdida
 
 
@@ -87,7 +96,11 @@ def mapear_crm(entidade: str, statecode: int, statuscode: int) -> tuple[str | No
     return None, False
 
 
-def mensagem_pendente_crm(protocolo: str | None) -> str:
+def mensagem_pendente_crm(protocolo: str | None, statuscode: int | None = None) -> str:
+    """Mensagem pública de `pendente_associado` vindo do CRM: a Central respondeu na
+    conversa (100000002) ou pediu detalhes por fora ("Aguardando detalhes")."""
+    if statuscode == STATUS_RESPONDIDO_CENTRAL:
+        return rotulos.MENSAGEM_RESPOSTA_NA_CONVERSA
     texto = rotulos.MENSAGEM_PENDENTE_CRM
     return f"{texto} Protocolo: {protocolo}." if protocolo else texto
 
@@ -155,8 +168,42 @@ def pedido_crm(r: Any) -> PedidoCrm | None:
     if texto.cortado:
         logger.warning("espelho: texto de %s cortado para caber no CRM (revisar limite na origem)", r.id)
     return PedidoCrm(contact_id=str(r.contact_id), registro_id=str(r.id), entidade=destino.entidade,
-                     tipo=str(r.tipo_servico), titulo=texto.titulo, descricao=texto.descricao,
-                     assunto_id=destino.assunto_id, time_id=destino.time_id)
+                     tipo=destino.tipo, titulo=texto.titulo, descricao=texto.descricao,
+                     assunto_id=destino.assunto_id, time_id=destino.time_id, produto_id=destino.produto_id)
+
+
+def _criar_no_crm(hub: ClienteHub, pedido: PedidoCrm) -> CriacaoCrm:
+    """`solicitacao.criar`; se o CRM não consegue ligar o produto agora (503
+    `produto_indisponivel`), reenvia o MESMO pedido, mesmo `registro_id`, sem `produto_id`
+    (contrato do hub §7): o atendimento nasce e a linha do produto fica para a equipe."""
+    try:
+        return hub.solicitacao_criar(pedido)
+    except HubError as exc:
+        if exc.codigo != "produto_indisponivel" or pedido.produto_id is None:
+            raise
+        logger.warning("espelho: produto indisponível no CRM para %s — reenviando sem produto", pedido.registro_id)
+        return hub.solicitacao_criar(pedido.sem_produto())
+
+
+def _cancelar_servico_indisponivel(r: Any, agora: datetime) -> list[tuple[str, str, str, str]]:
+    """O CRM recusou o produto do tipo (422 `produto_inativo`): a APM desligou o serviço
+    depois de o associado pedir. O pedido não chegou à Central; é cancelado pelo sistema,
+    com a mensagem pública, e o espelho encerra. Só se nada mudou desde a leitura."""
+    with _sessao() as db:
+        atual = db.execute(_SQL_TRAVAR, {"id": r.id}).first()
+        if atual is None or (atual.status, atual.atualizada_em) != (r.status, r.atualizada_em) \
+                or atual.status != "criada":
+            return []
+        res = maquina.transitar(db, solicitacao_id=str(r.id), para="cancelada", ator="sistema", origem="job",
+                                mensagem=rotulos.MENSAGEM_SERVICO_INDISPONIVEL,
+                                cancel_motivo="servico_indisponivel", agora=agora)
+        db.execute(text("UPDATE solicitacao SET crm_sync = 'ok', crm_tentativas = 0, crm_proxima_em = :agora "
+                        "WHERE id = :id AND crm_id IS NULL"), {"agora": agora, "id": r.id})
+    logger.warning("espelho: %s cancelada — produto inativo no CRM (%s)", r.id, r.tipo_servico)
+    audit.registrar_sistema(categoria="negocio", tipo="solicitacao_servico_indisponivel", severidade="aviso",
+                            origem="espelhar_solicitacoes", contact_id=str(r.contact_id),
+                            detalhes={"solicitacao_id": str(r.id), "tipo": str(r.tipo_servico)})
+    return [(res.solicitacao_id, res.contact_id, res.de, res.para)]
 
 
 _SQL_TRAVAR = text(
@@ -284,8 +331,14 @@ def espelhar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None, ids: 
                 ctx.gravados += 1
             continue
         try:
-            criacao = hub.solicitacao_criar(pedido)
+            criacao = _criar_no_crm(hub, pedido)
         except HubError as exc:
+            if exc.codigo == "produto_inativo":
+                transicoes = _cancelar_servico_indisponivel(r, ctx.agora)
+                if transicoes:
+                    ctx.gravados += 1
+                    _registrar_uso(transicoes, "sistema")
+                continue
             falha = classificar_hub(exc)
             if falha.classe == SISTEMICO:
                 ctx.erro_sistemico = f"disjuntor: {falha.codigo}"
@@ -364,7 +417,8 @@ def aplicar_registro(sid: str, reg: RegistroCrm, agora: datetime) -> tuple[bool,
                 if not passos:
                     pendencia = ("transicao_nao_prevista", local)
                 for passo in passos:
-                    mensagem = mensagem_pendente_crm(r.crm_protocolo) if passo == "pendente_associado" else None
+                    mensagem = (mensagem_pendente_crm(r.crm_protocolo, reg.statuscode)
+                                if passo == "pendente_associado" else None)
                     res = maquina.transitar(db, solicitacao_id=sid, para=passo, ator="apm", origem="crm",
                                             agora=agora, mensagem=mensagem)
                     transicoes.append((res.solicitacao_id, res.contact_id, res.de, res.para))
@@ -448,10 +502,18 @@ def sincronizar_solicitacoes(ctx: Contexto, *, hub: ClienteHub | None = None) ->
                 ctx.lidos += len(ampliado)
                 por_id.update({reg.registro_id: reg for reg in ampliado})
         except HubError as exc:
-            falha = classificar_hub(exc)
-            ctx.erro_sistemico = f"hub: {falha.codigo}"
-            logger.warning("sync: rodada interrompida (%s)", falha.codigo)
-            return
+            if exc.codigo != "nao_encontrado":
+                falha = classificar_hub(exc)
+                ctx.erro_sistemico = f"hub: {falha.codigo}"
+                logger.warning("sync: rodada interrompida (%s)", falha.codigo)
+                return
+            # O contato não existe mais no CRM (excluído ou mesclado): é uma resposta definitiva
+            # sobre ELE, não uma falha do hub. Sem isto, o contato — sempre o de consulta mais
+            # antiga — pararia a rodada de todos a cada ciclo. Os pedidos dele viram divergência
+            # `nao_encontrada_no_crm` e são marcados como consultados.
+            ctx.erros += 1
+            logger.warning("sync: contato de %d pedido(s) aberto(s) não existe mais no CRM", len(abertos))
+            por_id = {}
         nao_achados: list[str] = []
         for aberto in abertos:
             ctx.pulso()

@@ -6,6 +6,8 @@ aqui. Status e códigos nunca mudam (são contrato com a SPA e com o banco).
 
 from __future__ import annotations
 
+from . import catalogo_crm
+
 STATUS: tuple[str, ...] = ("criada", "enviada", "em_atendimento", "pendente_associado",
                            "concluida_positiva", "concluida_negativa", "cancelada")
 TERMINAIS: frozenset[str] = frozenset({"concluida_positiva", "concluida_negativa", "cancelada"})
@@ -31,6 +33,10 @@ ROTULO_MARCADOR = "Aguardando o parceiro, a APM já está cobrando"
 # (ADR-0023; decisão de 2026-11-04). O job acrescenta o protocolo.
 MENSAGEM_PENDENTE_CRM = ("A Central de Relacionamento precisa de mais informações sobre este pedido e vai "
                          "falar com você pelos contatos do seu cadastro.")
+# `pendente_associado` porque a Central respondeu na conversa (statuscode 100000002, ADR-0024).
+MENSAGEM_RESPOSTA_NA_CONVERSA = "Há uma nova mensagem para você na conversa desta solicitação."
+# Cancelamento pelo sistema quando o CRM recusa o produto do tipo (422 `produto_inativo`).
+MENSAGEM_SERVICO_INDISPONIVEL = "Este serviço não está disponível no momento."
 
 ROTULO_TIPO: dict[str, str] = {
     "alteracao_cadastro": "Alteração de cadastro",
@@ -44,6 +50,8 @@ ROTULO_TIPO: dict[str, str] = {
     "cancelamento_associacao": "Cancelamento da associação",
     "exclusao_dados": "Exclusão de dados",
     "beneficio": "Benefício",
+    # Tipos do catálogo comum com o App APM (ADR-0024): o rótulo é o do catálogo.
+    **{slug: catalogo_crm.TIPOS_CRM[slug].rotulo for slug in sorted(catalogo_crm.TIPOS_NOVOS)},
 }
 
 # Ator no log → quem o associado vê na linha do tempo (contrato da API).

@@ -22,6 +22,7 @@ export const FLAGS_DESLIGADAS: Record<ChaveFlag, boolean> = {
   comunicacao_outbox: false,
   cancelamento_online: false,
   lgpd_consentimentos: false,
+  solicitacoes_crm: false,
 };
 
 export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flags' | 'config'>> & {

@@ -27,8 +27,9 @@
 - `docs/REQUISITOS-minha-apm.md` — requisitos RF/RNF, integrações, modelo de dados, máquina de
   estados das solicitações, eventos de uso, perfil editável, flags, lacunas (v0.1, anterior à
   spec v2; o delta está no levantamento).
-- `docs/adr/` — decisões de arquitetura (ADR-0001..0022; 0018 solicitações v2 com 8 status, 0019 serviço
-  de jobs, 0020 limites por contagem no banco, 0021 flags v2, 0022 usuário de banco do backoffice).
+- `docs/adr/` — decisões de arquitetura (ADR-0001..0024; 0018 solicitações v2 com 8 status, 0019 serviço
+  de jobs, 0020 limites por contagem no banco, 0021 flags v2, 0022 usuário de banco do backoffice, 0023 espelho
+  no CRM por incident/opportunity, 0024 paridade com o App APM: web lê o CRM, job escreve, conversa).
   Mudança de decisão = ADR nova.
 - `docs/PENDENCIAS.md` e `docs/CONCLUIDO.md` — **toda entrega atualiza os dois**: item resolvido
   sai de PENDENCIAS e entra em CONCLUIDO com data e evidência; descoberta nova entra em PENDENCIAS.
@@ -49,9 +50,9 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 | **Back-channel IdP** | `http://login_associado:8000` na `rede_publica`, header `Host: login.apm.org.br` | [atual] Evita hairpin via Cloudflare e a zona `oauth_token` (3 r/s) do edge. `iss` continua `https://login.apm.org.br`. |
 | **Sessão** | Cookie `SessionMiddleware`, `same_site=lax`, Secure fora de `development` | [atual] **cifrado e autenticado** (`app/sessao.py`, Fernet/MultiFernet; `SESSION_ENC_KEYS` obrigatória em produção), nome `__Host-area` (`area_sessao` só em development) — ADR-0011. Conteúdo: `sub, cid, nome, email, cpf_mask, auth_at, idp_at, amr, idt, csrf, tipo, status` (`idp_at` = `auth_time` do IdP, base do step-up). **CPF completo, access e refresh token nunca.** O CSRF nasce no login (`store_identity`) e `/static/` não lê nem reemite o cookie (corrida de 2026-10-20). |
 | **CSRF** | [atual] Form field `csrf` (`/auth/*`); na API, `X-CSRF-Token` + `Sec-Fetch-Site: same-origin` (ou `Origin` = `PUBLIC_BASE_URL`) + `Content-Type` JSON/multipart | `app/csrf.py` (`exigir_csrf`). Token entregue em `GET /api/v1/sessao`. Recusa vai para `evento_log` (`csrf_recusado`). |
-| **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials` com `ferramentas:ler` (+ `ferramentas:escrever` só com `HUB_ESCRITA_HABILITADA=true`, depois da P-29), REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`, implementado no hub na Fase 2b (`SistemasTiAPM/mcp_hub` `8bb3c43`; provisão P-02, P-05, P-29). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Escrita desligada = perfil só de leitura e rotas de escrita em 404 `recurso_desligado` sem chamar o hub. Token do hub só em memória de processo. Timeouts `HUB_TIMEOUT` (leitura) e `HUB_TIMEOUT_ESCRITA` (30 s). `HUB_MODE=real\|stub` (stub proibido em produção). Smoke: `scripts/check_hub.py`. ADR-0002. |
+| **Integração D365** | **`mcp_hub`** (`http://mcp_hub:8000`, `Host: mcp.apm.org.br`), OAuth `client_credentials` com `ferramentas:ler` (+ `ferramentas:escrever` só com `HUB_ESCRITA_HABILITADA=true`, depois da P-29), REST `/api/v1/ferramentas/{nome}` | [atual] `app/integracoes/hub.py` + simulado `hub_stub.py`; contrato em `docs/CONTRATO-HUB.md`, implementado no hub na Fase 2b (`SistemasTiAPM/mcp_hub` `8bb3c43`; provisão P-02, P-05, P-29). Solicitações em paridade com o App APM (ADR-0024, flag `solicitacoes_crm`): **o web só lê** (`solicitacao.listar`, `interacoes_listar`, `produtos`), **o job escreve** (`criar`, `interagir`); catálogo de tipos comum com o App em `dominio/solicitacoes/catalogo_crm.py` (mudar só junto com o App). Leitura **e escrita** no CRM só pelo hub; ERP só leitura. Escrita desligada = perfil só de leitura e rotas de escrita em 404 `recurso_desligado` sem chamar o hub. Token do hub só em memória de processo. Timeouts `HUB_TIMEOUT` (leitura) e `HUB_TIMEOUT_ESCRITA` (30 s). `HUB_MODE=real\|stub` (stub proibido em produção). Smoke: `scripts/check_hub.py`. ADR-0002. |
 | **Site WordPress** | MySQL `portal_apm` (Locaweb), usuário somente leitura próprio | [alvo Fase 5] `app/integracoes/portal_wp.py`, **só no serviço de jobs**; o processo web nunca conecta na Locaweb. Cache em `noticia_cache`/`evento_cache`. ADR-0006, P-07. |
-| **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [atual desde 30/10, profile `jobs`, dry-run por padrão] Agendador in-process, `GET_LOCK` por job, `job_execucao`, `JOBS_APLICAR` (dry-run por padrão), conta própria no hub (ADR-0019). Outbox de solicitações e de comunicação, `sem_retorno`, carência, sincronização do portal, cache de perfil. |
+| **Jobs** | Serviço `area-associado-jobs`, mesma imagem, `python -m app.jobs`, 256M | [atual desde 30/10, profile `jobs`, dry-run por padrão] Agendador in-process, `GET_LOCK` por job, `job_execucao`, `JOBS_APLICAR` (dry-run por padrão), conta própria no hub (ADR-0019). Outbox de solicitações (espelho no CRM), sincronização de status, outbox de mensagens da conversa (`enviar_mensagens`, ADR-0024), comunicação, `sem_retorno`, situação das carteirinhas. [alvo] sincronização do portal, cache de perfil. |
 | **Imagens** | Pillow 13 (foto de perfil), segno (QR em SVG) | [atual] Em memória, magic bytes, `MAX_IMAGE_PIXELS`, 512×512 para o CRM (`entityimage`), miniatura 128×128 local. ADR-0005. |
 | **E-mail** | SMTP com STARTTLS (`app/integracoes/email.py`), `SMTP_MODE=real\|stub` | [atual] Código de troca de e-mail e aviso ao endereço antigo (ADR-0015). Stub proibido em produção; credencial própria pendente (P-27). |
 | **ORM / Driver** | SQLAlchemy 2.0 + PyMySQL 1.1 | [atual] `ssl_ca=/etc/ssl/rds/global-bundle.pem`, `ssl_verify_cert`, `ssl_verify_identity`. Bundle baixado no `Dockerfile`. |
@@ -83,7 +84,9 @@ app/
   api/erros.py     # contrato único de erro {erro, mensagem, request_id, detalhes?}
   api/v1/          # sessao, uso, perfil (contato, e-mail, foto), carteirinha (dados, QR, compartilhar), deps
   dominio/         # associado (acesso + pós-login), perfil (cache), foto (Pillow), carteirinha (token, QR),
-                   # email_verificacao (código HMAC)
+                   # email_verificacao (código HMAC); solicitacoes/ (servico, maquina, schemas, rotulos, crm,
+                   # catalogo_crm = catálogo comum com o App, catalogo = produtos ativos, situacao_crm = rótulos
+                   # do App, leitura_crm = fusão área ∪ CRM, mensagens = conversa/outbox)
   integracoes/     # hub.py (cliente mcp_hub), hub_stub.py, email.py (SMTP)
   templates/       # base, erro, stub_login (com persona; só testes), verificar; entrada (guardada, sem rota)
   static/          # style.css, fonts.css (Neo Sans), logo, favicons; entrada.css + Sora (sem rota); spa/ = build (gitignored)
@@ -92,8 +95,9 @@ scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.
 sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado, 006 associado_perfil,
                    # 007 email_verificacao, 008 partições, 009 flags v2, 010 solicitação, 011 job_execucao,
                    # 012 comunicação/notificação, 013 ajuda/parâmetros, 014 revogação da carteirinha,
-                   # 015 espelho no CRM (UPDATE por tabela ou por coluna; allowlist em scripts/db_check.py;
-                   # 016+ reservadas, REQUISITOS §6.2)
+                   # 015 espelho no CRM, 016 paridade com o App (tipos, solicitacao_mensagem, solicitacao_leitura,
+                   # flag solicitacoes_crm) (UPDATE por tabela ou por coluna; allowlist em scripts/db_check.py;
+                   # 017+ reservadas, REQUISITOS §6.2)
 tests/             # unidades sem rede/banco + integração com MySQL real (marcador `mysql`, TESTE_DB_*)
 deploy/nginx_porteiro/
 docs/              # SPEC, REQUISITOS, PENDENCIAS, CONCLUIDO, adr/, PROVISIONAMENTO, CUTOVER, ACESSO-CONSTRUCAO
@@ -121,7 +125,8 @@ reais (P-02, P-05, P-27, P-29) e P-01 (certificado de origem).
 `POST /api/v1/uso` (CSRF), `GET /api/v1/perfil`, `PUT /api/v1/perfil/contato`, `POST /api/v1/perfil/email`
 e `/perfil/email/confirmar`, `GET|POST|DELETE /api/v1/perfil/foto`, `GET /api/v1/carteirinha`,
 `GET /api/v1/carteirinha/qr.svg`, `GET /api/v1/carteirinha/imagem.png` e `/documento.pdf`, `POST /api/v1/carteirinha/compartilhar`,
-`GET|POST /api/v1/solicitacoes` e `/solicitacoes/{id}[/cancelar|/responder|/avaliar]`, `GET /api/v1/ajuda/faq`, `/ajuda/contato`,
+`GET|POST /api/v1/solicitacoes` e `/solicitacoes/{id}[/cancelar|/responder|/avaliar]`, com a flag `solicitacoes_crm`
+(ADR-0024): `GET /api/v1/solicitacoes/tipos` e `GET|POST /api/v1/solicitacoes/{id}/mensagens`, `GET /api/v1/ajuda/faq`, `/ajuda/contato`,
 `POST /api/v1/ajuda/formulario` e `/ajuda/cancelamento` (flag `cancelamento_online`, step-up), `GET /verificar/{token}`
 (público: só nome, situação e "verificado em"), `POST /auth/logout` (CSRF → `/oauth/logout` do IdP), `GET /health`;
 internos (403 no edge): `GET /db-health` (inclui `uso_falhas` e presença da SPA), `GET /auth-health`.
@@ -236,5 +241,5 @@ Invariantes: código pronto para produção (erros, bordas, segurança, desempen
 **Sentinela tem precedência**; mudança fora do escopo aprovado exige novo plano.
 
 ---
-*Criado em 2026-10-01. Revisado em 2026-10-30 (plano de execução em 7 ondas; ADR-0018..0022; Ondas 1 e 2 executadas: solicitações, Ajuda, carteirinha com revogação, jobs, React Router 7). Revisado em 2026-10-29 (spec v2 da agência e levantamento técnico como documentos que governam; skills de prontidão em `.claude/skills/`). Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
+*Criado em 2026-10-01. Revisado em 2026-11-13 (ADR-0024: solicitações em paridade com o App APM — web lê o CRM, job escreve, conversa; `sql/016`). Revisado em 2026-10-30 (plano de execução em 7 ondas; ADR-0018..0022; Ondas 1 e 2 executadas: solicitações, Ajuda, carteirinha com revogação, jobs, React Router 7). Revisado em 2026-10-29 (spec v2 da agência e levantamento técnico como documentos que governam; skills de prontidão em `.claude/skills/`). Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
 regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Revisado em 2026-10-19 (Fase 2b: hub implementado, regra 21 com o endereço e a escrita incerta). Revisado em 2026-10-20 (landing de entrada; visual dos mockups da agência, ADR-0017, regra 13). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*

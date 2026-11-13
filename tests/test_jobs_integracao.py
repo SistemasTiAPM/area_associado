@@ -219,7 +219,7 @@ def test_espelho_cria_ocorrencia_promove_enviada_e_guarda_protocolo(ambiente):
     assert s["crm_id"] == sid and s["crm_entidade"] == "ocorrencia" and s["crm_protocolo"] == protocolo
     assert (s["crm_estado"], s["crm_status"], s["crm_consultado_em"]) == (0, 1, agora)
     chamada = ambiente.criar_chamadas[-1]
-    assert chamada["registro_id"] == sid and chamada["contact_id"] == cid and chamada["tipo"] == "outro"
+    assert chamada["registro_id"] == sid and chamada["contact_id"] == cid and chamada["tipo"] == "outros"  # slug do App
     assert (chamada["assunto_id"], chamada["time_id"]) == (catalogo_crm.ASSUNTO_ATENDIMENTO_APM,
                                                           catalogo_crm.TIME_CENTRAL)
     assert chamada["titulo"] == "Minha APM: Dúvida"
@@ -330,7 +330,7 @@ def test_janela_de_arrependimento_e_desistencia(ambiente):
     agora = _agora() + timedelta(seconds=1)
     assert _espelhar(ambiente, sid, agora).lidos == 0  # dentro da janela: nada sai
     _espelhar(ambiente, sid, agora + timedelta(hours=25))
-    assert _sol(sid)["status"] == "enviada" and ambiente.criar_chamadas[-1]["tipo"] == "cancelamento_associacao"
+    assert _sol(sid)["status"] == "enviada" and ambiente.criar_chamadas[-1]["tipo"] == "outros"
     assert "Motivo: Preço" in ambiente.criar_chamadas[-1]["descricao"]
 
     cid2 = _cid()
@@ -441,6 +441,39 @@ def test_sincronizar_codigo_desconhecido_e_registro_sumido(ambiente, monkeypatch
     _sincronizar(monkeypatch, ambiente, cid, t0 + timedelta(hours=21))
     assert _divergencias(sid)[-1] == "nao_encontrada_no_crm"
     assert _sol(sid)["crm_consultado_em"] == t0 + timedelta(hours=21)  # não martela o hub
+
+
+def test_sincronizar_contato_excluido_do_crm_nao_para_a_rodada(ambiente, monkeypatch):
+    """P-85: o hub responde 404 `nao_encontrado` para contato que não existe mais. É resposta
+    definitiva sobre ele: divergência, marca consultado e a rodada segue para os demais."""
+    from app.config import get_settings
+    from app.integracoes.hub import HubError
+    from app.jobs import solicitacoes
+
+    excluido, vivo = _cid(), _cid()
+    sid_excluido, sid_vivo = _criar(excluido), _criar(vivo)
+    t0 = _agora() + timedelta(seconds=1)
+    _espelhar(ambiente, sid_excluido, t0)
+    _espelhar(ambiente, sid_vivo, t0 + timedelta(seconds=1))  # consultado depois: vem em segundo na rodada
+    ambiente.falhar_solicitacoes[excluido] = HubError("nao_encontrado", 404)
+    ambiente.definir_estado(sid_vivo, 1, 5)
+
+    monkeypatch.setenv("JOBS_ENSAIO_CONTATOS", f"{excluido},{vivo}")
+    get_settings.cache_clear()
+    monkeypatch.setattr(solicitacoes, "PAUSA_SYNC_S", 0)
+    agora = t0 + timedelta(hours=7)
+    ctx = _ctx(agora)
+    solicitacoes.sincronizar_solicitacoes(ctx, hub=ambiente)
+    assert ctx.erro_sistemico is None and ctx.erros == 1
+    assert _divergencias(sid_excluido) == ["nao_encontrada_no_crm"]
+    assert _sol(sid_excluido)["crm_consultado_em"] == agora and _sol(sid_excluido)["status"] == "enviada"
+    assert _sol(sid_vivo)["status"] == "concluida_positiva"
+
+    # Outro erro do hub continua parando a rodada (comportamento anterior).
+    ambiente.falhar_solicitacoes[excluido] = HubError("fonte_indisponivel", 503)
+    ctx = _ctx(agora + timedelta(hours=7))
+    solicitacoes.sincronizar_solicitacoes(ctx, hub=ambiente)
+    assert ctx.erro_sistemico == "hub: fonte_indisponivel"
 
 
 def test_sincronizar_amplia_a_pagina_quando_a_central_tem_muitos_registros(ambiente, monkeypatch):

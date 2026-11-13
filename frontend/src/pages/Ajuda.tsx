@@ -570,7 +570,16 @@ function PainelPedido({ pedido, aoFechar }: { pedido: Pedido; aoFechar: () => vo
   );
 }
 
-function BlocoPedidosComuns({ aoAbrir, solicitacoesDisponiveis }: { aoAbrir: (p: Pedido) => void; solicitacoesDisponiveis: boolean }) {
+function BlocoPedidosComuns({
+  aoAbrir,
+  solicitacoesDisponiveis,
+  catalogoDisponivel,
+}: {
+  aoAbrir: (p: Pedido) => void;
+  solicitacoesDisponiveis: boolean;
+  /** Flag `solicitacoes_crm` (ADR-0024): catálogo comum com o App em "Nova solicitação". */
+  catalogoDisponivel: boolean;
+}) {
   return (
     <section className="secao-ajuda" aria-labelledby="titulo-pedidos">
       <h2 className="secao__titulo" id="titulo-pedidos">
@@ -612,6 +621,19 @@ function BlocoPedidosComuns({ aoAbrir, solicitacoesDisponiveis }: { aoAbrir: (p:
                 <Icon nome="seta" tamanho={14} />
               </button>
             </li>
+            {catalogoDisponivel ? (
+              <li className="pedido cartao">
+                <span className="pedido__icone" aria-hidden="true">
+                  <Icon nome="conversa" tamanho={20} />
+                </span>
+                <b className="pedido__titulo">Seguros, planos e outros serviços</b>
+                <span className="pedido__texto">Peça uma cotação ou um atendimento e converse com a equipe por aqui.</span>
+                <Link to="/solicitacoes/nova" className="link-texto pedido__acao">
+                  Nova solicitação
+                  <Icon nome="seta" tamanho={14} />
+                </Link>
+              </li>
+            ) : null}
           </>
         ) : null}
       </ul>
@@ -792,7 +814,11 @@ export function PaginaAjuda() {
     <>
       <BlocoFaq />
       <BlocoCentral formularioDisponivel={solicitacoesDisponiveis} aoEscrever={() => abrir({ tipo: 'duvida', assunto: 'outro' })} />
-      <BlocoPedidosComuns aoAbrir={abrir} solicitacoesDisponiveis={solicitacoesDisponiveis} />
+      <BlocoPedidosComuns
+        aoAbrir={abrir}
+        solicitacoesDisponiveis={solicitacoesDisponiveis}
+        catalogoDisponivel={sessao.flags.solicitacoes_crm === true}
+      />
       {pedido && solicitacoesDisponiveis ? <PainelPedido key={abertura} pedido={pedido} aoFechar={fechar} /> : null}
       {sessao.flags.cancelamento_online && solicitacoesDisponiveis ? <BlocoCancelamento /> : null}
     </>

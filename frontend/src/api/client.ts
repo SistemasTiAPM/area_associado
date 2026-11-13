@@ -22,6 +22,8 @@ export class ApiError extends Error {
   readonly detalhes: CorpoErro['detalhes'];
   /** Campos do corpo de erro além do contrato único (ex.: `libera_em` em `409 nao_elegivel`). */
   readonly extras: Readonly<Record<string, unknown>>;
+  /** Segundos do cabeçalho `Retry-After` (429/503), quando o servidor diz quando tentar de novo. */
+  readonly retryAfter: number | null;
 
   constructor(
     status: number,
@@ -30,6 +32,7 @@ export class ApiError extends Error {
     requestId: string | null = null,
     detalhes?: CorpoErro['detalhes'],
     extras: Readonly<Record<string, unknown>> = {},
+    retryAfter: number | null = null,
   ) {
     super(mensagem);
     this.name = 'ApiError';
@@ -38,7 +41,16 @@ export class ApiError extends Error {
     this.requestId = requestId;
     this.detalhes = detalhes;
     this.extras = extras;
+    this.retryAfter = retryAfter;
   }
+}
+
+/** `Retry-After` só na forma de segundos (a API nunca manda data); fora de 1 s–24 h vira `null`. */
+function lerRetryAfter(resposta: Response): number | null {
+  const bruto = resposta.headers.get('Retry-After');
+  if (!bruto || !/^\d{1,6}$/.test(bruto.trim())) return null;
+  const segundos = Number(bruto.trim());
+  return segundos >= 1 && segundos <= 86_400 ? segundos : null;
 }
 
 const CHAVES_CONTRATO = new Set(['erro', 'mensagem', 'request_id', 'detalhes']);
@@ -95,10 +107,18 @@ async function lerErro(resposta: Response): Promise<ApiError> {
   const requestId = resposta.headers.get('X-Request-Id');
   if (corpoErroValido(corpo)) {
     const extras = Object.fromEntries(Object.entries(corpo).filter(([chave]) => !CHAVES_CONTRATO.has(chave)));
-    return new ApiError(resposta.status, corpo.erro, corpo.mensagem, corpo.request_id ?? requestId, corpo.detalhes, extras);
+    return new ApiError(
+      resposta.status,
+      corpo.erro,
+      corpo.mensagem,
+      corpo.request_id ?? requestId,
+      corpo.detalhes,
+      extras,
+      lerRetryAfter(resposta),
+    );
   }
   const erro = resposta.status === 429 ? 'limite_taxa' : resposta.status >= 500 ? 'erro_interno' : 'erro_desconhecido';
-  return new ApiError(resposta.status, erro, MENSAGEM_PADRAO, requestId);
+  return new ApiError(resposta.status, erro, MENSAGEM_PADRAO, requestId, undefined, {}, lerRetryAfter(resposta));
 }
 
 async function executar<T>(caminho: string, init: RequestInit): Promise<T> {

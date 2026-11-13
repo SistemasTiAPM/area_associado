@@ -51,8 +51,44 @@ def colunas_crm_presentes() -> bool:
     return presentes
 
 
+TABELAS_016 = ("solicitacao_mensagem", "solicitacao_leitura")
+_estado_016: tuple[bool, float] | None = None
+
+
+def paridade_presente() -> bool:
+    """A `sql/016` (outbox de mensagens, leitura e tipos do catálogo comum, ADR-0024) já
+    foi aplicada? Mesmo cache das colunas da 015: presença para sempre, ausência por 60 s."""
+    global _estado_016
+    agora = time.monotonic()
+    with _lock:
+        if _estado_016 is not None and (_estado_016[0] or _estado_016[1] > agora):
+            return _estado_016[0]
+    try:
+        with _sessao() as db:
+            total = db.execute(text(
+                "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME IN :tabelas"
+            ).bindparams(bindparam("tabelas", expanding=True)), {"tabelas": list(TABELAS_016)}).scalar()
+        presente = int(total or 0) == len(TABELAS_016)
+    except SQLAlchemyError as exc:
+        logger.error("solicitações: conferência da sql/016 falhou (%s)", type(exc).__name__)
+        presente = False
+    with _lock:
+        _estado_016 = (presente, agora + _TTL_AUSENTE)
+    return presente
+
+
+def paridade_ativa() -> bool:
+    """Catálogo comum, lista dos dois canais e conversa: flag `solicitacoes_crm` ligada
+    E migrações 015/016 aplicadas. Qualquer dúvida = desligado (comportamento da Onda 2)."""
+    from ... import flags  # import tardio: evita ciclo com config em testes
+
+    return flags.ligada("solicitacoes_crm") and colunas_crm_presentes() and paridade_presente()
+
+
 def redefinir() -> None:
     """Testes: esquece o cache."""
-    global _estado
+    global _estado, _estado_016
     with _lock:
         _estado = None
+        _estado_016 = None

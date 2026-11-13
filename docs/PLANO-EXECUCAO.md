@@ -166,4 +166,5 @@ cobrança" — **o mais problemático: a fonte não existe**.
 | 0 | arquivos entregues (`OPERACAO.md`, `_00_padrao.conf.example`, `verificar-pos-reboot.patch.md`, `alertas.sh`); execução pelo operador | 2026-10-30 |
 | 1 | **feita** (ver `CONCLUIDO.md` 2026-10-30); restam ações do operador: grant M-7 no hub, `sql/008`, `sql/009`, WebKit no host de e2e | 2026-10-30 |
 | 2 | **feita** (ver `CONCLUIDO.md`); restam ações do operador: `sql/008`–`014`, M-7, `.env.jobs` + profile `jobs`, zonas do porteiro | 2026-10-30 |
+| 2+ | espelho no CRM por `incident`/`opportunity` (ADR-0023, 04/11) e **paridade com o App APM** (ADR-0024, 13/11: catálogo comum, lista dos dois canais, conversa; `sql/016`, flag `solicitacoes_crm`) — código pronto; restam ações do operador e do hub (P-78..P-83) | 2026-11-13 |
 | 3–7 | planejadas | 2026-10-30 |

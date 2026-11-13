@@ -44,6 +44,8 @@ for de in ("criada", "enviada", "pendente_associado"):
     ESPERADAS.add((de, "cancelada", "associado", "ui"))
 for de in ("criada", "enviada", "em_atendimento", "pendente_associado"):
     ESPERADAS.add((de, "cancelada", "apm", "backoffice"))
+# ADR-0024: o CRM recusou o produto do tipo (422) — o espelho encerra o pedido que nunca saiu.
+ESPERADAS.add(("criada", "cancelada", "sistema", "job"))
 
 
 def test_tabela_de_transicoes_exaustiva():

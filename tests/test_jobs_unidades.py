@@ -374,10 +374,10 @@ def test_registro_tabela_de_jobs():
 
     jobs = registro.jobs()
     nomes = [j.nome for j in jobs]
-    assert nomes == ["espelhar_solicitacoes", "sincronizar_solicitacoes", "marcar_sem_retorno",
-                     "enviar_comunicacao", "situacao_carteirinhas"]
+    assert nomes == ["espelhar_solicitacoes", "sincronizar_solicitacoes", "enviar_mensagens",
+                     "marcar_sem_retorno", "enviar_comunicacao", "situacao_carteirinhas"]
     assert {j.nome for j in jobs if j.efeito_externo} == {"espelhar_solicitacoes", "sincronizar_solicitacoes",
-                                                         "enviar_comunicacao"}
+                                                         "enviar_mensagens", "enviar_comunicacao"}
     q = registro.por_nome()
     assert q["espelhar_solicitacoes"].quando.intervalo_s == 60
     assert q["sincronizar_solicitacoes"].quando.intervalo_s == 900  # cadência por contato: JOBS_SYNC_CADENCIA_H
@@ -575,7 +575,7 @@ def test_email_error_compativel_e_tipado():
     ("JOBS_INTERVALO_ESPELHO", "5"), ("JOBS_LOTE", "500"), ("JOBS_SITUACAO_HORA", "24"),
     ("JOBS_SITUACAO_LOTE", "201"), ("JOBS_SITUACAO_PAUSA", "0"), ("CENTRAL_EMAIL", "Central <c@apm.org.br>"),
     ("JOBS_SYNC_CADENCIA_H", "0"), ("JOBS_SYNC_LIMITE", "51"), ("JOBS_SYNC_LINHAS_DIA", "50"),
-    ("JOBS_ENSAIO_CONTATOS", "8eb5da36-3847-ee11-be6f-00224837e097,nao-guid"),
+    ("JOBS_ENSAIO_CONTATOS", "1538029d-dbde-f111-84e8-7ced8db12239,nao-guid"),
 ])
 def test_settings_dos_jobs_recusam_valor_invalido(monkeypatch, chave, valor):
     from pydantic import ValidationError
@@ -597,8 +597,8 @@ def test_settings_dos_jobs_padroes_e_aplicar_com_stub(monkeypatch):
     assert (s.jobs_intervalo_sync, s.jobs_sync_cadencia_h, s.jobs_sync_limite, s.jobs_sync_linhas_dia) == \
         (900, 6, 10, 5000)
     assert s.jobs_ensaio_contatos is None and s.jobs_ensaio_contatos_lista == ()
-    monkeypatch.setenv("JOBS_ENSAIO_CONTATOS", " 8EB5DA36-3847-EE11-BE6F-00224837E097 , ")
-    assert Settings().jobs_ensaio_contatos_lista == ("8eb5da36-3847-ee11-be6f-00224837e097",)
+    monkeypatch.setenv("JOBS_ENSAIO_CONTATOS", " 1538029D-DBDE-F111-84E8-7CED8DB12239 , ")
+    assert Settings().jobs_ensaio_contatos_lista == ("1538029d-dbde-f111-84e8-7ced8db12239",)
     monkeypatch.delenv("JOBS_ENSAIO_CONTATOS")
     monkeypatch.setenv("CENTRAL_EMAIL", " Central@APM.org.br ")
     assert Settings().central_email == "central@apm.org.br"

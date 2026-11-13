@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from .. import comunicacao, limites_negocio
 from ..ajuda import contato_resumo
-from . import esquema, maquina, parametros, rotulos, schemas
+from . import catalogo_crm, esquema, maquina, parametros, rotulos, schemas
 from .maquina import SolicitacaoNaoEncontrada, TransicaoInvalida
 
 logger = logging.getLogger("area_associado.solicitacoes")
@@ -284,11 +284,25 @@ def _data_filiacao(db: Session, contact_id: str) -> date | None:
 
 def exigir_elegibilidade(db: Session, contact_id: str, tipo_servico: str, campos: dict[str, Any],
                          hoje: date) -> None:
-    """Carência da declaração AMB (RF-FI-04): 1 mês desde a filiação.
+    """Carências: declaração AMB (RF-FI-04), 1 mês desde a filiação; tipos do catálogo
+    comum com o App (ADR-0024), os mesmos meses do App (`catalogo_crm.TipoCrm.carencia_meses`).
 
     Sem data de filiação no cache (não deveria acontecer: vem do IdP no login)
     a área NÃO bloqueia — o pedido é avaliado por uma pessoa da Central, que
     confere no CRM; bloquear aqui recusaria quem tem direito."""
+    if tipo_servico in catalogo_crm.TIPOS_NOVOS:
+        tipo = catalogo_crm.TIPOS_CRM[tipo_servico]
+        if tipo.carencia_meses <= 0:
+            return
+        filiacao = _data_filiacao(db, contact_id)
+        if filiacao is None:
+            logger.warning("solicitacoes: %s sem data de filiação no cache; segue para a APM", tipo_servico)
+            return
+        libera = somar_meses(filiacao, tipo.carencia_meses)
+        if hoje < libera:
+            raise NaoElegivel(libera, f"{tipo.rotulo} fica disponível a partir de {libera:%d/%m/%Y}, "
+                                      f"{tipo.carencia_meses} meses depois da filiação.")
+        return
     if tipo_servico != "declaracao_associado" or campos.get("finalidade") != "amb_prova_titulo":
         return
     filiacao = _data_filiacao(db, contact_id)

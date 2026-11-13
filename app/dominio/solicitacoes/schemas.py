@@ -24,7 +24,7 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import rotulos
+from . import catalogo_crm, rotulos
 
 DADOS_MAX_BYTES = 16 * 1024
 
@@ -54,6 +54,10 @@ class EntradaInvalida(Exception):
 # de `crm.descricao`, assunto + mensagem do tipo `outro` cabem nas 2000 da descrição.
 ASSUNTO_OUTRO_MAX = 120
 MENSAGEM_OUTRO_MAX = 1700
+# Tipos do catálogo comum com o App (ADR-0024): formulário único, o texto do associado É
+# a descrição no CRM (10–2000 unidades UTF-16, limites do hub). Mensagem da conversa: 2–2000.
+MENSAGEM_CATALOGO_MIN, MENSAGEM_CATALOGO_MAX = 10, 2000
+MENSAGEM_CONVERSA_MIN, MENSAGEM_CONVERSA_MAX = 2, 2000
 
 
 def unidades_utf16(texto: str) -> int:
@@ -191,12 +195,17 @@ SCHEMAS: dict[str, tuple[Campo, ...]] = {
     "mentoria_oferecer": (Campo("area_interesse", False, _texto(120)),),
     "cartao_apm": (),
     "exclusao_dados": (),
+    **{slug: (Campo("mensagem", True, _texto(MENSAGEM_CATALOGO_MAX, minimo=MENSAGEM_CATALOGO_MIN,
+                                             multilinha=True, utf16=True)),)
+       for slug in sorted(catalogo_crm.TIPOS_NOVOS)},
 }
 
 # Contrato da Onda 2: só estes nascem por `POST /solicitacoes`. Cancelamento
 # só por `POST /ajuda/cancelamento` (flag + step-up); os demais, pelas telas
 # das fases seguintes.
 TIPOS_CRIAVEIS_API: frozenset[str] = frozenset({"outro", "declaracao_associado", "alteracao_cadastro"})
+# Com a flag `solicitacoes_crm` (ADR-0024), também os tipos do catálogo comum com o App.
+TIPOS_CRIAVEIS_PARIDADE: frozenset[str] = TIPOS_CRIAVEIS_API | catalogo_crm.TIPOS_NOVOS
 
 
 def _nome_detalhe(chave: object) -> str:

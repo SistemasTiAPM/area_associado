@@ -18,6 +18,14 @@ export type StatusSolicitacao =
 /** Tipos que a SPA cria por `POST /solicitacoes` (os demais nascem de outras rotas). */
 export type TipoServicoCriavel = 'outro' | 'declaracao_associado' | 'alteracao_cadastro';
 
+/**
+ * Paridade com o App APM (ADR-0024; flag `solicitacoes_crm`): situação do registro no CRM,
+ * a mesma que o App mostra. Nula enquanto o pedido não chegou ao CRM.
+ */
+export type SituacaoCrm = 'aberta' | 'em_andamento' | 'aguardando_associado' | 'concluida' | 'cancelada';
+export type CanalAbertura = 'app' | 'minha_apm';
+export type QuemResponde = 'central' | 'apm';
+
 export type AtorLinhaDoTempo = 'voce' | 'equipe_apm' | 'parceiro' | 'sistema';
 
 export interface ResumoSolicitacao {
@@ -41,6 +49,12 @@ export interface ResumoSolicitacao {
   pode_cancelar: boolean;
   pode_responder: boolean;
   pode_avaliar: boolean;
+  /** Paridade com o App (ADR-0024); ausentes ou no padrão com a flag desligada. */
+  situacao?: SituacaoCrm | null;
+  canal?: CanalAbertura | null;
+  responde?: QuemResponde | null;
+  pode_enviar_mensagem?: boolean;
+  nova_resposta?: boolean;
 }
 
 export type ValorCampo = string | number | boolean | null | Record<string, string | number | boolean | null>;
@@ -71,7 +85,43 @@ export type SituacaoLista = 'andamento' | 'encerradas';
 export interface PaginaSolicitacoes {
   itens: ResumoSolicitacao[];
   proximo_cursor: string | null;
+  /** O CRM não respondeu: o que foi aberto pelo App pode estar faltando. */
+  parcial?: boolean;
 }
+
+/** Tipo do catálogo comum com o App (`GET /solicitacoes/tipos`); some quando a APM desliga o serviço. */
+export interface TipoCatalogo {
+  codigo: string;
+  rotulo: string;
+  grupo: string | null;
+  grupo_rotulo: string | null;
+  ordem: number;
+  responde: QuemResponde;
+  carencia_meses: number;
+}
+
+export interface MensagemConversa {
+  id: string;
+  autor: 'voce' | 'central';
+  texto: string;
+  quando: string | null;
+  /** `enviando`: na fila da área; `falhou`: não chegou à Central. */
+  estado: 'enviada' | 'enviando' | 'falhou';
+}
+
+export interface Conversa {
+  mensagens: MensagemConversa[];
+  pode_enviar: boolean;
+  motivo_bloqueio: 'aguardando_envio' | 'encerrada' | 'nao_permitida' | null;
+  responde: QuemResponde;
+  truncado: boolean;
+}
+
+/** Limites do hub, em unidades UTF-16 (o `length` do JavaScript conta igual). */
+export const DESCRICAO_MIN = 10;
+export const DESCRICAO_MAX = 2000;
+export const MENSAGEM_MIN = 2;
+export const MENSAGEM_MAX = 2000;
 
 export const LIMITE_PAGINA = 20;
 export const RESPOSTA_MAX = 2000;
@@ -116,7 +166,8 @@ export function obterSolicitacao(id: string, sinal?: AbortSignal) {
 }
 
 export interface NovaSolicitacao {
-  tipo_servico: TipoServicoCriavel;
+  /** Um `TipoServicoCriavel` ou, com a paridade ligada, o `codigo` de um `TipoCatalogo`. */
+  tipo_servico: TipoServicoCriavel | (string & {});
   campos: Record<string, ValorCampo>;
   chave_idempotencia: string;
 }
@@ -131,6 +182,29 @@ export function cancelarSolicitacao(id: string, motivo?: string) {
 
 export function responderSolicitacao(id: string, texto: string) {
   return api<Solicitacao>(caminhoSolicitacao(id, '/responder'), { metodo: 'POST', corpo: { texto: texto.trim() } });
+}
+
+export async function listarTipos(sinal?: AbortSignal): Promise<TipoCatalogo[]> {
+  const resposta = await api<{ itens: TipoCatalogo[] }>('/solicitacoes/tipos', sinal ? { sinal } : {});
+  return resposta.itens;
+}
+
+/**
+ * `atualizar`: pedido explícito do associado ("Atualizar conversa" ou logo depois de enviar) —
+ * o servidor confere no CRM se há mensagem nova. Sem ele, a conversa vem do cache do servidor
+ * enquanto nada mudou (cada mensagem relida gasta cota do hub).
+ */
+export function listarMensagens(id: string, sinal?: AbortSignal, atualizar = false) {
+  const caminho = caminhoSolicitacao(id, '/mensagens') + (atualizar ? '?atualizar=true' : '');
+  return api<Conversa>(caminho, sinal ? { sinal } : {});
+}
+
+/** `chave` = `novaChaveIdempotencia()`, a mesma em cada nova tentativa da mesma mensagem. */
+export function enviarMensagem(id: string, texto: string, chave: string) {
+  return api<MensagemConversa>(caminhoSolicitacao(id, '/mensagens'), {
+    metodo: 'POST',
+    corpo: { texto: texto.trim(), chave_idempotencia: chave },
+  });
 }
 
 export function avaliarSolicitacao(id: string, nota: number, comentario?: string) {

@@ -35,6 +35,7 @@ Pendências referenciadas (P-xx) estão no plano de implementação; as regras c
 | [ADR-0021](0021-feature-flags-v2.md) | Feature flags v2: chaves novas da spec v2 (adenda à 0007) | Aceita | 2026-10-30 |
 | [ADR-0022](0022-usuario-de-banco-do-backoffice.md) | Usuário de banco próprio do backoffice (`apm_area_bo`) e só-leitura dos painéis | Aceita | 2026-10-30 |
 | [ADR-0023](0023-espelho-de-solicitacoes-por-incident.md) | Espelho das solicitações por `incident`/`opportunity` e sincronização por mudança (adenda à 0018) | Aceita | 2026-11-04 |
+| [ADR-0024](0024-solicitacoes-em-paridade-com-o-app.md) | Solicitações em paridade com o App APM: web lê o CRM, job escreve, conversa pela Timeline (adenda à 0023) | Aceita | 2026-11-13 |
 
 ## Mapa de dependências
 

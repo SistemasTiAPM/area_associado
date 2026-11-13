@@ -42,6 +42,9 @@ FLAGS_CONHECIDAS: tuple[str, ...] = (
     "comunicacao_outbox",      # outbox de comunicação → RD Station (DEC-18, P-46)
     "cancelamento_online",     # P14 pedido de cancelamento pela área (A16)
     "lgpd_consentimentos",     # P13 consentimentos, exportação e exclusão (P-54)
+    # ADR-0024 (sql/016): paridade com o App APM — catálogo comum, lista dos dois
+    # canais e conversa com a Central.
+    "solicitacoes_crm",
 )
 
 _lock = threading.Lock()

@@ -27,14 +27,26 @@ EMOJI = "\U0001F600"  # 2 unidades UTF-16
 def test_catalogo_cobre_todos_os_tipos_e_so_aponta_para_a_central():
     import re
 
-    assert set(catalogo_crm.CATALOGO) == set(schemas.SCHEMAS)
-    for tipo, destino in catalogo_crm.CATALOGO.items():
+    # Todo tipo da área tem destino decidido (ou None explícito); nada fora do catálogo comum.
+    for tipo in schemas.SCHEMAS:
+        destino = catalogo_crm.destino(tipo)
         if destino is None:
+            assert tipo == "exclusao_dados"
             continue
-        assert destino.entidade == "ocorrencia" and destino.time_id == catalogo_crm.TIME_CENTRAL, tipo
-        assert re.match(RE_GUID, destino.assunto_id) and re.match(RE_GUID, destino.time_id)
-    assert catalogo_crm.destino("alteracao_cadastro").assunto_id == catalogo_crm.ASSUNTO_ATUALIZACAO_CADASTRAL
-    assert catalogo_crm.destino("outro").assunto_id == catalogo_crm.ASSUNTO_ATENDIMENTO_APM
+        assert destino.tipo in catalogo_crm.TIPOS_CRM, tipo
+        assert re.match(RE_GUID, destino.time_id)
+        if destino.entidade == "ocorrencia":
+            assert re.match(RE_GUID, destino.assunto_id) and destino.produto_id is None, tipo
+        else:
+            assert destino.assunto_id is None and re.match(RE_GUID, destino.produto_id), tipo
+    # Tipos antigos da área: traduzidos para o slug do App, todos ocorrência da Central.
+    for tipo in ("outro", "declaracao_associado", "cancelamento_associacao", "cartao_apm", "mentoria_pedir"):
+        destino = catalogo_crm.destino(tipo)
+        assert (destino.tipo, destino.entidade, destino.time_id) == ("outros", "ocorrencia",
+                                                                     catalogo_crm.TIME_CENTRAL), tipo
+        assert destino.assunto_id == catalogo_crm.ASSUNTO_ATENDIMENTO_APM and catalogo_crm.traduzido(tipo)
+    cadastro = catalogo_crm.destino("alteracao_cadastro")
+    assert (cadastro.tipo, cadastro.assunto_id) == ("alteracao_cadastral", catalogo_crm.ASSUNTO_ATUALIZACAO_CADASTRAL)
     # Sem destino: LGPD (DEC-06), benefício (Fase 4), tipo desconhecido (fail-closed).
     assert catalogo_crm.destino("exclusao_dados") is None
     assert catalogo_crm.destino(None, "beneficio-x") is None and catalogo_crm.destino("outro", "b1") is None
@@ -208,8 +220,11 @@ def test_listar_descarta_texto_e_linha_invalida(monkeypatch):
     assert vistos == [{"contact_id": CID, "limite": 50}]  # teto do hub
     assert [r.registro_id for r in regs] == [SID, CID]
     assert regs[0] == RegistroCrm(SID, "ocorrencia", "CAS-285497-M7P9T5", 0, 3, 100000001,
-                                  "2026-11-04T10:00:00-03:00", "2026-11-04T11:00:00-03:00")
-    assert regs[1].canal is None and not hasattr(regs[0], "descricao")
+                                  "2026-11-04T10:00:00-03:00", "2026-11-04T11:00:00-03:00",
+                                  descricao="não guardar")
+    # O título do CRM é descartado; a descrição fica só em trânsito e fora do repr (ADR-0024).
+    assert regs[1].canal is None and not hasattr(regs[0], "titulo")
+    assert "não guardar" not in repr(regs[0])
     with pytest.raises(ValueError):
         hub.solicitacao_listar("x", 10)
 

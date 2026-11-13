@@ -17,9 +17,10 @@ ilustrativos; o `REQUISITOS` v0.2 já reflete a spec v2, mas o levantamento é q
 | Como a tela se comporta em detalhe (textos, estados, componentes) onde a spec v2 só resume? | `docs/SPEC-minha-apm.md` | Protótipo de 01/10. A seção "Fundação visual" é histórica (ADR-0017). Números em R$ e contagens são placeholders: **nunca** chegam ao associado (regra 19). |
 | Requisito formal RF/RNF, modelo de dados, catálogo de eventos, lacunas LA-xx? | `docs/REQUISITOS-minha-apm.md` | **v0.2 (30/10)**, alinhado à spec v2: 177 RFs, 8 status, `sql/008..022`, allowlist por usuário, catálogo unificado de eventos. |
 | Em que ordem fazer? O que já foi feito? | `docs/PLANO-EXECUCAO.md` | 7 ondas; Onda 1 feita em 30/10; Onda 2 = Fase 3 ampliada (ADR-0018..0021 já decidem a máquina de estados, jobs, limites e flags). |
-| Por que decidimos assim? | `docs/adr/` (0001–0022) | Mudar decisão = ADR nova; nunca editar ADR aceita. 0018 solicitações v2 (8 status), 0019 jobs, 0020 limites, 0021 flags v2, 0022 usuário de banco do backoffice. |
+| Por que decidimos assim? | `docs/adr/` (0001–0024) | Mudar decisão = ADR nova; nunca editar ADR aceita. 0018 solicitações v2 (8 status), 0019 jobs, 0020 limites, 0021 flags v2, 0022 usuário de banco do backoffice, 0023 espelho no CRM por incident/opportunity, 0024 paridade com o App APM (catálogo comum, lista dos dois canais, conversa). |
 | O que está travado e com quem? O que já foi entregue? | `docs/PENDENCIAS.md` (P-xx) e `docs/CONCLUIDO.md` | Toda entrega atualiza os dois. |
-| Como o hub entrega o cadastro? | `docs/CONTRATO-HUB.md` | 4 ferramentas `associado.*` por `contact_id`; nunca CPF. |
+| Como o hub entrega o cadastro? | `docs/CONTRATO-HUB.md` | Ferramentas `associado.*` por `contact_id`; nunca CPF. |
+| Solicitações no CRM, catálogo de tipos, conversa com a Central? | `docs/CONTRATO-HUB.md` "Solicitações" + ADR-0023/0024 | Catálogo comum com o App APM (`catalogo_crm.py`; mudar só junto com o App, pelo William). Web só LÊ (`listar`, `interacoes_listar`, `produtos`); job escreve (`criar`, `interagir`). Rótulos do App em tudo que está no CRM (`situacao_crm.py`). Flag `solicitacoes_crm`. |
 
 ## Precedência quando dois documentos discordam
 
@@ -39,6 +40,8 @@ decide, impacto e recomendação. Não se "resolve" em código sem decisão regi
 - SPA React + Vite servida pelo FastAPI (ADR-0001); URLs reais, sem `localStorage` de rota.
 - CRM e ERP **só** via `mcp_hub`; escrita por ferramenta tipada (ADR-0002); chave `contact_id`,
   nunca CPF (ADR-0014); token do hub só em memória.
+- Paridade com o App APM (ADR-0024, 13/11): web lê o CRM e job escreve; tipos antigos fora do catálogo do App vão
+  como `outros`; rótulos do App em tudo que está no CRM; tudo atrás da flag `solicitacoes_crm`.
 - Solicitações em MySQL próprio com espelho no CRM (ADR-0003); UPDATE só por GRANT de tabela,
   DELETE nunca, trilhas append-only (ADR-0004); `evento_uso` catálogo fechado em transação própria
   (ADR-0012).

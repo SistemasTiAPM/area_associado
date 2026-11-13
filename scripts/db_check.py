@@ -64,6 +64,7 @@ POLITICAS: dict[str, Politica] = {
             "solicitacao",                                                 # 010 (por coluna)
             "job_execucao",                                                # 011 (por coluna)
             "comunicacao_evento", "notificacao",                           # 012 (por coluna)
+            "solicitacao_mensagem", "solicitacao_leitura",                 # 016 (por coluna)
         }),
     ),
     "apm_area_bo": Politica(

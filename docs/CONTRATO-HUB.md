@@ -143,96 +143,210 @@ exige base64 válido, até 256 KiB, JPEG (SOI/EOI) de **512×512** lido do marca
 remove a foto. Saída `{"contact_id", "bytes"}`. Se o CRM guarda a imagem cheia ou só 144×144 é
 P-30 (homologação).
 
-## Solicitações (P-06 resolvida pelo hub em 2026-11-04; ADR-0023)
+## Solicitações (contrato do hub de 2026-11-13: paridade com o App APM; ADR-0023 e ADR-0024)
 
-**Contrato do hub**, implantado e ensaiado em produção em 2026-11-04: `mcp_hub/docs/PLANO-SOLICITACOES.md`
-(decisões D-1..D-13) e `mcp_hub/docs/CATALOGO-CRM-SOLICITACOES.md` (GUIDs e códigos do tenant). A proposta
-anterior da área (`task` + `espelhar`/`status_atualizar`/`alteracoes_consultar`) foi **substituída**: o hub
-cria `incident` (ocorrência) ou `opportunity` (oportunidade) e lista por contato. Cliente:
-`app/integracoes/hub.py` (`solicitacao_criar`, `solicitacao_listar`); simulado em `hub_stub.py`; jobs em
-`app/jobs/solicitacoes.py`; catálogo em `app/dominio/solicitacoes/catalogo_crm.py`; texto em
-`app/dominio/solicitacoes/crm.py`.
+Origem: mensagem da sessão do `mcp_hub` de 2026-11-13 ("Hub → Minha APM: solicitações, mensagens e produto"),
+que **substitui** a versão de 04/11 desta seção. No hub: `docs/PLANO-SOLICITACOES.md`, `PLANO-INTERACOES.md`,
+`PLANO-PRODUTO-OPORTUNIDADE.md` e `CATALOGO-CRM-SOLICITACOES.md`. O App APM usa as MESMAS ferramentas e o
+MESMO catálogo; o CRM distingue os canais pela conta que chama (Canal "Minha APM" = 100000001, Origem Web = 3),
+nunca pela entrada. Regra D-14: o associado vê, no App e na Minha APM, tudo o que abriu por qualquer dos dois
+canais, em qualquer estado; o que a Central abriu por telefone/balcão não aparece. A conversa cruza canais.
 
-Regras comuns:
+Código na área: `app/integracoes/hub.py` (+ `hub_stub.py`), `app/dominio/solicitacoes/catalogo_crm.py`,
+`catalogo.py`, `situacao_crm.py`, `leitura_crm.py`, `mensagens.py`, `crm.py`; jobs em `app/jobs/solicitacoes.py`
+e `app/jobs/mensagens.py`.
 
-- Conta **`area-associado-jobs`** (`.env.jobs`): `ferramentas:ler` + `ferramentas:escrever`, grants exatos em
-  `solicitacao.criar` e `solicitacao.listar` (nunca `solicitacao.*`), mais `associado.situacao` e
-  `associado.perfil_consultar` (M-8). `HUB_ESCRITA_HABILITADA=true` só no `.env.jobs`; o web segue só leitura.
-- **Canal e origem** o hub grava pela CONTA chamadora (`CRM_SOLICITACAO_CONTAS` no `.env` do hub):
-  `area-associado-jobs` → canal `100000001` "Minha APM", origem `3` Web. Conta sem mapa → 403
-  `canal_nao_configurado` antes de qualquer chamada ao CRM.
-- **Sem CPF**, sem e-mail, sem telefone no texto: só o que o associado preencheu no formulário do tipo.
-- **Cota PII conta LINHAS**: `listar` com 10 linhas gasta 10; `criar` não gasta.
+### Contas e grants (decisão de 2026-11-13: web lê, job escreve)
 
-### `solicitacao.criar` (escrita, só REST)
+| Conta | Escopos | Grants exatos de `solicitacao.*` | Uso |
+|---|---|---|---|
+| `area-associado` (processo web) | `ferramentas:ler` | `listar`, `interacoes_listar`, `produtos` | lista e detalhe fundidos, conversa, catálogo |
+| `area-associado-jobs` (serviço de jobs, `.env.jobs`) | `ler` + `escrever` | `criar`, `listar`, `interagir` | espelho, sincronização, envio das mensagens |
 
-| Campo | Regra | Origem na área |
+Nunca `solicitacao.*` com curinga. `HUB_ESCRITA_HABILITADA=true` só no `.env.jobs`: o web não pede o escopo
+de escrita nem chama `criar`/`interagir` (conferido em teste). Canal e origem vêm do mapa de contas do hub
+(`CRM_SOLICITACAO_CONTAS`): **só `criar` e `interagir` exigem a conta no mapa** — a conta web (só leitura) fica
+fora; `area-associado-jobs` está no mapa (canal 100000001, origem 3). Conta que escreve sem mapa → 403
+`canal_nao_configurado`. Aceito pelo hub em 13/11 (retorno à resposta da área); aplicação no painel: P-78 e P-79.
+Produto (`produto_id` e `solicitacao.produtos`) no ar no hub desde 12/11.
+
+**Cota de dado pessoal** (retorno do hub de 13/11): conta as LINHAS pessoais devolvidas, não as chamadas,
+somando todas as ferramentas pessoais da conta (situação, perfil, solicitações); zera às **00:00 de Brasília**.
+Conta web: 30.000/dia; jobs: 25.000/dia. `listar` custa as linhas que voltam (não o `limite`);
+`interacoes_listar` custa **1 por mensagem devolvida**; `criar`, `interagir` e `produtos` não gastam. Na área:
+lista em cache por contato (`HUB_LISTA_TTL`, 60 s); conversa com `HUB_CONVERSA_LIMITE` (20) em cache de memória
+(`HUB_CONVERSA_TTL`), relida só quando `ultima_interacao_em` da lista muda, quando o job acabou de publicar uma
+mensagem ou no "Atualizar conversa"; teto de 30 leituras de conversa por minuto por associado.
+**Esgotada** (429 `cota_pii_esgotada`, sem `Retry-After`; cada negação é auditada): as leituras pessoais da
+conta ficam suspensas por 15 min no processo (`PAUSA_COTA_S`); escritas e `produtos` seguem; a lista sai
+`parcial` e a conversa indisponível.
+
+### Catálogo de tipos (o mesmo do App — `catalogo_crm.TIPOS_CRM`)
+
+O slug vai gravado no CRM e decide se o registro aceita mensagens. **Mudança de catálogo: combinar pelo
+William, App e Minha APM mudam juntos.** Conferido contra esta tabela em `tests/test_paridade_unidades.py`.
+
+| slug | entidade | grupo | assunto_id | time_id | produto_id |
+|---|---|---|---|---|---|
+| alteracao_cadastral | ocorrencia | — | e2d19f07-29e1-e811-a974-000d3ac1b8d2 | 312dcfcf-0714-e911-a952-000d3ac1be86 | — |
+| duvida | ocorrencia | — | 64fb455c-c4e1-e811-a974-000d3ac1b8d2 | 312dcfcf-0714-e911-a952-000d3ac1be86 | — |
+| segunda_via_boleto | ocorrencia | — | 710f6a32-29e1-e811-a974-000d3ac1b8d2 | 312dcfcf-0714-e911-a952-000d3ac1be86 | — |
+| outros | ocorrencia | — | 64fb455c-c4e1-e811-a974-000d3ac1b8d2 | 312dcfcf-0714-e911-a952-000d3ac1be86 | — |
+| defesa_profissional | ocorrencia | — | 774db512-2bfb-ed11-8f6e-000d3ac16b52 | 810c580c-c8cc-ed11-a7c6-000d3ac16b52 | — |
+| planos_de_saude | oportunidade | — | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | 217ad212-6d88-e911-a968-000d3ac1b6c7 |
+| seguro_vida | oportunidade | seguros | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | 51fff108-6e88-e911-a968-000d3ac1b6c7 |
+| seguro_vida_dit | oportunidade | seguros | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | 6e87d9fe-87e9-eb11-bacb-0022483785cc |
+| seguro_carro | oportunidade | seguros | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | c0fce926-6e88-e911-a968-000d3ac1b6c7 |
+| seguro_residencial | oportunidade | seguros | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | d26d429c-5ef5-eb11-94ef-002248370ae9 |
+| seguro_viagem | oportunidade | seguros | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | b8cfc64a-6e88-e911-a968-000d3ac1b6c7 |
+| seguro_pet | oportunidade | seguros | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | f200d262-6e88-e911-a968-000d3ac1b6c7 |
+| seguro_responsabilidade_civil | oportunidade | seguros | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | 3edf4a52-6a14-ef11-9f89-6045bd3ae7ae |
+| assessoria_aposentadoria | oportunidade | — | — | 9b92ec59-c106-ed11-82e5-000d3ac16b52 | 11bcef28-8625-e911-a963-000d3ac1b38b |
+| contabilidade | oportunidade | — | — | 66665b46-d8e5-e811-a979-000d3ac1b2cd | cb0f0d4d-8625-e911-a963-000d3ac1b38b |
+| despachante | oportunidade | — | — | 4d111e0f-7e1e-ed11-b83d-000d3ac16b52 | f6fdd73e-8525-e911-a963-000d3ac1b38b |
+| apm_facilities | oportunidade | — | — | 3afbea3a-7d1e-ed11-b83d-000d3ac16b52 | 27ad3e28-53f5-eb11-94ef-002248370ae9 |
+| seguros (legado) | oportunidade | — | — | 7bb27bfb-0714-e911-a952-000d3ac1be86 | — |
+
+- `seguros` (legado): nunca ofertado; reconhecido na lista e aceita mensagens.
+- Rótulos de tela, ordem e carência (meses) iguais aos do App: Planos de Saúde; Seguro de Vida; Seguro de
+  Vida – DIT adicional; Seguro Auto; Seguro Residencial; Seguro Viagem; Seguro Pet; Seguro de Responsabilidade
+  Civil (grupo "Seguros"); Defesa Profissional (3); Assessoria para Aposentadoria (3); Contabilidade (2);
+  Despachante (2); APM Facilities; Alteração cadastral; Dúvidas e perguntas; Segunda via de boleto; Outros
+  assuntos. Carências a confirmar (P-81).
+- **Tipos antigos da área** (não existem no App) são traduzidos no envio: `outro → outros`,
+  `alteracao_cadastro → alteracao_cadastral`; `declaracao_associado`, `cancelamento_associacao`, `cartao_apm`,
+  `diagnostico_marketing`, `submeter_trabalho`, `mentoria_*` → `outros`, com `Minha APM: <rótulo>` no título.
+  `exclusao_dados` e pedido de benefício não vão ao CRM (`crm_sync='retido'`).
+- A tela "Nova solicitação" oferece os 15 tipos novos; `alteracao_cadastral` e `outros` continuam nascendo
+  pelos formulários próprios da área (perfil/Ajuda).
+
+### `solicitacao.criar` (escrita — só o job)
+
+Entrada: `contact_id`; `registro_id` (UUID v4 = `solicitacao.id`; idempotente: repetir devolve o mesmo
+registro com `criada: false`); `entidade` (`ocorrencia`|`oportunidade`); `tipo` (slug do catálogo);
+`titulo` (1–200) e `descricao` (10–2000), texto puro medido em unidades UTF-16; `assunto_id` (obrigatório em
+ocorrência, `null` em oportunidade); `time_id`; `produto_id` **só em oportunidade** (omitido quando vazio; em
+ocorrência o hub responde 400 — a área valida antes de sair).
+Saída (1 linha): `contact_id, registro_id, entidade, criada, protocolo, statecode, statuscode, criado_em`.
+Resposta fora do formato = `escrita_indeterminada` (repete com o mesmo id). O CRM completa sozinho Tipo de
+Cliente, Lista de Preços e a linha do produto.
+
+Texto: nos tipos do catálogo comum, título = nome do tipo e descrição = o texto do associado (como o App);
+nos tipos antigos, `Minha APM: <rótulo>` e os campos do formulário em linhas "rótulo: valor". Nunca CPF,
+e-mail ou telefone.
+
+### `solicitacao.produtos` (leitura, sem dado pessoal — web)
+
+Entrada `{"produto_ids": [...]}` (1–50 GUIDs, sem repetição). Uma linha por id: `produto_id, numero, nome,
+ativo`; id inexistente → `ativo: false`. A área chama com os produtos dos tipos ofertáveis, guarda por
+`HUB_PRODUTOS_TTL` (720 s) em memória, tenta de novo só 120 s depois de uma falha, mantém o último resultado
+bom e, sem nenhum, usa o catálogo local. Tipo com produto inativo **some da tela** e `POST /solicitacoes`
+responde 422 `servico_indisponivel`. O `nome` do CRM é descartado (nunca vai ao associado).
+
+### `solicitacao.listar` (leitura — web e job)
+
+Entrada `{contact_id, limite 1..50}`. Linhas, mais recentes primeiro, dos DOIS canais, em qualquer estado:
+`contact_id, registro_id, entidade, protocolo, assunto_id, tipo, canal, titulo, descricao, statecode,
+statuscode, criado_em, atualizado_em, ultima_interacao_em, ultima_interacao_autor, pode_enviar_mensagem`.
+`pode_enviar_mensagem` (adendo de 2026-11-13; booleano, nunca nulo): `interagir` aceitaria uma mensagem naquele
+registro agora — é estado do registro, igual para a conta web e a de jobs; não inclui o limite de 10/h e 40/dia.
+Coluna ausente ou não booleana = comportamento anterior. `canal`: 100000000 App
+APM, 100000001 Minha APM. A área descarta `titulo`; `descricao` fica só em trânsito (detalhe do registro
+aberto pelo App), nunca em banco ou log. Web: `HUB_LISTA_LIMITE` (50) com cache; job: `JOBS_SYNC_LIMITE` (10,
+ampliando a 50).
+
+### Situação e rótulos na tela (os mesmos do App — `situacao_crm.py`)
+
+| par `statecode/statuscode` | situação | rótulo |
 |---|---|---|
-| `contact_id` | GUID | dono do pedido |
-| `registro_id` | UUID v4 minúsculo = chave primária no CRM (`incidentid`/`opportunityid`); **idempotente** (o hub faz GET antes do POST) | `solicitacao.id` (por isso `crm_id = id`) |
-| `entidade` | `ocorrencia` \| `oportunidade` | catálogo |
-| `tipo` | `^[a-z0-9_]{2,50}$` → `alf_tipo_solicitacao` | `tipo_servico` |
-| `titulo` | ≤ 200 unidades UTF-16 | `Minha APM: <rótulo do tipo>` (no formulário livre, o assunto dado pelo associado) |
-| `descricao` | 10–2000 unidades UTF-16, texto puro | cabeçalho fixo + "rótulo: valor" por campo do formulário (texto longo em bloco) |
-| `assunto_id` | GUID `subject`; obrigatório em ocorrência, `null` em oportunidade | catálogo |
-| `time_id` | GUID `team` dono | catálogo (Central de Relacionamento) |
+| 1/* | `concluida` | Concluída (provisório, P-80) |
+| 2/* | `cancelada` | Cancelada (provisório, P-80) |
+| 0/1 | `aberta` | Aberta (provisório, P-80) |
+| 0/3 em ocorrência; 0/100000002 | `aguardando_associado` | "A Central aguarda seu retorno" / "A APM aguarda seu retorno" |
+| 0/qualquer outro (inclui 100000001); statecode desconhecido | `em_andamento` | "Aguardando a Central/APM" se o último autor é o associado; senão "Em andamento" |
 
-Saída: **uma** linha `{contact_id, registro_id, entidade, criada, protocolo, statecode, statuscode, criado_em}`.
-`criada=false` = já existia (repetição). `protocolo` = `ticketnumber` (`CAS-######-XXXXXX`), só em ocorrência.
-Resposta fora disso (outro `registro_id`, ocorrência sem protocolo, códigos não inteiros) = **resultado
-incerto**: a área trata como `escrita_indeterminada` e repete com o mesmo `registro_id`.
+Ordem e regra confirmadas pelo hub em 13/11. O texto segue a **entidade**: "a Central" em ocorrência, "a APM"
+em oportunidade e em entidade desconhecida. (Quem assina a conversa é por tipo: Central de Relacionamento nos
+tipos de atendimento geral — `alteracao_cadastral`, `duvida`, `segunda_via_boleto`, `outros` — e em ocorrência de
+tipo desconhecido; Equipe APM em `defesa_profissional` e em toda oportunidade.) Os textos de `aberta`,
+`em_andamento`, `concluida` e `cancelada` estão no app Flutter (P-80). Situações **abertas** (unicidade e caixa de
+envio): `aberta`, `em_andamento`, `aguardando_associado`. Datas no horário de Brasília. O que ainda não chegou
+ao CRM mantém os rótulos da spec v2 §8.5.
 
-Limite de texto garantido **na origem**: o formulário livre (`outro`) aceita assunto ≤ 120 e mensagem ≤ 1700
-unidades UTF-16 (API e `maxLength` do navegador medem igual); o pior caso de cada tipo cabe nas 2000 sem
-corte (teste). Corte só como defesa, marcado `[texto cortado pela Minha APM]`, nunca no meio de um emoji.
+**Carência e unicidade são regra de cada cliente (o hub não aplica)** e por isso idênticas às do App: carência em
+meses de calendário desde a data de associação; um registro aberto por slug, só entre tipos do catálogo.
+Consequência aceita pelo William (DIV-49): os tipos da área traduzidos para `outros`, enquanto abertos, impedem
+"Outros assuntos" no App.
 
-### `solicitacao.listar` (leitura, só REST)
+### Mapeamento `statecode/statuscode` → status da área (job de sincronização)
 
-Entrada `{"contact_id", "limite": 1..50}` (padrão do hub 20; a área usa `JOBS_SYNC_LIMITE` = 10 e amplia
-para 50 só quando o pedido não está na primeira página). Linhas, mais recentes primeiro:
-`registro_id, entidade, protocolo, assunto_id, tipo, canal, titulo, descricao, statecode, statuscode,
-criado_em, atualizado_em` (+ `contact_id`). Registros abertos pela Central vêm com `canal`, `titulo` e
-`descricao` `null` — e **também gastam linha da cota**. A área descarta `titulo`/`descricao` (não guarda texto
-do CRM) e casa só por `registro_id`.
+Transita só quando o par MUDA em relação ao último visto (`crm_estado/crm_status`).
 
-### Mapeamento `statecode/statuscode` → status da área
+| Entidade | Par | Status na área |
+|---|---|---|
+| ocorrência | 0/1 na criação | nada |
+| ocorrência | 0/1 vindo de outro estado | `em_atendimento` |
+| ocorrência | 0/2, 0/4 | `em_atendimento` |
+| ocorrência | 0/3 | `pendente_associado` + mensagem padrão + protocolo |
+| ambas | 0/100000001 (respondido pelo associado) | `em_atendimento` |
+| ambas | 0/100000002 (respondido pela Central) | `pendente_associado` + "Há uma nova mensagem para você na conversa…" |
+| ocorrência | 1/* | `concluida_positiva` |
+| ocorrência | 2/6 | `concluida_negativa` |
+| ocorrência | 2/2000 ou desconhecido | nada + divergência no `evento_log` |
+| oportunidade | 0/1 nada · 0/2 `em_atendimento` · 1/* `concluida_positiva` · 2/* `concluida_negativa` | |
 
-A área só transita quando o par **muda** em relação ao último visto (`crm_estado`/`crm_status`): depois de
-o associado agir, o CRM continua no estado anterior. Códigos padrão do Dataverse (customização do tenant a
-confirmar — P-76):
+### Conversa na Timeline
 
-| Ocorrência | Área |
-|---|---|
-| 0/1 Em andamento | nada — é o status de **criação** (ninguém da Central abriu) |
-| 0/1 vindo de outro estado | `em_atendimento` (a Central retomou, ex.: saiu de "Aguardando detalhes") |
-| 0/2 Em espera, 0/4 Pesquisando | `em_atendimento` |
-| 0/3 Aguardando detalhes | `pendente_associado`, com a mensagem padrão + protocolo (o CRM não manda texto) |
-| 1/* Resolvida | `concluida_positiva` |
-| 2/6 Cancelada | `concluida_negativa` |
-| 2/2000 Mesclada; 0/x desconhecido | nada + divergência no `evento_log` (uma vez por mudança) |
+**`solicitacao.interacoes_listar` (leitura — web).** Entrada `contact_id, registro_id` (o pai), `entidade`,
+`limite 1..50`. Linhas: `contact_id, registro_id, entidade, interacao_id, autor, canal, texto, criado_em` —
+`autor` ∈ {`associado`, `central`} (outro valor é descartado). Pai de outro contato, de outro canal ou
+inexistente → lista vazia. O texto nunca é gravado nem logado pela área.
 
-Oportunidade: 0/1 nada, 0/2 `em_atendimento`, 1/* `concluida_positiva`, 2/* `concluida_negativa`. Caminho pela
-máquina com `(apm, crm)`, passando por `em_atendimento` quando preciso (inclusive de `pendente_associado`, P-66).
+**`solicitacao.interagir` (escrita — só o job).** Entrada `contact_id, registro_id, entidade, interacao_id`
+(UUID v4 = `solicitacao_mensagem.id`; idempotente), `texto` (2–2000, texto puro). Saída `contact_id,
+registro_id, entidade, interacao_id, criada, criado_em`. Só aceita se o pai é do contato, aberto por
+autoatendimento, de tipo do catálogo, não bloqueado pela Central e com `statecode 0`. Limite por associado:
+**10 por hora e 40 por dia, somando App e Minha APM** → 429 `limite_titular` com `Retry-After` (até 3600 s).
+
+Na área: `POST /api/v1/solicitacoes/{id}/mensagens` grava na outbox e responde 202; o job `enviar_mensagens`
+publica e **apaga o texto** ao confirmar. A caixa de envio só aparece com `pode_enviar`: situação aberta, tipo do
+catálogo, canal 100000000/100000001 e registro não bloqueado; encerrado = só leitura, com "Abrir nova
+solicitação". **Bloqueio pela Central:** caixa de envio = regra local **E** `pode_enviar_mensagem` da lista.
+Registro aberto com `false` → sem campo nem botão, com o texto do App: "Esta conversa foi encerrada pela
+Central. Para falar conosco, abra uma nova solicitação." (`motivo_bloqueio = nao_permitida`; o `POST` responde
+403 `mensagem_nao_permitida`). A Central pode desbloquear: a coluna manda. O 403 `interacao_nao_permitida`
+aprendido na fila (mensagem `falhou`) só vale enquanto o hub não disse nada mais novo — lista indisponível,
+registro fora dela, coluna ausente ou falha posterior à leitura (cache de `HUB_LISTA_TTL`). 403 e 409
+`registro_fechado` continuam possíveis entre a lista e o envio.
 
 ### O que NÃO existe no hub (e o que a área faz)
 
-| Falta | Consequência na área |
-|---|---|
-| Ferramenta de status (`status_atualizar`): o app user do hub não tem Write em incident/opportunity | Pedido já no CRM: **cancelar e responder pela área são recusados** (409 `na_central`) e a tela orienta a falar com a Central pelo protocolo. Mudança local depois do envio (ex.: backoffice) fica `crm_sync='retido'` + aviso `solicitacao_transicao_retida` — reprocessável quando a ferramenta existir (P-74) |
-| Consulta por cursor (`alteracoes_desde`) | Sincronização por contato com cadência (`JOBS_SYNC_CADENCIA_H` = 6 h) e teto diário de linhas (`JOBS_SYNC_LINHAS_DIA` = 5.000); com cursor filtrado pelo canal Minha APM o custo cairia para dezenas de linhas/dia (P-75) |
-| Campo de mensagem pública | `pendente_associado` vindo do CRM usa texto fixo (`rotulos.MENSAGEM_PENDENTE_CRM`) + protocolo |
+- **Ferramenta de status/cancelamento:** não existe **por desenho** (a credencial do hub não altera ocorrência
+  nem oportunidade). Com o registro aberto, o associado pede o cancelamento **pela conversa** e a Central
+  cancela; fechado, fala com a Central. `POST …/cancelar` segue 409 `na_central`; mudança local posterior vira
+  `crm_sync='retido'`.
+- **Cursor de alterações:** a sincronização segue por contato a cada 6 h com teto de linhas (P-75); a tela lê o
+  par ao vivo.
 
-### Erros das duas ferramentas
+### Erros das ferramentas `solicitacao.*`
 
-| HTTP / `erro` | Classe no job | Efeito |
-|---|---|---|
-| 429 `fonte_limitada` / `limite_taxa` + `Retry-After` (1..60 s) | sistêmico | para a rodada; o processo inteiro não chama o hub até o prazo; nenhuma tentativa gasta |
-| 504 `escrita_indeterminada` | transitório | repete com o mesmo `registro_id` (seguro), recuo 1, 2, 4 … 60 min |
-| 404 `nao_encontrado` do **contato** | permanente | `falhou` + `evento_log` |
-| 404 `nao_encontrado` de **assunto/time** | sistêmico (`catalogo_crm_invalido`) | catálogo errado: para a rodada, não marca `falhou` (a área lê `detalhes[].campo`; até o hub mandar, a mensagem fixa — P-76) |
-| 409 `conflito` | permanente | `falhou` + `evento_log` severidade erro (o `registro_id` é de outro contato) |
-| 403 `canal_nao_configurado` | sistêmico | conta sem mapa no hub: para a rodada |
-| 400 `entrada_invalida` | permanente | `falhou` |
+| HTTP | `erro` do hub | Na área (`HubError`) | Efeito |
+|---|---|---|---|
+| 400 | `entrada_invalida` | `entrada_invalida` | permanente (bug de integração; log sem dado pessoal) |
+| 403 | `canal_nao_configurado` | `canal_nao_configurado` | sistêmico: para a rodada |
+| 403 | `interacao_nao_permitida` | `interacao_nao_permitida` | mensagem `falhou` (aviso); a tela esconde o envio |
+| 404 | `nao_encontrado` (contato/registro) | `nao_encontrado` | permanente |
+| 404 | `nao_encontrado` (assunto/time/produto) | `catalogo_crm_invalido` | sistêmico: catálogo da área errado |
+| 409 | `conflito` | `conflito` | permanente (id reaproveitado em outro registro) |
+| 409 | `registro_fechado` | `registro_fechado` | mensagem `falhou` (aviso); só leitura |
+| 422 | `produto_inativo` | `produto_inativo` | pedido cancelado pelo sistema: "Este serviço não está disponível no momento." |
+| 429 | `limite_titular` | `limite_titular` (sem pausa do processo) | mensagens do contato adiadas pelo `Retry-After` |
+| 429 | `limite_taxa` (60 s) / `fonte_limitada` (1–60 s) | `limite_taxa` | pausa o processo pelo `Retry-After` |
+| 429 | `cota_pii_esgotada` (sem `Retry-After`) | `cota_esgotada` | leituras pessoais da conta suspensas por 15 min; sistêmico no job |
+| 503 | `produto_indisponivel` | `produto_indisponivel` | reenvio imediato do MESMO pedido sem `produto_id` |
+| 503 | `interacao_desabilitada` | `interacao_desabilitada` | sistêmico no job; na tela, 503 `mensagens_indisponiveis` |
+| 504 | `escrita_indeterminada` / `tempo_esgotado` | `escrita_indeterminada` | transitório: repete com o mesmo id; recuo 1…60 min |
+| outros | — | `fonte_indisponivel` | transitório; lista da área sai `parcial` |
 
 ## Erros
 

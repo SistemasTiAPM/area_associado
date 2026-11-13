@@ -49,7 +49,8 @@ export type ChaveFlag =
   | 'inscricoes'
   | 'comunicacao_outbox'
   | 'cancelamento_online'
-  | 'lgpd_consentimentos';
+  | 'lgpd_consentimentos'
+  | 'solicitacoes_crm';
 
 /** Corpo de erro único da API (REQUISITOS §3.0). */
 export interface CorpoErro {

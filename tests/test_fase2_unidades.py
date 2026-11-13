@@ -323,7 +323,7 @@ def test_hub_stub_obedece_a_flag_de_escrita(monkeypatch):
 def test_hub_situacao_por_contact_id_sem_cpf_enum_fechado(monkeypatch):
     """TI-47: `associado.situacao` entra por contact_id, sai sem CPF; enum fora da lista vira `outro`."""
     linhas = iter([
-        {"contact_id": "8EB5DA36-3847-EE11-BE6F-00224837E097", "cpf": "12345678901", "status_associativo": "Ativo",
+        {"contact_id": "1538029D-DBDE-F111-84E8-7CED8DB12239", "cpf": "12345678901", "status_associativo": "Ativo",
          "status_associativo_codigo": 2, "situacao_normalizada": "ativo", "tipo_associado": "Efetivo",
          "data_filiacao": "2001-03-15", "statecode": "0", "situacao_registro": "Ativo",
          "associacao_status": "Ativa", "associacao_status_codigo": 100000001, "associacao_data": "2024-05-01"},
@@ -338,13 +338,13 @@ def test_hub_situacao_por_contact_id_sem_cpf_enum_fechado(monkeypatch):
         return httpx.Response(200, json={"colunas": [], "linhas": [next(linhas)]})
 
     cliente, chamadas = _hub(monkeypatch, rotas, escrita=False)
-    s1 = cliente.situacao_consultar("8eb5da36-3847-ee11-be6f-00224837e097")
-    assert s1.contact_id == "8eb5da36-3847-ee11-be6f-00224837e097" and s1.situacao_normalizada == "ativo"
+    s1 = cliente.situacao_consultar("1538029d-dbde-f111-84e8-7ced8db12239")
+    assert s1.contact_id == "1538029d-dbde-f111-84e8-7ced8db12239" and s1.situacao_normalizada == "ativo"
     assert s1.statecode == 0 and s1.status_associativo_codigo == 2 and s1.ativa is True
     assert s1.associacao_status_codigo == 100000001 and s1.data_filiacao == "2001-03-15"
     assert not hasattr(s1, "cpf") and "cpf" not in str(s1)
     assert chamadas[1].url.path.endswith("/associado.situacao")
-    assert json.loads(chamadas[1].content) == {"argumentos": {"contact_id": "8eb5da36-3847-ee11-be6f-00224837e097"}}
+    assert json.loads(chamadas[1].content) == {"argumentos": {"contact_id": "1538029d-dbde-f111-84e8-7ced8db12239"}}
 
     s2 = cliente.situacao_consultar("cid")  # enum em caixa alta não é o contrato: fail-closed
     assert s2.situacao_normalizada == "outro" and s2.contact_id is None and s2.status_associativo_codigo is None

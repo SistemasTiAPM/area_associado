@@ -483,6 +483,23 @@
         "title": "CarteirinhaResposta",
         "type": "object"
       },
+      "CatalogoTipos": {
+        "additionalProperties": false,
+        "properties": {
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/TipoCatalogo"
+            },
+            "title": "Itens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "itens"
+        ],
+        "title": "CatalogoTipos",
+        "type": "object"
+      },
       "CategoriaFaq": {
         "additionalProperties": false,
         "properties": {
@@ -667,6 +684,60 @@
           "texto"
         ],
         "title": "ContatoSolicitacao",
+        "type": "object"
+      },
+      "Conversa": {
+        "additionalProperties": false,
+        "properties": {
+          "mensagens": {
+            "items": {
+              "$ref": "#/components/schemas/MensagemConversa"
+            },
+            "title": "Mensagens",
+            "type": "array"
+          },
+          "motivo_bloqueio": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aguardando_envio",
+                  "encerrada",
+                  "nao_permitida"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Bloqueio"
+          },
+          "pode_enviar": {
+            "title": "Pode Enviar",
+            "type": "boolean"
+          },
+          "responde": {
+            "enum": [
+              "central",
+              "apm"
+            ],
+            "title": "Responde",
+            "type": "string"
+          },
+          "truncado": {
+            "description": "Há mensagens anteriores que não foram trazidas.",
+            "title": "Truncado",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mensagens",
+          "pode_enviar",
+          "motivo_bloqueio",
+          "responde",
+          "truncado"
+        ],
+        "title": "Conversa",
         "type": "object"
       },
       "DetalheErro": {
@@ -1059,6 +1130,12 @@
             "title": "Itens",
             "type": "array"
           },
+          "parcial": {
+            "default": false,
+            "description": "O CRM não respondeu: a lista traz só o que foi aberto pela Minha APM (o que veio do App pode estar faltando).",
+            "title": "Parcial",
+            "type": "boolean"
+          },
           "proximo_cursor": {
             "anyOf": [
               {
@@ -1097,6 +1174,77 @@
         "title": "LoteUso",
         "type": "object"
       },
+      "MensagemConversa": {
+        "additionalProperties": false,
+        "properties": {
+          "autor": {
+            "enum": [
+              "voce",
+              "central"
+            ],
+            "title": "Autor",
+            "type": "string"
+          },
+          "estado": {
+            "enum": [
+              "enviada",
+              "enviando",
+              "falhou"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "quando": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quando"
+          },
+          "texto": {
+            "title": "Texto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "autor",
+          "texto",
+          "quando",
+          "estado"
+        ],
+        "title": "MensagemConversa",
+        "type": "object"
+      },
+      "MensagemEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "chave_idempotencia": {
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Chave Idempotencia",
+            "type": "string"
+          },
+          "texto": {
+            "maxLength": 4000,
+            "title": "Texto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "texto",
+          "chave_idempotencia"
+        ],
+        "title": "MensagemEntrada",
+        "type": "object"
+      },
       "NovaSolicitacao": {
         "additionalProperties": false,
         "properties": {
@@ -1112,11 +1260,7 @@
             "type": "string"
           },
           "tipo_servico": {
-            "enum": [
-              "outro",
-              "declaracao_associado",
-              "alteracao_cadastro"
-            ],
+            "pattern": "^[a-z][a-z0-9_]{1,49}$",
             "title": "Tipo Servico",
             "type": "string"
           }
@@ -1407,7 +1551,7 @@
             "additionalProperties": {
               "type": "boolean"
             },
-            "description": "Chaves: mensalidade_zero, fatura_valor, patrocinio, clube_economia, comunidade_posts, wallet, erp_financeiro, totalpass, notificacoes, encaminhamento_parceiro, reservas, inscricoes, comunicacao_outbox, cancelamento_online, lgpd_consentimentos.",
+            "description": "Chaves: mensalidade_zero, fatura_valor, patrocinio, clube_economia, comunidade_posts, wallet, erp_financeiro, totalpass, notificacoes, encaminhamento_parceiro, reservas, inscricoes, comunicacao_outbox, cancelamento_online, lgpd_consentimentos, solicitacoes_crm.",
             "title": "Flags",
             "type": "object"
           },
@@ -1482,6 +1626,22 @@
             "title": "Campos",
             "type": "object"
           },
+          "canal": {
+            "anyOf": [
+              {
+                "enum": [
+                  "app",
+                  "minha_apm"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Por onde o associado abriu: App APM ou Minha APM.",
+            "title": "Canal"
+          },
           "contato": {
             "anyOf": [
               {
@@ -1512,12 +1672,24 @@
             "title": "Na Central",
             "type": "boolean"
           },
+          "nova_resposta": {
+            "default": false,
+            "description": "Há mensagem da Central/APM que o associado ainda não abriu.",
+            "title": "Nova Resposta",
+            "type": "boolean"
+          },
           "pode_avaliar": {
             "title": "Pode Avaliar",
             "type": "boolean"
           },
           "pode_cancelar": {
             "title": "Pode Cancelar",
+            "type": "boolean"
+          },
+          "pode_enviar_mensagem": {
+            "default": false,
+            "description": "A conversa aceita mensagem do associado agora.",
+            "title": "Pode Enviar Mensagem",
             "type": "boolean"
           },
           "pode_responder": {
@@ -1548,9 +1720,44 @@
             "description": "Protocolo da Central (CAS-######-XXXXXX); null até o pedido chegar ao CRM ou quando o destino não tem protocolo.",
             "title": "Protocolo"
           },
+          "responde": {
+            "anyOf": [
+              {
+                "enum": [
+                  "central",
+                  "apm"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Quem fala com o associado na conversa.",
+            "title": "Responde"
+          },
           "rotulo_status": {
             "title": "Rotulo Status",
             "type": "string"
+          },
+          "situacao": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aberta",
+                  "em_andamento",
+                  "aguardando_associado",
+                  "concluida",
+                  "cancelada"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Situação do registro no CRM (a mesma do App); null enquanto o pedido não chegou ao CRM.",
+            "title": "Situacao"
           },
           "status": {
             "enum": [
@@ -1615,6 +1822,22 @@
             ],
             "description": "Catálogo como dado só na Fase 4: hoje sempre null."
           },
+          "canal": {
+            "anyOf": [
+              {
+                "enum": [
+                  "app",
+                  "minha_apm"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Por onde o associado abriu: App APM ou Minha APM.",
+            "title": "Canal"
+          },
           "contato": {
             "anyOf": [
               {
@@ -1638,12 +1861,24 @@
             "title": "Na Central",
             "type": "boolean"
           },
+          "nova_resposta": {
+            "default": false,
+            "description": "Há mensagem da Central/APM que o associado ainda não abriu.",
+            "title": "Nova Resposta",
+            "type": "boolean"
+          },
           "pode_avaliar": {
             "title": "Pode Avaliar",
             "type": "boolean"
           },
           "pode_cancelar": {
             "title": "Pode Cancelar",
+            "type": "boolean"
+          },
+          "pode_enviar_mensagem": {
+            "default": false,
+            "description": "A conversa aceita mensagem do associado agora.",
+            "title": "Pode Enviar Mensagem",
             "type": "boolean"
           },
           "pode_responder": {
@@ -1674,9 +1909,44 @@
             "description": "Protocolo da Central (CAS-######-XXXXXX); null até o pedido chegar ao CRM ou quando o destino não tem protocolo.",
             "title": "Protocolo"
           },
+          "responde": {
+            "anyOf": [
+              {
+                "enum": [
+                  "central",
+                  "apm"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Quem fala com o associado na conversa.",
+            "title": "Responde"
+          },
           "rotulo_status": {
             "title": "Rotulo Status",
             "type": "string"
+          },
+          "situacao": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aberta",
+                  "em_andamento",
+                  "aguardando_associado",
+                  "concluida",
+                  "cancelada"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Situação do registro no CRM (a mesma do App); null enquanto o pedido não chegou ao CRM.",
+            "title": "Situacao"
           },
           "status": {
             "enum": [
@@ -1713,6 +1983,69 @@
           "pode_avaliar"
         ],
         "title": "SolicitacaoResumo",
+        "type": "object"
+      },
+      "TipoCatalogo": {
+        "additionalProperties": false,
+        "properties": {
+          "carencia_meses": {
+            "title": "Carencia Meses",
+            "type": "integer"
+          },
+          "codigo": {
+            "description": "Slug do tipo (o mesmo do App APM).",
+            "title": "Codigo",
+            "type": "string"
+          },
+          "grupo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo"
+          },
+          "grupo_rotulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grupo Rotulo"
+          },
+          "ordem": {
+            "title": "Ordem",
+            "type": "integer"
+          },
+          "responde": {
+            "enum": [
+              "central",
+              "apm"
+            ],
+            "title": "Responde",
+            "type": "string"
+          },
+          "rotulo": {
+            "title": "Rotulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "rotulo",
+          "grupo",
+          "grupo_rotulo",
+          "ordem",
+          "responde",
+          "carencia_meses"
+        ],
+        "title": "TipoCatalogo",
         "type": "object"
       },
       "TipoSolicitacao": {
@@ -4413,6 +4746,127 @@
         ]
       }
     },
+    "/api/v1/solicitacoes/tipos": {
+      "get": {
+        "operationId": "listar_tipos",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogoTipos"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Listar Tipos",
+        "tags": [
+          "solicitacoes"
+        ]
+      }
+    },
     "/api/v1/solicitacoes/{solicitacao_id}": {
       "get": {
         "operationId": "obter_solicitacao",
@@ -4861,6 +5315,320 @@
           }
         },
         "summary": "Cancelar Solicitacao",
+        "tags": [
+          "solicitacoes"
+        ]
+      }
+    },
+    "/api/v1/solicitacoes/{solicitacao_id}/mensagens": {
+      "get": {
+        "description": "`atualizar=true` (botão \"Atualizar conversa\"): relê a lista do associado no hub antes de\ndecidir se a conversa mudou. Sem ele, a conversa vem do cache enquanto não há mensagem nova.",
+        "operationId": "listar_mensagens",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solicitacao_id",
+            "required": true,
+            "schema": {
+              "title": "Solicitacao Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "atualizar",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Atualizar",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversa"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Listar Mensagens",
+        "tags": [
+          "solicitacoes"
+        ]
+      },
+      "post": {
+        "description": "Aceita a mensagem (202): ela entra na fila e o serviço de jobs publica na conversa\ndo CRM. O texto nunca vai para `evento_uso` nem para log.",
+        "operationId": "enviar_mensagem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "solicitacao_id",
+            "required": true,
+            "schema": {
+              "title": "Solicitacao Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MensagemEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MensagemConversa"
+                }
+              }
+            },
+            "description": "Repetição da mesma `chave_idempotencia`."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MensagemConversa"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Enviar Mensagem",
         "tags": [
           "solicitacoes"
         ]

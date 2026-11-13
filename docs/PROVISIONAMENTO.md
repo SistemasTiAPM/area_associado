@@ -251,6 +251,28 @@ $M -e "SHOW GRANTS FOR 'apm_area'@'%';" | grep crm_consultado_em
 docker compose exec area-associado python -m scripts.db_check   # resultado : conforme; migracoes … 015
 ```
 
+### 2.7 Paridade com o App APM — `sql/016_solicitacao_paridade` (2026-11-13, ADR-0024)
+
+Tipos do catálogo comum no ENUM `solicitacao.tipo_servico` (mudança só de metadados, sem cópia da tabela),
+tabelas `solicitacao_mensagem` (outbox da conversa) e `solicitacao_leitura` com `GRANT UPDATE` por coluna, e a
+flag `solicitacoes_crm` (desligada). **Reaplicável.** Pode ser aplicada antes ou depois do deploy: sem ela a
+flag não existe e a área segue como na Onda 2.
+
+```bash
+cd /home/ubuntu/area_associado
+M="mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado"
+sha256sum sql/016_solicitacao_paridade.sql   # 428d0d99701d844db8ab24f24b6fe6091e4d0bc57e7395138dae995cf32dca0e
+$M < sql/016_solicitacao_paridade.sql && \
+$M -e "INSERT INTO schema_migrations (versao, arquivo, sha256) VALUES ('016','016_solicitacao_paridade.sql','428d0d99701d844db8ab24f24b6fe6091e4d0bc57e7395138dae995cf32dca0e');" && \
+echo "OK 016"
+$M -e "SHOW GRANTS FOR 'apm_area'@'%';" | grep -E "solicitacao_mensagem|solicitacao_leitura"
+$M -e "SELECT chave, ligada FROM feature_flag WHERE chave = 'solicitacoes_crm';"   # 0
+docker compose exec area-associado python -m scripts.db_check   # resultado : conforme; migracoes … 016
+```
+
+Ligar a paridade (só depois dos grants no hub, P-78, e do ensaio — `docs/JOBS.md` §4c):
+`UPDATE feature_flag SET ligada = 1 WHERE chave = 'solicitacoes_crm';` (vale em até `FLAGS_CACHE_TTL` s).
+
 ## 3. Conferir
 
 ```bash

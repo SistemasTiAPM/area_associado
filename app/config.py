@@ -118,6 +118,17 @@ class Settings(BaseSettings):
     # pede só `ferramentas:ler` (a conta nasce sem `escrever` até a P-29) e as
     # rotas de escrita respondem 404 `recurso_desligado` sem chamar o hub.
     hub_escrita_habilitada: bool = Field(False, alias="HUB_ESCRITA_HABILITADA")
+    # Paridade com o App (ADR-0024). Catálogo: `solicitacao.produtos` vale por
+    # HUB_PRODUTOS_TTL s em memória (tipo com produto inativo some da tela).
+    # Lista do associado no CRM (`solicitacao.listar`): HUB_LISTA_TTL s por contato
+    # e HUB_LISTA_LIMITE linhas (a cota PII do hub conta LINHAS).
+    hub_produtos_ttl: int = Field(720, alias="HUB_PRODUTOS_TTL", ge=60, le=3600)
+    hub_lista_ttl: int = Field(60, alias="HUB_LISTA_TTL", ge=10, le=600)
+    hub_lista_limite: int = Field(50, alias="HUB_LISTA_LIMITE", ge=1, le=50)
+    # Conversa (`solicitacao.interacoes_listar`): 1 linha de cota por MENSAGEM devolvida.
+    # Limite modesto e cache em memória enquanto `ultima_interacao_em` não muda.
+    hub_conversa_limite: int = Field(20, alias="HUB_CONVERSA_LIMITE", ge=1, le=50)
+    hub_conversa_ttl: int = Field(600, alias="HUB_CONVERSA_TTL", ge=30, le=3600)
 
     # ------------------------------------------------------------------ #
     # E-mail (código de troca de e-mail e aviso ao endereço antigo).      #
@@ -168,6 +179,8 @@ class Settings(BaseSettings):
     jobs_intervalo_sync: int = Field(900, alias="JOBS_INTERVALO_SYNC")
     jobs_intervalo_sem_retorno: int = Field(900, alias="JOBS_INTERVALO_SEM_RETORNO")
     jobs_intervalo_comunicacao: int = Field(60, alias="JOBS_INTERVALO_COMUNICACAO")
+    # Outbox das mensagens do associado → `solicitacao.interagir` (ADR-0024).
+    jobs_intervalo_mensagens: int = Field(20, alias="JOBS_INTERVALO_MENSAGENS", ge=5, le=600)
     # Itens por execução no espelho e na comunicação (disjuntor da cota do hub/SMTP).
     jobs_lote: int = Field(50, alias="JOBS_LOTE")
     # Situação das carteirinhas: diário às JOBS_SITUACAO_HORA (hora local,
