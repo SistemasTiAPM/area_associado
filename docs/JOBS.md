@@ -153,8 +153,7 @@ Contato sintético desde 13/11: `1538029d-dbde-f111-84e8-7ced8db12239` (o anteri
 CRM com todos os registros dele). Tem associação ativa no CRM desde 01/01/2026 (passa em todas as carências;
 confirmado pelo hub em 13/11). A lista dele começa vazia: registros "do App" só aparecem depois de o William abrir
 um pelo App. Chamar o hub sempre por `contact_id`; o CPF de teste não está liberado nas contas da área.
-**Antes do ensaio, uma vez:** `$J python -m scripts.ensaio_espelho encerrar-antigo` cancela na área o pedido de
-04/11 do contato antigo (só efeito local; não chama o hub).
+O pedido de 04/11 do contato antigo foi cancelado na área em 13/11 (`ensaio_espelho encerrar-antigo`, P-85).
 
 ```bash
 cd /home/ubuntu/area_associado

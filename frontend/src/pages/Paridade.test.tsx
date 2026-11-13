@@ -329,11 +329,11 @@ describe('Minhas solicitações com a paridade ligada', () => {
     expect(await screen.findByText('Nenhuma mensagem nesta solicitação.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Enviar mensagem' })).toBeNull();
     expect(screen.getByText(/Para cancelar ou complementar, fale com a Central e informe o protocolo CAS-285497-M7P9T5/)).toBeInTheDocument();
-    // Registro aberto com as mensagens bloqueadas (coluna `pode_enviar_mensagem` do hub): o texto do App.
-    expect(
-      screen.getByText('Esta conversa foi encerrada pela Central. Para falar conosco, abra uma nova solicitação.'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Abrir nova solicitação/ })).toHaveAttribute('href', '/solicitacoes/nova');
+    // Registro aberto com as mensagens bloqueadas (coluna `pode_enviar_mensagem` do hub): só o envio
+    // parou — nada de "encerrada" nem de convite para abrir outra solicitação.
+    expect(screen.getByText(/A Central desativou o envio de mensagens nesta solicitação\. Ela continua em atendimento/)).toBeInTheDocument();
+    expect(screen.queryByText(/encerrada/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /Abrir nova solicitação/ })).toBeNull();
     bloqueada.unmount();
 
     // O CRM já encerrou, mas o status da área ainda não acompanhou: nada de "fale com a Central".

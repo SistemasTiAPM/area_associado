@@ -312,8 +312,11 @@ Na área: `POST /api/v1/solicitacoes/{id}/mensagens` grava na outbox e responde 
 publica e **apaga o texto** ao confirmar. A caixa de envio só aparece com `pode_enviar`: situação aberta, tipo do
 catálogo, canal 100000000/100000001 e registro não bloqueado; encerrado = só leitura, com "Abrir nova
 solicitação". **Bloqueio pela Central:** caixa de envio = regra local **E** `pode_enviar_mensagem` da lista.
-Registro aberto com `false` → sem campo nem botão, com o texto do App: "Esta conversa foi encerrada pela
-Central. Para falar conosco, abra uma nova solicitação." (`motivo_bloqueio = nao_permitida`; o `POST` responde
+Registro aberto com `false` → sem campo nem botão, com o texto "A Central desativou o envio de mensagens nesta
+solicitação. Ela continua em atendimento e você acompanha as respostas por aqui." — **diferente do texto
+sugerido pelo hub e usado no App** ("Esta conversa foi encerrada pela Central…"), por decisão do William no
+ensaio de 13/11: bloquear o envio não encerra a ocorrência, e abrir outra do mesmo tipo seria recusado (
+`motivo_bloqueio = nao_permitida`; o `POST` responde
 403 `mensagem_nao_permitida`). A Central pode desbloquear: a coluna manda. O 403 `interacao_nao_permitida`
 aprendido na fila (mensagem `falhou`) só vale enquanto o hub não disse nada mais novo — lista indisponível,
 registro fora dela, coluna ausente ou falha posterior à leitura (cache de `HUB_LISTA_TTL`). 403 e 409

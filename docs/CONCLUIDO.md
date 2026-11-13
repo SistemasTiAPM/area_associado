@@ -30,6 +30,48 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-11-13 — Ensaio: texto do bloqueio de mensagens corrigido (fast-path)
+
+No ensaio pela tela, o William bloqueou o envio no CRM **sem encerrar a ocorrência** e a conversa mostrou
+"Esta conversa foi encerrada pela Central. Para falar conosco, abra uma nova solicitação." (texto sugerido pelo
+hub, o mesmo do App). Está errado para o caso: o registro segue aberto e uma nova solicitação do mesmo tipo
+seria recusada pela regra de um aberto por tipo. Novo texto em `frontend/src/components/Conversa.tsx`:
+"A Central desativou o envio de mensagens nesta solicitação. Ela continua em atendimento e você acompanha as
+respostas por aqui." — sem o link "Abrir nova solicitação". Vitest 215, `tsc -b` e ESLint limpos. A mesma
+frase está no App: avisar a sessão do App (P-80). Confirmado no ensaio: a coluna `pode_enviar_mensagem` do hub
+esconde a caixa de envio com o registro aberto.
+
+## 2026-11-13 — P-85 fechada: pedido órfão do contato sintético antigo encerrado
+
+O William rodou em produção, depois do deploy `3e13f44f`:
+`docker compose --profile jobs exec area-associado-jobs python -m scripts.ensaio_espelho encerrar-antigo` →
+`cancelado: 97ac2479-daac-4272-a921-e9c5544cdaa6 (estava enviada)`. Era a linha do ensaio de 04/11
+(`CAS-285559-X6N4J7`, excluída do CRM com o contato). Só efeito local, pela máquina de estados; nada apagado.
+A sincronização não tem mais pedido aberto de contato inexistente.
+
+## 2026-11-13 — P-78 e P-79: grants e cota aplicados no hub; conferência das duas contas
+
+O hub confirmou em 13/11 (adendo): `area-associado` com `solicitacao.listar`, `interacoes_listar` e `produtos`
+e cota de 30.000/dia; `area-associado-jobs` com `criar`, `listar` e `interagir` e 25.000/dia. Conferência depois
+do deploy `3e13f44f`, com o contato sintético `1538029d-…` (só contagens):
+
+| Conta | Resultado de `check_hub --solicitacoes` |
+|---|---|
+| `area-associado` | `produtos: ok (12/12 ativos)`, `listar: ok (2 registros; canais: 100000000)`, `interacoes_listar: ok (1 mensagem no registro mais recente)`, `sem cpf: ok` |
+| `area-associado-jobs` | `listar: ok (2 registros; canais: 100000000)`, `sem cpf: ok`; `produtos` e `interacoes_listar` sem grant (não exigidas nesta conta) |
+
+Os dois registros são os que o William abriu pelo App em 13/11 (`CAS-286597-X6Y5C2` e uma oportunidade de
+Seguro Auto, encerrados). `criar` e `interagir` da conta de jobs só são exercitados no ensaio (§4c): a
+conferência não escreve. O adendo repete a coluna `pode_enviar_mensagem`, já implementada em `3e13f44`.
+
+## 2026-11-13 — Deploy da paridade com o App (`3e13f44f`), flag desligada
+
+Commit `3e13f44` em `origin/main`; `scripts/deploy.sh` às 16:21–16:23 (-03): build ok (inclui `npm run check`),
+container `healthy`, smoke `db_check` ok, `check_oidc` ok, `csp_check` ok, `/health` ok. Anterior: `4a8eabf3`
+(rollback: `scripts/deploy.sh --rollback`). Serviço de jobs recriado na mesma imagem (`healthy`, em simulação;
+`enviar_mensagens` registrado a cada 20 s). `db_check` em produção voltou a **conforme** (20 tabelas, migrações
+001–016). `solicitacoes_crm` = 0. e2e Playwright não refeito nesta rodada.
+
 ## 2026-11-13 — `pode_enviar_mensagem` do hub e contato excluído na sincronização (P-85)
 
 Aprovado pelo William em 13/11 ("sim, junto"), com a opção "a coluna do hub manda".

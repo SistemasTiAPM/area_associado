@@ -263,15 +263,12 @@ export function Conversa({ solicitacaoId, aoEnviar }: Props) {
             </p>
           </div>
         ) : dados.motivo_bloqueio === 'nao_permitida' ? (
-          <div className="aviso">
-            <p>Esta conversa foi encerrada pela Central. Para falar conosco, abra uma nova solicitação.</p>
-            <p>
-              <LinkInterno para="/solicitacoes/nova" className="link-texto">
-                Abrir nova solicitação
-                <Icon nome="seta" tamanho={14} />
-              </LinkInterno>
-            </p>
-          </div>
+          // Só o envio foi bloqueado: o registro continua aberto no CRM. Por isso o texto não diz
+          // "encerrada" nem convida a abrir outra (a regra de um pedido aberto por tipo recusaria).
+          <p className="aviso">
+            A Central desativou o envio de mensagens nesta solicitação. Ela continua em atendimento e você
+            acompanha as respostas por aqui.
+          </p>
         ) : null}
       </>
     );
