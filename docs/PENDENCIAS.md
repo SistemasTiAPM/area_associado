@@ -24,11 +24,11 @@ demonstração". Fases 1, 2a e 2b implantadas; RDS com `sql/001`–`007`.
 | 1 — Fundação (SPA, sessão cifrada, API, flags, analytics) | **no ar** em minha.apm.org.br (construção) | — |
 | 2a — Perfil, e-mail por código, foto, carteirinha | **no ar** (hub e SMTP simulados) | CRM real em leitura desde 21/10; e-mail: P-27 |
 | 2b — mcp_hub com perfil, contato e foto no CRM | **no ar** com `HUB_MODE=real`, só leitura (21/10) | P-41; escrita real só depois de P-29; P-30, P-31 |
-| 3 — Solicitações | **no ar** desde 30/10 (Onda 2); espelho no CRM em simulação (ADR-0023); **paridade com o App APM no ar desde 13/11** (`3e13f44f`, ADR-0024), atrás da flag `solicitacoes_crm` (desligada) | P-77 (painel do hub), ensaio (`docs/JOBS.md` §4c) |
+| 3 — Solicitações | **no ar** desde 30/10 (Onda 2); espelho no CRM em simulação (ADR-0023); **paridade com o App APM ligada para todos desde 19/11** (ADR-0024: flag `solicitacoes_crm` = 1, jobs com `JOBS_APLICAR=1`) | cancelar os registros de teste no CRM; P-27 (e-mails pendentes); P-80, P-81 |
 | 4 a 8 | não iniciadas | ver roteiro no fim deste arquivo |
 
 **O que está nas mãos de quem**
-- **Operador (você):** P-01, certificado de origem; P-77, painel do hub; ensaio da paridade (ação 8 abaixo); P-80 e P-81 (rótulos e carências do App). P-36 (cofre)
+- **Operador (você):** P-01, certificado de origem; cancelar no CRM os registros de teste do contato sintético (`CAS-286631-X8D7T1`, oportunidade `c13e3197-…`, `CAS-286630-X4G6Z4`); conferir pela tela a resposta da Central e o desbloqueio; replicar o `.env.jobs` novo no cofre (P-36); P-80 e P-81 (rótulos e carências do App). P-36 (cofre)
   adiada por decisão sua.
 - **TI / infra:** P-27, credencial SMTP.
 - **CRM admin:** P-37, contatos de teste no CRM para a agência entrar pelo Login APM; P-29, flows em
@@ -82,8 +82,9 @@ ar desde 30/10; `sql/008`–`014` aplicadas em 2026-11-03, P05 e P14 disponívei
    (aplicada em 13/11; o `db_check` fica "não conforme" até o deploy, por causa da allowlist antiga na imagem
    em produção) → ~~commit e deploy (flag desligada)~~ (`3e13f44f`, 13/11; `db_check` conforme) → ~~grants e cota no painel do hub
    (P-78, P-79)~~ (aplicados em 13/11) → ~~`check_hub --solicitacoes` nas duas contas~~ (ok em 13/11) → ~~P-85 (`ensaio_espelho encerrar-antigo`)~~ (13/11) →
-   ensaio com o contato sintético (`docs/JOBS.md` §4c), William confere no CRM → ligar `solicitacoes_crm` e
-   `JOBS_APLICAR=1` + `HUB_ESCRITA_HABILITADA=true` no `.env.jobs`.
+   ~~ensaio com o contato sintético (`docs/JOBS.md` §4c)~~ (13 e 19/11) → ~~ligar `solicitacoes_crm` e
+   `JOBS_APLICAR=1` + `HUB_ESCRITA_HABILITADA=true` no `.env.jobs`~~ (**virada em 19/11**). Resta ao William
+   cancelar os registros de teste no CRM e conferir pela tela a resposta da Central e o desbloqueio.
 
 **Para retomar:** **Onda 3** = Fase 3b (P13: preferências, consentimentos versionados, exportação e
 exclusão por anonimização; RD Station em stub). Decidir antes DEC-06, DEC-26, DEC-27 (levantamento §11).

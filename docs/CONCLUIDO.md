@@ -30,6 +30,32 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-11-19 — Virada da paridade com o App: jobs escrevendo no CRM (ADR-0024)
+
+Pedido do William em 19/11 ("vamos concluir a virada"). Estado anterior: flag `solicitacoes_crm` ligada desde
+o ensaio de 13/11, jobs em simulação.
+
+- **Ensaio pela tela (13/11, William):** "Dúvida" aberta pela área → `CAS-286631-X8D7T1`, uma mensagem
+  publicada na Timeline; bloqueio de mensagens pela Central escondeu a caixa de envio (coluna
+  `pode_enviar_mensagem`); texto do bloqueio corrigido e implantado em `4e67e60f` (13/11 17:35, smokes ok).
+- **Ensaio do Seguro Auto (19/11):** `ensaio_espelho criar --tipo seguro_carro` + `espelhar_solicitacoes`
+  restrito ao contato sintético → `c13e3197-…` `enviada`, `sync=ok`, **oportunidade com produto**, par 0/1.
+  `ensaio_espelho listar`: 5 registros, os dois da área (canal `minha_apm`) e os três do App (canal `app`).
+- **Filas antes de ligar:** 2 pedidos na base (a dúvida do ensaio e o cancelado do contato antigo, que o
+  espelho só retém); nenhuma mensagem pendente; 1 e-mail A04 pendente do contato de teste.
+- **Virada (19/11 11:26 -03):** `.env.jobs` com `HUB_ESCRITA_HABILITADA=true` e `JOBS_APLICAR=1` (cópia do
+  anterior em `.env.jobs.bak-20261119`); serviço de jobs recriado, `healthy`. Primeiras execuções em
+  `modo=aplicar`, todas `ok` e `erros=0`: `sincronizar_solicitacoes` (lidos=5, gravados=1), `espelhar_solicitacoes`,
+  `enviar_mensagens`, `enviar_comunicacao`.
+- **Não mudou:** o web segue só leitura (`HUB_ESCRITA_HABILITADA=false` no `.env`, P-29); `SMTP_MODE=stub` em
+  staging, então os e-mails continuam pendentes até a P-27 (o job avisa a cada minuto, sem erro).
+- **Voltar atrás:** restaurar o `.env.jobs.bak-20261119` e recriar o serviço de jobs; desligar a flag com
+  `UPDATE feature_flag SET ligada = 0 WHERE chave = 'solicitacoes_crm'`.
+
+Não verificado nesta virada: resposta da Central chegando à conversa pela tela e desbloqueio (parte do
+William no CRM). Registros de teste a cancelar no CRM: `CAS-286631-X8D7T1`, a oportunidade `c13e3197-…` e
+`CAS-286630-X4G6Z4` (aberta pelo App).
+
 ## 2026-11-13 — Ensaio: texto do bloqueio de mensagens corrigido (fast-path)
 
 No ensaio pela tela, o William bloqueou o envio no CRM **sem encerrar a ocorrência** e a conversa mostrou
