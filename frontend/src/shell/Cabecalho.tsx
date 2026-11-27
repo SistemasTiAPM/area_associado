@@ -65,7 +65,7 @@ export const Cabecalho = forwardRef<HTMLHeadingElement, Props>(function Cabecalh
               <ConteudoAvatar iniciais={iniciais} fotoVersao={foto_versao} tamanho={40} />
             </span>
             <span className="topo__perfil-textos">
-              <b className="topo__perfil-nome">{nome_exibicao || iniciais}</b>
+              <b className="topo__perfil-nome">{sessao.preferencias.tratamento ?? (nome_exibicao || iniciais)}</b>
               {tipo ? <span className="topo__perfil-tipo">{tipo}</span> : null}
             </span>
             <span className="visualmente-oculto">, abrir meu perfil</span>

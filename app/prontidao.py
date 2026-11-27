@@ -35,6 +35,9 @@ RECURSOS: dict[str, frozenset[str]] = {
     "solicitacoes": frozenset({"solicitacao", "solicitacao_evento", "comunicacao_evento", "comunicacao_supressao",
                                "notificacao", "fila_ligacao", "parametro"}),
     "ajuda": frozenset({"faq", "parametro"}),
+    # P13 (sql/017): preferências, consentimentos e pedidos do titular.
+    "privacidade": frozenset({"consentimento_texto", "consentimento", "perfil_declarado", "pergunta_perfil",
+                              "titular_pedido"}),
 }
 _TODAS: tuple[str, ...] = tuple(sorted(set().union(*RECURSOS.values())))
 

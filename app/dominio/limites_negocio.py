@@ -55,6 +55,7 @@ STATUS_NAO_TERMINAIS: tuple[str, ...] = ("criada", "enviada", "em_atendimento", 
 # tabela → (coluna de data, colunas filtráveis). Fechado: nada vem do chamador.
 _TABELAS: dict[str, tuple[str, frozenset[str]]] = {
     "solicitacao": ("criada_em", frozenset({"tipo_servico", "status"})),
+    "titular_pedido": ("criado_em", frozenset({"tipo", "status"})),
 }
 
 

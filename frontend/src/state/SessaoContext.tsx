@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ApiError, aoCsrfInvalido, api, definirCsrf } from '../api/client';
-import type { Sessao } from '../api/tipos';
+import type { Sessao, TamanhoFonte } from '../api/tipos';
 
 type Estado =
   | { fase: 'carregando' }
@@ -14,9 +14,16 @@ interface ValorContexto {
 
 const Contexto = createContext<ValorContexto | null>(null);
 
+/** Tamanho de fonte do perfil (TI-64): `data-fonte` no <html>; o CSS faz o resto. */
+export function aplicarFonte(fonte: TamanhoFonte): void {
+  if (fonte === 'padrao') delete document.documentElement.dataset.fonte;
+  else document.documentElement.dataset.fonte = fonte;
+}
+
 function aplicarPreferencias(sessao: Sessao): void {
   // Atributo no <html>, não estilo inline: compatível com a CSP (ADR-0013).
   document.documentElement.dataset.animacoes = sessao.config.animations ? 'on' : 'off';
+  aplicarFonte(sessao.preferencias.fonte);
 }
 
 /**

@@ -14,8 +14,8 @@ const API_TIPOS = '/api/v1/solicitacoes/tipos';
 const API_ANDAMENTO = '/api/v1/solicitacoes?situacao=andamento&limite=20';
 const API_DETALHE = `/api/v1/solicitacoes/${ID_SOLICITACAO}`;
 const API_MENSAGENS = `${API_DETALHE}/mensagens`;
-const LIGADA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true }, flags: { solicitacoes_crm: true } });
-const DESLIGADA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true } });
+const LIGADA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false }, flags: { solicitacoes_crm: true } });
+const DESLIGADA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false } });
 
 const tipo = (codigo: string, rotulo: string, ordem: number, extra: Partial<TipoCatalogo> = {}): TipoCatalogo => ({
   codigo,

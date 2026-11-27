@@ -134,14 +134,14 @@
   /* ---- Tipografia ---- */
   --fonte-base: 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --fonte-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  --fs-base: 14px;
-  --fs-h1: 30px;
-  --fs-h2: 26px;
-  --fs-h3: 12px;
-  --fs-h4: 18px;
-  --fs-destaque: 32px;
-  --fs-pequeno: 13px;
-  --fs-meta: 12.5px;
+  --fs-base: 0.875rem;
+  --fs-h1: 1.875rem;
+  --fs-h2: 1.625rem;
+  --fs-h3: 0.75rem;
+  --fs-h4: 1.125rem;
+  --fs-destaque: 2rem;
+  --fs-pequeno: 0.8125rem;
+  --fs-meta: 0.78125rem;
 
   /* ---- Forma e espaçamento ---- */
   --raio-cabecalho: 34px;

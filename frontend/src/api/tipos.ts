@@ -27,11 +27,22 @@ export interface Sessao {
    * aplicadas. A SPA mostra "em construção" na rota e não chama a API dele.
    */
   recursos: Record<RecursoSessao, boolean>;
+  /**
+   * Preferências que o shell aplica antes de qualquer tela (ADR-0026). Com a flag
+   * `perfil_preferencias` desligada vem o padrão. Guardadas no servidor, nunca no navegador.
+   */
+  preferencias: {
+    fonte: TamanhoFonte;
+    /** Como prefere ser chamado; `null` = saudação neutra com o primeiro nome. */
+    tratamento: string | null;
+  };
   expira_em: string;
 }
 
 /** Recursos com prontidão informada por `GET /sessao` (Onda 2). */
-export type RecursoSessao = 'solicitacoes' | 'ajuda';
+export type RecursoSessao = 'solicitacoes' | 'ajuda' | 'privacidade';
+
+export type TamanhoFonte = 'padrao' | 'grande' | 'maior';
 
 /** REQUISITOS §10 — espelho de app/flags.py:FLAGS_CONHECIDAS. */
 export type ChaveFlag =
@@ -50,7 +61,8 @@ export type ChaveFlag =
   | 'comunicacao_outbox'
   | 'cancelamento_online'
   | 'lgpd_consentimentos'
-  | 'solicitacoes_crm';
+  | 'solicitacoes_crm'
+  | 'perfil_preferencias';
 
 /** Corpo de erro único da API (REQUISITOS §3.0). */
 export interface CorpoErro {

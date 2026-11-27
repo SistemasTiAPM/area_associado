@@ -355,7 +355,7 @@ def test_prontidao_cache_e_falha_fechada(monkeypatch):
 
     monkeypatch.setattr(prontidao, "_ler_tabelas", ler)
     prontidao.limpar_cache()
-    assert prontidao.recursos() == {"solicitacoes": False, "ajuda": True}
+    assert prontidao.recursos() == {"solicitacoes": False, "ajuda": True, "privacidade": False}
     assert prontidao.disponivel("ajuda") and not prontidao.disponivel("inexistente")
     assert len(chamadas) == 1  # cache
 
@@ -364,12 +364,12 @@ def test_prontidao_cache_e_falha_fechada(monkeypatch):
 
     monkeypatch.setattr(prontidao, "_ler_tabelas", fora)
     prontidao.limpar_cache()
-    assert prontidao.recursos() == {"solicitacoes": False, "ajuda": False}
+    assert prontidao.recursos() == {"solicitacoes": False, "ajuda": False, "privacidade": False}
     monkeypatch.setattr(prontidao, "_ler_tabelas", lambda: frozenset(set().union(*prontidao.RECURSOS.values())))
     assert prontidao.recursos()["solicitacoes"] is False  # falha também fica em cache (curto)
     real = time.monotonic
     monkeypatch.setattr(prontidao.time, "monotonic", lambda: real() + prontidao.TTL_FALHA_S + 1)
-    assert prontidao.recursos() == {"solicitacoes": True, "ajuda": True}
+    assert prontidao.recursos() == {"solicitacoes": True, "ajuda": True, "privacidade": True}
     prontidao.limpar_cache()
 
 
@@ -447,11 +447,13 @@ def test_sessao_traz_recursos_e_contador_real(api):
 
     h = _entrar(api.c)
     s = api.c.get("/api/v1/sessao").json()
-    assert s["recursos"] == {"solicitacoes": True, "ajuda": True} and s["solicitacoes_aguardando"] == 2
+    assert s["recursos"] == {"solicitacoes": True, "ajuda": True, "privacidade": True}
+    assert s["solicitacoes_aguardando"] == 2 and s["preferencias"] == {"fonte": "padrao", "tratamento": None}
     api.estado["tabelas"] = frozenset({"faq", "parametro"})
     prontidao.limpar_cache()
     s = api.c.get("/api/v1/sessao").json()
-    assert s["recursos"] == {"solicitacoes": False, "ajuda": True} and s["solicitacoes_aguardando"] == 0
+    assert s["recursos"] == {"solicitacoes": False, "ajuda": True, "privacidade": False}
+    assert s["solicitacoes_aguardando"] == 0
     assert h  # sessão válida
 
 

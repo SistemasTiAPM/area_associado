@@ -8,6 +8,8 @@ Nada aqui carrega CPF, `sub`, `contact_id` ou token (REQUISITOS §3).
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from ...flags import FLAGS_CONHECIDAS
@@ -39,6 +41,14 @@ class RecursosSessao(_Resposta):
 
     solicitacoes: bool
     ajuda: bool
+    privacidade: bool = Field(description="`sql/017` aplicada (P13: preferências, consentimentos, dados).")
+
+
+class PreferenciasSessao(_Resposta):
+    """O que o shell precisa antes de qualquer tela (flag `perfil_preferencias`; senão, o padrão)."""
+
+    fonte: Literal["padrao", "grande", "maior"]
+    tratamento: str | None = Field(description="Como prefere ser chamado; null = saudação neutra com o primeiro nome.")
 
 
 class SessaoResposta(_Resposta):
@@ -53,6 +63,7 @@ class SessaoResposta(_Resposta):
     dados_demonstracao: bool
     recursos: RecursosSessao
     solicitacoes_aguardando: int = Field(description="Solicitações em `pendente_associado` (0 sem o recurso).")
+    preferencias: PreferenciasSessao
     expira_em: str
 
 
@@ -97,6 +108,93 @@ class TrocaEmailIniciada(_Resposta):
 class FotoResposta(_Resposta):
     tem_foto: bool
     foto_versao: str | None
+
+
+# ------------------------------------------- perfil e privacidade (P13)
+class Opcao(_Resposta):
+    valor: str
+    rotulo: str
+
+
+class OpcoesPreferencias(_Resposta):
+    atuacao: list[Opcao]
+    temas: list[Opcao]
+    canal_preferido: list[Opcao]
+    frequencia: list[Opcao]
+    fonte: list[Opcao]
+
+
+class PreferenciasResposta(_Resposta):
+    """Perfil declarado (ADR-0026; REQUISITOS §9.1). Listas vazias e `null` = ainda não respondido."""
+
+    tratamento: str | None
+    atuacao: list[str]
+    temas: list[str]
+    canal_preferido: str | None
+    frequencia: str | None
+    fonte: Literal["padrao", "grande", "maior"]
+    atualizado_em: str | None
+    faltam: list[str] = Field(description="Campos do perfil ainda sem resposta (base do \"Complete seu perfil\").")
+    opcoes: OpcoesPreferencias
+
+
+class PerguntaPerfil(_Resposta):
+    chave: str
+    titulo: str
+    ajuda: str
+    tipo: Literal["texto", "multipla", "unica"]
+    opcoes: list[Opcao]
+    maximo: int | None
+
+
+class PerguntaResposta(_Resposta):
+    pergunta: PerguntaPerfil | None = Field(description="null = nada a perguntar nesta visita.")
+
+
+class ConsentimentoHistorico(_Resposta):
+    valor: Literal["concedido", "retirado"]
+    versao: str
+    origem: str
+    registrado_em: str | None
+
+
+class ConsentimentoItem(_Resposta):
+    finalidade: str
+    canal: str
+    titulo: str
+    texto: str
+    versao: str = Field(description="Versão vigente do texto; devolver no PUT.")
+    concedido: bool
+    versao_registrada: str | None
+    registrado_em: str | None
+    texto_mudou: bool = Field(description="Concedido sobre uma versão anterior do texto.")
+    historico: list[ConsentimentoHistorico]
+
+
+class ConsentimentosResposta(_Resposta):
+    itens: list[ConsentimentoItem]
+
+
+class PedidoTitular(_Resposta):
+    protocolo: str
+    tipo: Literal["exportacao", "exclusao"]
+    status: Literal["registrado", "em_analise", "concluido", "recusado", "cancelado"]
+    criado_em: str | None
+    concluido_em: str | None
+    solicitacao_id: str | None
+
+
+class PedidosTitularResposta(_Resposta):
+    itens: list[PedidoTitular]
+    exportacao_disponivel_em: str | None = Field(description="null = já pode baixar os dados.")
+    exclusao_aberta: PedidoTitular | None
+    exige_reautenticacao: bool = Field(description="Baixar e pedir exclusão pedem senha recente no Login APM.")
+
+
+class ExclusaoResposta(_Resposta):
+    protocolo: str
+    solicitacao_id: str
+    registrado_em: str | None
 
 
 # ----------------------------------------------------------- carteirinha

@@ -33,7 +33,8 @@ async function entrar(page: Page, destino = '/area/perfil') {
 test('perfil: contato, troca de e-mail com código e foto no avatar', async ({ page }) => {
   const violacoes = await vigiarCsp(page);
   await entrar(page);
-  await expect(page.getByRole('heading', { level: 1, name: 'Meu perfil' })).toBeVisible();
+  // Com as flags de P13 ligadas no banco de teste o título passa a "Perfil e privacidade" (ADR-0026).
+  await expect(page.getByRole('heading', { level: 1, name: /^(Meu perfil|Perfil e privacidade)$/ })).toBeVisible();
   await expect(page.getByText('TELMA NOGUEIRA', { exact: true })).toBeVisible();
 
   // Contato

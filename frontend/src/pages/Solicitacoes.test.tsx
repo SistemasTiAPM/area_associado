@@ -8,7 +8,7 @@ import { fabricarSessao, montarApp, respostaJson } from '../test/utilidades';
 const API_ANDAMENTO = '/api/v1/solicitacoes?situacao=andamento&limite=20';
 const API_ENCERRADAS = '/api/v1/solicitacoes?situacao=encerradas&limite=20';
 const API_DETALHE = `/api/v1/solicitacoes/${ID_SOLICITACAO}`;
-const PRONTA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true } });
+const PRONTA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false } });
 
 type Chamada = { url: string; init: RequestInit | undefined };
 const corpoUso = (chamadas: Chamada[]) =>
@@ -129,7 +129,7 @@ describe('Minhas solicitações — lista (P05; RF-SO-01, 07, 08, 09, 15)', () =
   });
 
   it('contador do menu usa solicitacoes_aguardando', async () => {
-    montarApp('/solicitacoes', fabricarSessao({ recursos: { solicitacoes: true, ajuda: true }, solicitacoes_aguardando: 2 }), (url) =>
+    montarApp('/solicitacoes', fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false }, solicitacoes_aguardando: 2 }), (url) =>
       url === API_ANDAMENTO ? respostaJson({ itens: [], proximo_cursor: null }) : undefined,
     );
     const menu = await screen.findByRole('navigation', { name: 'Menu principal' });

@@ -36,6 +36,8 @@ Pendências referenciadas (P-xx) estão no plano de implementação; as regras c
 | [ADR-0022](0022-usuario-de-banco-do-backoffice.md) | Usuário de banco próprio do backoffice (`apm_area_bo`) e só-leitura dos painéis | Aceita | 2026-10-30 |
 | [ADR-0023](0023-espelho-de-solicitacoes-por-incident.md) | Espelho das solicitações por `incident`/`opportunity` e sincronização por mudança (adenda à 0018) | Aceita | 2026-11-04 |
 | [ADR-0024](0024-solicitacoes-em-paridade-com-o-app.md) | Solicitações em paridade com o App APM: web lê o CRM, job escreve, conversa pela Timeline (adenda à 0023) | Aceita | 2026-11-13 |
+| [ADR-0025](0025-direitos-do-titular-por-anonimizacao.md) | Direitos do titular pelo perfil: exportação síncrona e exclusão por anonimização feita pelo operador (DEC-06) | Aceita | 2026-11-19 |
+| [ADR-0026](0026-consentimento-versionado-e-perfil-declarado.md) | Consentimento versionado append-only e perfil declarado no servidor: tratamento e tamanho de fonte (DEC-26, DEC-27) | Aceita | 2026-11-19 |
 
 ## Mapa de dependências
 

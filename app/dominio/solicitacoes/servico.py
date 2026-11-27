@@ -268,6 +268,7 @@ _MSG_UNICO: dict[str, str] = {
     "declaracao_associado": "Já existe um pedido desta declaração em andamento.",
     "alteracao_cadastro": "Já existe um pedido de alteração em andamento para um desses campos.",
     "cancelamento_associacao": "Você já tem um pedido de cancelamento em andamento.",
+    "exclusao_dados": "Você já tem um pedido de exclusão de dados em andamento.",
 }
 _MSG_UNICO_PADRAO = "Já existe uma solicitação deste tipo em andamento."
 

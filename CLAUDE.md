@@ -27,9 +27,11 @@
 - `docs/REQUISITOS-minha-apm.md` — requisitos RF/RNF, integrações, modelo de dados, máquina de
   estados das solicitações, eventos de uso, perfil editável, flags, lacunas (v0.1, anterior à
   spec v2; o delta está no levantamento).
-- `docs/adr/` — decisões de arquitetura (ADR-0001..0024; 0018 solicitações v2 com 8 status, 0019 serviço
+- `docs/adr/` — decisões de arquitetura (ADR-0001..0026; 0018 solicitações v2 com 8 status, 0019 serviço
   de jobs, 0020 limites por contagem no banco, 0021 flags v2, 0022 usuário de banco do backoffice, 0023 espelho
-  no CRM por incident/opportunity, 0024 paridade com o App APM: web lê o CRM, job escreve, conversa).
+  no CRM por incident/opportunity, 0024 paridade com o App APM: web lê o CRM, job escreve, conversa,
+  0025 direitos do titular por anonimização feita pelo operador, 0026 consentimento versionado e perfil
+  declarado no servidor).
   Mudança de decisão = ADR nova.
 - `docs/PENDENCIAS.md` e `docs/CONCLUIDO.md` — **toda entrega atualiza os dois**: item resolvido
   sai de PENDENCIAS e entra em CONCLUIDO com data e evidência; descoberta nova entra em PENDENCIAS.
@@ -44,7 +46,7 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 |--------|-----------|-------------|
 | **Linguagem** | Python 3.12 (`python:3.12-slim`) | Mesma base do `login_associado` e do `mcp_hub`. [atual] |
 | **Backend** | FastAPI 0.115 + Gunicorn 23 / workers Uvicorn | 2 workers, bind `0.0.0.0:8000`, `--timeout 60`. [atual] API JSON em `/api/v1` [atual: `sessao`, `uso`; demais recursos nas fases 2–8]. |
-| **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Visual dos mockups da agência (ADR-0017): fontes Sora e JetBrains Mono self-hosted (OFL), cards de vidro, trilho em pílula. Ícones SVG próprios. React Router **7** (`react-router`), `basename="/area"` com URLs reais (sem `localStorage` de rota); navegação com destino dinâmico só por `lib/navegacao.ts` (ESLint). Modais em portal (`document.body`) com a raiz `inert`. ADR-0001. |
+| **Frontend** | **React 18 + Vite 8 + TypeScript 5.9** em `frontend/`, build em estágio Node (`node:24-bookworm-slim`, npm 11) do Dockerfile, saída em `app/static/spa/` | [atual] **Sem Node em runtime.** O estágio Node roda `npm run check` (typecheck, ESLint com as regras de CSP, Vitest) antes do build. Sem biblioteca de UI e sem Tailwind: componentes próprios + `tokens.css`. Todo `font-size` em `rem`; tamanho do texto em 3 passos por `data-fonte` no `<html>`, guardado no servidor (ADR-0026). Visual dos mockups da agência (ADR-0017): fontes Sora e JetBrains Mono self-hosted (OFL), cards de vidro, trilho em pílula. Ícones SVG próprios. React Router **7** (`react-router`), `basename="/area"` com URLs reais (sem `localStorage` de rota); navegação com destino dinâmico só por `lib/navegacao.ts` (ESLint). Modais em portal (`document.body`) com a raiz `inert`. ADR-0001. |
 | **Páginas Jinja2** | `/auth/*`, `stub_login` (só testes), `erro`, `/verificar/{token}` | [atual] Só as páginas fora da SPA; `/` não tem página (redireciona ao Login APM ou a `/area`). `/verificar/{token}` usa o visual do mockup (`entrada.css`, Sora). A página de entrada (`entrada.html`) fica **guardada sem rota** desde 2026-10-20, por decisão do usuário. `boot.js` removido. Stub e erro no visual antigo (Neo Sans) até P-24. |
 | **Autenticação** | OIDC Authorization Code + PKCE S256, client **confidencial** (`client_secret_basic`) | [atual] `app/oidc.py` com `httpx` + `pyjwt` (RS256 fixo, `iss`/`aud`/`nonce`/`exp`/`auth_time` obrigatórios). **Sem refresh token**: sessão própria; expirou → SSO silencioso no IdP. [atual] Escopo `carteirinha` (tipo, situação, CRM, UF, filiação); sem tipo ou situação o login é recusado (ADR-0016). O client do IdP precisa permitir o escopo (P-09). |
 | **Back-channel IdP** | `http://login_associado:8000` na `rede_publica`, header `Host: login.apm.org.br` | [atual] Evita hairpin via Cloudflare e a zona `oauth_token` (3 r/s) do edge. `iss` continua `https://login.apm.org.br`. |
@@ -59,7 +61,7 @@ Legenda: **[atual]** já implementado · **[alvo Fase N]** decidido e planejado,
 | **Banco** | MySQL 8.4 (RDS `mysql-producao`), schema `area_associado`, usuário `apm_area` (`REQUIRE SSL`) | [atual] `SELECT, INSERT, EXECUTE` no schema. [alvo] **`UPDATE` concedido tabela a tabela** na migração que a cria, com justificativa; **DELETE nunca**; trilhas append-only. Migrações em `sql/NNN_*.sql`, aplicadas pelo operador (`docs/PROVISIONAMENTO.md`). ADR-0004. |
 | **Auditoria** | `evento_log` (append-only), `app/audit.py` | [atual] HMAC de `sub`/IP/UA com `LOG_HASH_KEY`; `request_id` ecoado em `X-Request-Id`. CHECK recusa segredo/CPF em `detalhes`. |
 | **Analytics** | `evento_uso` (append-only), `app/uso.py` | [atual] Catálogo fechado de ações, transação própria, nunca derruba a resposta, sempre loga falha. ADR-0012. |
-| **Feature flags** | Tabela `feature_flag` + `FLAGS_FORCAR_DESLIGADAS` | [atual] Banco fora ou tabela ausente = todas desligadas. Nascem desligadas. Patrocínio, Mensalidade Zero e Fatura de valor forçadas desligadas até existir fonte (P-12). ADR-0007. |
+| **Feature flags** | Tabela `feature_flag` + `FLAGS_FORCAR_DESLIGADAS` | [atual] Banco fora ou tabela ausente = todas desligadas. Nascem desligadas. P13: `perfil_preferencias` (preferências, pergunta, fonte) e `lgpd_consentimentos` (autorizações e dados do titular; só depois da P-54). Patrocínio, Mensalidade Zero e Fatura de valor forçadas desligadas até existir fonte (P-12). ADR-0007. |
 | **Infra** | Docker Compose, `read_only`, tmpfs `/tmp`, `cap_drop ALL`, `no-new-privileges`, 400M, uid 10001 | [atual] Sem porta publicada. Vhost em `deploy/nginx_porteiro/area_associado.conf.example`. Host sem `buildx`: construir com `DOCKER_BUILDKIT=0` (P-26). |
 
 ### Estrutura
@@ -82,22 +84,27 @@ app/
   templating.py    # instância única do Jinja2 (páginas fora da SPA)
   publico.py       # GET /verificar/{token} (verificação pública da carteirinha)
   api/erros.py     # contrato único de erro {erro, mensagem, request_id, detalhes?}
-  api/v1/          # sessao, uso, perfil (contato, e-mail, foto), carteirinha (dados, QR, compartilhar), deps
+  api/v1/          # sessao, uso, perfil (contato, e-mail, foto), privacidade (P13: preferências, pergunta,
+                   # consentimentos, dados do titular), carteirinha (dados, QR, compartilhar), deps
   dominio/         # associado (acesso + pós-login), perfil (cache), foto (Pillow), carteirinha (token, QR),
                    # email_verificacao (código HMAC); solicitacoes/ (servico, maquina, schemas, rotulos, crm,
                    # catalogo_crm = catálogo comum com o App, catalogo = produtos ativos, situacao_crm = rótulos
-                   # do App, leitura_crm = fusão área ∪ CRM, mensagens = conversa/outbox)
+                   # do App, leitura_crm = fusão área ∪ CRM, mensagens = conversa/outbox);
+                   # P13: preferencias (perfil declarado + pergunta), consentimento (trilha versionada),
+                   # titular (exportação e pedido de exclusão), agregacao (recorte mínimo de 20)
   integracoes/     # hub.py (cliente mcp_hub), hub_stub.py, email.py (SMTP)
   templates/       # base, erro, stub_login (com persona; só testes), verificar; entrada (guardada, sem rota)
   static/          # style.css, fonts.css (Neo Sans), logo, favicons; entrada.css + Sora (sem rota); spa/ = build (gitignored)
 frontend/          # Vite + React + TS: src/{styles,api,shell,components,pages,state,lib,test}, e2e/ (Playwright)
-scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py, check_hub.py
+scripts/           # db_check.py (TLS, grants, allowlist de UPDATE), check_oidc.py, csp_check.py, check_hub.py;
+                   # do OPERADOR (credencial administrativa): anonimizar_titular.sql, retencao.sql (docs/RETENCAO.md)
 sql/               # 000–002 base; 003 feature_flag, 004 evento_uso, 005 associado, 006 associado_perfil,
                    # 007 email_verificacao, 008 partições, 009 flags v2, 010 solicitação, 011 job_execucao,
                    # 012 comunicação/notificação, 013 ajuda/parâmetros, 014 revogação da carteirinha,
                    # 015 espelho no CRM, 016 paridade com o App (tipos, solicitacao_mensagem, solicitacao_leitura,
-                   # flag solicitacoes_crm) (UPDATE por tabela ou por coluna; allowlist em scripts/db_check.py;
-                   # 017+ reservadas, REQUISITOS §6.2)
+                   # flag solicitacoes_crm), 017 P13 (consentimento_texto, consentimento, perfil_declarado,
+                   # pergunta_perfil, titular_pedido, associado.anonimizado_em, flag perfil_preferencias)
+                   # (UPDATE por tabela ou por coluna; allowlist em scripts/db_check.py; 018+ reservadas)
 tests/             # unidades sem rede/banco + integração com MySQL real (marcador `mysql`, TESTE_DB_*)
 deploy/nginx_porteiro/
 docs/              # SPEC, REQUISITOS, PENDENCIAS, CONCLUIDO, adr/, PROVISIONAMENTO, CUTOVER, ACESSO-CONSTRUCAO
@@ -127,7 +134,10 @@ e `/perfil/email/confirmar`, `GET|POST|DELETE /api/v1/perfil/foto`, `GET /api/v1
 `GET /api/v1/carteirinha/qr.svg`, `GET /api/v1/carteirinha/imagem.png` e `/documento.pdf`, `POST /api/v1/carteirinha/compartilhar`,
 `GET|POST /api/v1/solicitacoes` e `/solicitacoes/{id}[/cancelar|/responder|/avaliar]`, com a flag `solicitacoes_crm`
 (ADR-0024): `GET /api/v1/solicitacoes/tipos` e `GET|POST /api/v1/solicitacoes/{id}/mensagens`, `GET /api/v1/ajuda/faq`, `/ajuda/contato`,
-`POST /api/v1/ajuda/formulario` e `/ajuda/cancelamento` (flag `cancelamento_online`, step-up), `GET /verificar/{token}`
+`POST /api/v1/ajuda/formulario` e `/ajuda/cancelamento` (flag `cancelamento_online`, step-up); P13 (ADR-0025/0026) com a flag
+`perfil_preferencias`: `GET|PUT /api/v1/perfil/preferencias`, `GET /perfil/pergunta`, `POST /perfil/pergunta/{chave}`; com a flag
+`lgpd_consentimentos`: `GET|PUT /perfil/consentimentos`, `GET /perfil/dados/pedidos`, `POST /perfil/dados/exportar` e
+`/perfil/dados/exclusao` (step-up); `GET /verificar/{token}`
 (público: só nome, situação e "verificado em"), `POST /auth/logout` (CSRF → `/oauth/logout` do IdP), `GET /health`;
 internos (403 no edge): `GET /db-health` (inclui `uso_falhas` e presença da SPA), `GET /auth-health`.
 Erro único da API `{"erro", "mensagem", "request_id", "detalhes"?}`; sem sessão em `/api/` → 401
@@ -161,7 +171,7 @@ JSON, nunca 303.
 7. **`same_site="lax"`, não `strict`**: o callback é navegação cross-site; `strict` quebra o login
    com `state_mismatch` silencioso.
 8. **Trilhas são só INSERT** (privilégio): `evento_log`, `evento_uso`, `solicitacao_evento`,
-   `onboarding_progresso`. Chaves `token/id_token/access_token/refresh_token/client_secret/cpf/
+   `onboarding_progresso`, `consentimento` (e `consentimento_texto`, `titular_pedido`: sem UPDATE para a aplicação). Chaves `token/id_token/access_token/refresh_token/client_secret/cpf/
    senha/password/authorization` nunca entram em `detalhes` (filtro + CHECK). Identidade em
    `evento_log` só como HMAC. Auditoria nunca derruba a resposta ao associado.
 9. **TLS verificado no RDS.** `DB_SSL_VERIFY=0` só fora de produção. Bundle ausente → falha no boot.
@@ -241,5 +251,5 @@ Invariantes: código pronto para produção (erros, bordas, segurança, desempen
 **Sentinela tem precedência**; mudança fora do escopo aprovado exige novo plano.
 
 ---
-*Criado em 2026-10-01. Revisado em 2026-11-13 (ADR-0024: solicitações em paridade com o App APM — web lê o CRM, job escreve, conversa; `sql/016`). Revisado em 2026-10-30 (plano de execução em 7 ondas; ADR-0018..0022; Ondas 1 e 2 executadas: solicitações, Ajuda, carteirinha com revogação, jobs, React Router 7). Revisado em 2026-10-29 (spec v2 da agência e levantamento técnico como documentos que governam; skills de prontidão em `.claude/skills/`). Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
+*Criado em 2026-10-01. Revisado em 2026-11-19 (Onda 3, rodada 1: P13 Perfil e privacidade — ADR-0025 e ADR-0026, `sql/017`, tipografia em `rem`). Revisado em 2026-11-13 (ADR-0024: solicitações em paridade com o App APM — web lê o CRM, job escreve, conversa; `sql/016`). Revisado em 2026-10-30 (plano de execução em 7 ondas; ADR-0018..0022; Ondas 1 e 2 executadas: solicitações, Ajuda, carteirinha com revogação, jobs, React Router 7). Revisado em 2026-10-29 (spec v2 da agência e levantamento técnico como documentos que governam; skills de prontidão em `.claude/skills/`). Revisado em 2026-10-17 (Fase 0 da Minha APM: stack SPA, mcp_hub, jobs,
 regras 13–21, Integrador; Fase 1: fundação implementada, marcadores [atual]; Fase 2a: perfil, carteirinha, regras 22–23). Revisado em 2026-10-19 (Fase 2b: hub implementado, regra 21 com o endereço e a escrita incerta). Revisado em 2026-10-20 (landing de entrada; visual dos mockups da agência, ADR-0017, regra 13). Atualizar ao mudar stack, fronteiras de módulo ou regras de segurança.*

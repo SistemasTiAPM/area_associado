@@ -8,7 +8,7 @@ import { fabricarSessao, montarApp, respostaJson, type Rotas } from '../test/uti
 
 const API_FAQ = '/api/v1/ajuda/faq';
 const API_CONTATO = '/api/v1/ajuda/contato';
-const PRONTA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true } });
+const PRONTA = fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false } });
 
 const FAQ: RespostaFaq = {
   categorias: [
@@ -241,7 +241,7 @@ describe('Ajuda e atendimento (P14; RF-AJ-01..05)', () => {
     vi.stubGlobal('location', { ...window.location, assign, pathname: '/area/ajuda' });
     const { chamadas } = montarApp(
       '/ajuda',
-      fabricarSessao({ recursos: { solicitacoes: true, ajuda: true }, flags: { cancelamento_online: true } }),
+      fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false }, flags: { cancelamento_online: true } }),
       rotasBase((url) =>
         url === '/api/v1/ajuda/cancelamento'
           ? respostaJson({ erro: 'reautenticacao_necessaria', mensagem: 'Confirme sua senha.', request_id: null }, 403)
@@ -274,7 +274,7 @@ describe('Ajuda e atendimento (P14; RF-AJ-01..05)', () => {
     const usuario = userEvent.setup();
     montarApp(
       '/ajuda',
-      fabricarSessao({ recursos: { solicitacoes: true, ajuda: true }, flags: { cancelamento_online: true } }),
+      fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false }, flags: { cancelamento_online: true } }),
       rotasBase((url) =>
         url === '/api/v1/ajuda/cancelamento'
           ? respostaJson(solicitacao({ tipo: { codigo: 'cancelamento_associacao', rotulo: 'Cancelamento da associação' } }), 201)

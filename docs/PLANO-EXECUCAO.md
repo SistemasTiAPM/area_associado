@@ -113,6 +113,11 @@ as rotas novas em "em construção" até as migrações.
 
 ## Onda 3 — Fase 3b: P13 preferências, consentimentos e direitos do titular
 
+> **Estado em 2026-11-19 — rodada 1 construída** (núcleo de P13: TI-25, 26, 27, 28, 64, 90; ADR-0025 e
+> ADR-0026; `sql/017`, e não a `sql/019` prevista abaixo). Atrás de `perfil_preferencias` e
+> `lgpd_consentimentos`; commitada em 27/11, sem deploy até o pedido do William. **Rodada 2** (TI-53 RD Station em
+> simulação e TI-59 fila de ligações) tem plano próprio — P-88. Evidências em `docs/CONCLUIDO.md`.
+
 Decisões antes: DEC-06 (anonimização), DEC-26 (tratamento), DEC-27 (fonte). Ordem: TI-25 `sql/019` → TI-26
 domínio/API → TI-27 front → TI-28 retenção (`RETENCAO.md`, scripts do operador) → TI-90 padrão de acesso a
 dado pessoal → TI-64 tokens em `rem` + controle de fonte → TI-53 cliente RD em stub + `outbox_rd` → TI-59 fila

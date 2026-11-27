@@ -60,6 +60,12 @@ def hash_ua(ua: str | None) -> str | None:
     return _hmac(f"ua:{ua[:512]}" if ua else None)
 
 
+def hash_contato(contact_id: str | None) -> str | None:
+    """HMAC do `contact_id` do TITULAR de um dado acessado (TI-90): o registro de
+    acesso prova quem foi consultado sem repetir o identificador em claro."""
+    return _hmac(f"contato:{contact_id.lower()}" if contact_id else None)
+
+
 def client_ip(request: Request) -> str | None:
     # X-Real-IP é carimbado pelo nginx_porteiro após o real_ip (IP do visitante).
     ip = request.headers.get("x-real-ip")
@@ -181,3 +187,35 @@ def registrar_sistema(
             )
     except (SQLAlchemyError, ValueError) as exc:
         logger.error("audit: falha ao gravar evento %s/%s: %s", categoria, tipo, type(exc).__name__)
+
+
+_RE_CAMPO_ACESSO = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+FINALIDADES_ACESSO = ("exportacao_titular", "atendimento", "painel", "exportacao_terceiro")
+
+
+def registrar_acesso_dado_pessoal(
+    request: Request,
+    *,
+    sub: str | None,
+    ator_contact_id: str | None,
+    alvo_contact_id: str,
+    campos: list[str],
+    finalidade: str,
+) -> None:
+    """Padrão único de "registro de acesso a dado pessoal" (spec v2 §13, TI-90).
+
+    Toda leitura que ENTREGA dado pessoal a alguém (exportação do titular hoje;
+    atendimento e painéis no backoffice) grava uma linha `seguranca` /
+    `acesso_dado_pessoal` com: quem (HMAC do `sub` e IP/UA em HMAC, como todo
+    `evento_log`), de quem (`alvo_contact_hash`), quais GRUPOS de campos (nomes,
+    nunca valores) e para quê (catálogo fechado). Transação própria; nunca lança.
+    Bloqueante: chamar via `run_in_threadpool`."""
+    if finalidade not in FINALIDADES_ACESSO:
+        logger.error("audit: finalidade de acesso inválida (%.32s)", finalidade)
+        return
+    nomes = sorted({c for c in campos if isinstance(c, str) and _RE_CAMPO_ACESSO.match(c)})[:40]
+    registrar_isolado(
+        request, categoria="seguranca", tipo="acesso_dado_pessoal", sub=sub, contact_id=ator_contact_id,
+        status_http=200,
+        detalhes={"alvo_contact_hash": hash_contato(alvo_contact_id), "campos": nomes, "finalidade": finalidade},
+    )

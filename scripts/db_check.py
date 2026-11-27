@@ -40,6 +40,9 @@ from dataclasses import dataclass, field
 #                     `parametro`, `faq`, `texto_sistema` (013) e as trilhas
 #                     `solicitacao_evento`, `comunicacao_envio`,
 #                     `comunicacao_supressao` e `fila_ligacao` ficam SEM UPDATE.
+#                     `perfil_declarado` e `pergunta_perfil` (017, por coluna);
+#                     `consentimento_texto`, `consentimento` e `titular_pedido`
+#                     (017) ficam SEM UPDATE: prova e pedido do titular.
 # `apm_area_bo`     — backoffice (ADR-0022, Onda 6): UPDATE em catálogo e
 #                     configuração; a allowlist nasce com a migração dele.
 # `apm_area_painel` — painéis (ADR-0022): só SELECT em views `vw_*`, nada no
@@ -65,6 +68,7 @@ POLITICAS: dict[str, Politica] = {
             "job_execucao",                                                # 011 (por coluna)
             "comunicacao_evento", "notificacao",                           # 012 (por coluna)
             "solicitacao_mensagem", "solicitacao_leitura",                 # 016 (por coluna)
+            "perfil_declarado", "pergunta_perfil",                         # 017 (por coluna)
         }),
     ),
     "apm_area_bo": Politica(

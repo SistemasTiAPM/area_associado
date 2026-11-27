@@ -26,7 +26,9 @@ const ATALHOS: readonly { para: string; icone: NomeIcone; titulo: string; texto:
  */
 export function Inicio() {
   const { sessao } = useSessao();
-  const { nome_exibicao: nome, tipo, status } = sessao.associado;
+  const { nome_exibicao, tipo, status } = sessao.associado;
+  // Como a pessoa pediu para ser chamada (P13); sem isso, o primeiro nome, sem título (DEC-26).
+  const nome = sessao.preferencias.tratamento ?? nome_exibicao;
   const selo = [tipo, status].filter(Boolean).join(' · ');
 
   return (

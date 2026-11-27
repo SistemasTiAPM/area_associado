@@ -23,6 +23,7 @@ export const FLAGS_DESLIGADAS: Record<ChaveFlag, boolean> = {
   cancelamento_online: false,
   lgpd_consentimentos: false,
   solicitacoes_crm: false,
+  perfil_preferencias: false,
 };
 
 export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flags' | 'config'>> & {
@@ -37,7 +38,8 @@ export function fabricarSessao(parcial: Partial<Omit<Sessao, 'associado' | 'flag
     dados_demonstracao: false,
     solicitacoes_aguardando: 0,
     // Fail-closed como o servidor sem migração; os testes das telas da Onda 2 ligam o que usam.
-    recursos: { solicitacoes: false, ajuda: false },
+    recursos: { solicitacoes: false, ajuda: false, privacidade: false },
+    preferencias: { fonte: 'padrao', tratamento: null },
     expira_em: '2026-10-17T12:00:00Z',
     ...parcial,
     associado: {

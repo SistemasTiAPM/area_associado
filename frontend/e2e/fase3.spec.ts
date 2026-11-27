@@ -27,7 +27,7 @@ async function entrarNovo(page: Page, destino: string) {
 /** Os recursos da Onda 2 precisam estar prontos no servidor (migrações aplicadas). */
 async function exigirRecursos(page: Page) {
   const sessao = (await (await page.request.get('/api/v1/sessao')).json()) as { recursos?: Record<string, boolean> };
-  expect(sessao.recursos, 'aplique sql/010..014 no banco de teste').toEqual({ solicitacoes: true, ajuda: true });
+  expect(sessao.recursos, 'aplique sql/010..014 no banco de teste').toMatchObject({ solicitacoes: true, ajuda: true });
 }
 
 async function criarDuvida(page: Page, mensagem: string) {

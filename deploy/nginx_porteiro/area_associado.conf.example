@@ -28,6 +28,10 @@ map $request_method $area_chave_escrita {
     default "";
 }
 limit_req_zone $area_chave_escrita zone=area_solicitacoes:10m rate=5r/s;
+# P13 (Onda 3, ADR-0025): exportação dos dados e pedido de exclusão. Só POST
+# conta (mesma chave acima). A app exige senha recente, CSRF e limita 6/h por
+# associado e 1 exportação a cada 7 dias; aqui, 6/min por IP contra rajada.
+limit_req_zone $area_chave_escrita zone=area_titular:10m rate=6r/m;
 # Downloads da carteirinha (PNG/PDF renderizados em memória, 1 por worker por
 # vez): a app limita 10/h por associado; aqui, 30/min por IP contra rajada.
 limit_req_zone $binary_remote_addr zone=area_download:10m rate=30r/m;
@@ -128,6 +132,25 @@ server {
         limit_req zone=area_solicitacoes burst=10 nodelay;
         limit_req_status 429;
         client_max_body_size 64k;
+        proxy_pass http://$up_area:8000$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
+    }
+
+    # Direitos do titular (P13, ADR-0025): exportar os dados e pedir exclusão.
+    # Prefixo mais longo que /api/: vale este bloco. A resposta da exportação é
+    # um JSON com dado pessoal: sem buffer em disco no porteiro e sem cache.
+    location ^~ /api/v1/perfil/dados/ {
+        limit_req zone=area_api burst=10 nodelay;
+        limit_req zone=area_titular burst=3 nodelay;
+        limit_req_status 429;
+        client_max_body_size 4k;
+        proxy_max_temp_file_size 0;
+        proxy_no_cache 1;
+        proxy_cache_bypass 1;
         proxy_pass http://$up_area:8000$request_uri;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

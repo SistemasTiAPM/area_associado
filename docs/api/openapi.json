@@ -565,6 +565,179 @@
         "title": "ConfirmacaoEntrada",
         "type": "object"
       },
+      "ConsentimentoEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "enum": [
+              "email",
+              "whatsapp",
+              "sms",
+              "push",
+              "telefone"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "concedido": {
+            "title": "Concedido",
+            "type": "boolean"
+          },
+          "finalidade": {
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
+            "title": "Finalidade",
+            "type": "string"
+          },
+          "versao": {
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,15}$",
+            "title": "Versao",
+            "type": "string"
+          }
+        },
+        "required": [
+          "finalidade",
+          "canal",
+          "concedido",
+          "versao"
+        ],
+        "title": "ConsentimentoEntrada",
+        "type": "object"
+      },
+      "ConsentimentoHistorico": {
+        "additionalProperties": false,
+        "properties": {
+          "origem": {
+            "title": "Origem",
+            "type": "string"
+          },
+          "registrado_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registrado Em"
+          },
+          "valor": {
+            "enum": [
+              "concedido",
+              "retirado"
+            ],
+            "title": "Valor",
+            "type": "string"
+          },
+          "versao": {
+            "title": "Versao",
+            "type": "string"
+          }
+        },
+        "required": [
+          "valor",
+          "versao",
+          "origem",
+          "registrado_em"
+        ],
+        "title": "ConsentimentoHistorico",
+        "type": "object"
+      },
+      "ConsentimentoItem": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "concedido": {
+            "title": "Concedido",
+            "type": "boolean"
+          },
+          "finalidade": {
+            "title": "Finalidade",
+            "type": "string"
+          },
+          "historico": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentimentoHistorico"
+            },
+            "title": "Historico",
+            "type": "array"
+          },
+          "registrado_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registrado Em"
+          },
+          "texto": {
+            "title": "Texto",
+            "type": "string"
+          },
+          "texto_mudou": {
+            "description": "Concedido sobre uma versão anterior do texto.",
+            "title": "Texto Mudou",
+            "type": "boolean"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          },
+          "versao": {
+            "description": "Versão vigente do texto; devolver no PUT.",
+            "title": "Versao",
+            "type": "string"
+          },
+          "versao_registrada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versao Registrada"
+          }
+        },
+        "required": [
+          "finalidade",
+          "canal",
+          "titulo",
+          "texto",
+          "versao",
+          "concedido",
+          "versao_registrada",
+          "registrado_em",
+          "texto_mudou",
+          "historico"
+        ],
+        "title": "ConsentimentoItem",
+        "type": "object"
+      },
+      "ConsentimentosResposta": {
+        "additionalProperties": false,
+        "properties": {
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentimentoItem"
+            },
+            "title": "Itens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "itens"
+        ],
+        "title": "ConsentimentosResposta",
+        "type": "object"
+      },
       "ContatoCentral": {
         "additionalProperties": false,
         "description": "Bloco vazio (null) = a SPA não mostra o canal.",
@@ -928,6 +1101,58 @@
         "title": "EventoUi",
         "type": "object"
       },
+      "ExclusaoEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "chave_idempotencia": {
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Chave Idempotencia",
+            "type": "string"
+          },
+          "confirmacao": {
+            "maxLength": 16,
+            "title": "Confirmacao",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmacao",
+          "chave_idempotencia"
+        ],
+        "title": "ExclusaoEntrada",
+        "type": "object"
+      },
+      "ExclusaoResposta": {
+        "additionalProperties": false,
+        "properties": {
+          "protocolo": {
+            "title": "Protocolo",
+            "type": "string"
+          },
+          "registrado_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registrado Em"
+          },
+          "solicitacao_id": {
+            "title": "Solicitacao Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "protocolo",
+          "solicitacao_id",
+          "registrado_em"
+        ],
+        "title": "ExclusaoResposta",
+        "type": "object"
+      },
       "FaqResposta": {
         "additionalProperties": false,
         "properties": {
@@ -1272,6 +1497,192 @@
         "title": "NovaSolicitacao",
         "type": "object"
       },
+      "Opcao": {
+        "additionalProperties": false,
+        "properties": {
+          "rotulo": {
+            "title": "Rotulo",
+            "type": "string"
+          },
+          "valor": {
+            "title": "Valor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "valor",
+          "rotulo"
+        ],
+        "title": "Opcao",
+        "type": "object"
+      },
+      "OpcoesPreferencias": {
+        "additionalProperties": false,
+        "properties": {
+          "atuacao": {
+            "items": {
+              "$ref": "#/components/schemas/Opcao"
+            },
+            "title": "Atuacao",
+            "type": "array"
+          },
+          "canal_preferido": {
+            "items": {
+              "$ref": "#/components/schemas/Opcao"
+            },
+            "title": "Canal Preferido",
+            "type": "array"
+          },
+          "fonte": {
+            "items": {
+              "$ref": "#/components/schemas/Opcao"
+            },
+            "title": "Fonte",
+            "type": "array"
+          },
+          "frequencia": {
+            "items": {
+              "$ref": "#/components/schemas/Opcao"
+            },
+            "title": "Frequencia",
+            "type": "array"
+          },
+          "temas": {
+            "items": {
+              "$ref": "#/components/schemas/Opcao"
+            },
+            "title": "Temas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "atuacao",
+          "temas",
+          "canal_preferido",
+          "frequencia",
+          "fonte"
+        ],
+        "title": "OpcoesPreferencias",
+        "type": "object"
+      },
+      "PedidoTitular": {
+        "additionalProperties": false,
+        "properties": {
+          "concluido_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concluido Em"
+          },
+          "criado_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criado Em"
+          },
+          "protocolo": {
+            "title": "Protocolo",
+            "type": "string"
+          },
+          "solicitacao_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitacao Id"
+          },
+          "status": {
+            "enum": [
+              "registrado",
+              "em_analise",
+              "concluido",
+              "recusado",
+              "cancelado"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "exportacao",
+              "exclusao"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "protocolo",
+          "tipo",
+          "status",
+          "criado_em",
+          "concluido_em",
+          "solicitacao_id"
+        ],
+        "title": "PedidoTitular",
+        "type": "object"
+      },
+      "PedidosTitularResposta": {
+        "additionalProperties": false,
+        "properties": {
+          "exclusao_aberta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PedidoTitular"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exige_reautenticacao": {
+            "description": "Baixar e pedir exclusão pedem senha recente no Login APM.",
+            "title": "Exige Reautenticacao",
+            "type": "boolean"
+          },
+          "exportacao_disponivel_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = já pode baixar os dados.",
+            "title": "Exportacao Disponivel Em"
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/PedidoTitular"
+            },
+            "title": "Itens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "itens",
+          "exportacao_disponivel_em",
+          "exclusao_aberta",
+          "exige_reautenticacao"
+        ],
+        "title": "PedidosTitularResposta",
+        "type": "object"
+      },
       "PerfilResposta": {
         "additionalProperties": false,
         "properties": {
@@ -1490,12 +1901,310 @@
         "title": "PerfilResposta",
         "type": "object"
       },
+      "PerguntaPerfil": {
+        "additionalProperties": false,
+        "properties": {
+          "ajuda": {
+            "title": "Ajuda",
+            "type": "string"
+          },
+          "chave": {
+            "title": "Chave",
+            "type": "string"
+          },
+          "maximo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maximo"
+          },
+          "opcoes": {
+            "items": {
+              "$ref": "#/components/schemas/Opcao"
+            },
+            "title": "Opcoes",
+            "type": "array"
+          },
+          "tipo": {
+            "enum": [
+              "texto",
+              "multipla",
+              "unica"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chave",
+          "titulo",
+          "ajuda",
+          "tipo",
+          "opcoes",
+          "maximo"
+        ],
+        "title": "PerguntaPerfil",
+        "type": "object"
+      },
+      "PerguntaResposta": {
+        "additionalProperties": false,
+        "properties": {
+          "pergunta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PerguntaPerfil"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = nada a perguntar nesta visita."
+          }
+        },
+        "required": [
+          "pergunta"
+        ],
+        "title": "PerguntaResposta",
+        "type": "object"
+      },
+      "PreferenciasEntrada": {
+        "additionalProperties": false,
+        "description": "Ausente = não muda. `tratamento` vazio ou `null` = saudação neutra;\nlista vazia = sem resposta. Catálogos fechados no domínio.",
+        "properties": {
+          "atuacao": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atuacao"
+          },
+          "canal_preferido": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canal Preferido"
+          },
+          "fonte": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fonte"
+          },
+          "frequencia": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequencia"
+          },
+          "temas": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temas"
+          },
+          "tratamento": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tratamento"
+          }
+        },
+        "title": "PreferenciasEntrada",
+        "type": "object"
+      },
+      "PreferenciasResposta": {
+        "additionalProperties": false,
+        "description": "Perfil declarado (ADR-0026; REQUISITOS §9.1). Listas vazias e `null` = ainda não respondido.",
+        "properties": {
+          "atuacao": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Atuacao",
+            "type": "array"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "canal_preferido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canal Preferido"
+          },
+          "faltam": {
+            "description": "Campos do perfil ainda sem resposta (base do \"Complete seu perfil\").",
+            "items": {
+              "type": "string"
+            },
+            "title": "Faltam",
+            "type": "array"
+          },
+          "fonte": {
+            "enum": [
+              "padrao",
+              "grande",
+              "maior"
+            ],
+            "title": "Fonte",
+            "type": "string"
+          },
+          "frequencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequencia"
+          },
+          "opcoes": {
+            "$ref": "#/components/schemas/OpcoesPreferencias"
+          },
+          "temas": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Temas",
+            "type": "array"
+          },
+          "tratamento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tratamento"
+          }
+        },
+        "required": [
+          "tratamento",
+          "atuacao",
+          "temas",
+          "canal_preferido",
+          "frequencia",
+          "fonte",
+          "atualizado_em",
+          "faltam",
+          "opcoes"
+        ],
+        "title": "PreferenciasResposta",
+        "type": "object"
+      },
+      "PreferenciasSessao": {
+        "additionalProperties": false,
+        "description": "O que o shell precisa antes de qualquer tela (flag `perfil_preferencias`; senão, o padrão).",
+        "properties": {
+          "fonte": {
+            "enum": [
+              "padrao",
+              "grande",
+              "maior"
+            ],
+            "title": "Fonte",
+            "type": "string"
+          },
+          "tratamento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Como prefere ser chamado; null = saudação neutra com o primeiro nome.",
+            "title": "Tratamento"
+          }
+        },
+        "required": [
+          "fonte",
+          "tratamento"
+        ],
+        "title": "PreferenciasSessao",
+        "type": "object"
+      },
       "RecursosSessao": {
         "additionalProperties": false,
         "description": "Prontidão das migrações da Onda 2 (`app/prontidao.py`): false = a SPA mostra \"em construção\".",
         "properties": {
           "ajuda": {
             "title": "Ajuda",
+            "type": "boolean"
+          },
+          "privacidade": {
+            "description": "`sql/017` aplicada (P13: preferências, consentimentos, dados).",
+            "title": "Privacidade",
             "type": "boolean"
           },
           "solicitacoes": {
@@ -1505,7 +2214,8 @@
         },
         "required": [
           "solicitacoes",
-          "ajuda"
+          "ajuda",
+          "privacidade"
         ],
         "title": "RecursosSessao",
         "type": "object"
@@ -1523,6 +2233,39 @@
           "texto"
         ],
         "title": "ResponderEntrada",
+        "type": "object"
+      },
+      "RespostaPerguntaEntrada": {
+        "additionalProperties": false,
+        "description": "`{\"pular\": true}` ou `{\"resposta\": <texto | opção | lista de opções>}`.",
+        "properties": {
+          "pular": {
+            "default": false,
+            "title": "Pular",
+            "type": "boolean"
+          },
+          "resposta": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "items": {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resposta"
+          }
+        },
+        "title": "RespostaPerguntaEntrada",
         "type": "object"
       },
       "SessaoResposta": {
@@ -1551,9 +2294,12 @@
             "additionalProperties": {
               "type": "boolean"
             },
-            "description": "Chaves: mensalidade_zero, fatura_valor, patrocinio, clube_economia, comunidade_posts, wallet, erp_financeiro, totalpass, notificacoes, encaminhamento_parceiro, reservas, inscricoes, comunicacao_outbox, cancelamento_online, lgpd_consentimentos, solicitacoes_crm.",
+            "description": "Chaves: mensalidade_zero, fatura_valor, patrocinio, clube_economia, comunidade_posts, wallet, erp_financeiro, totalpass, notificacoes, encaminhamento_parceiro, reservas, inscricoes, comunicacao_outbox, cancelamento_online, lgpd_consentimentos, solicitacoes_crm, perfil_preferencias.",
             "title": "Flags",
             "type": "object"
+          },
+          "preferencias": {
+            "$ref": "#/components/schemas/PreferenciasSessao"
           },
           "recursos": {
             "$ref": "#/components/schemas/RecursosSessao"
@@ -1582,6 +2328,7 @@
           "dados_demonstracao",
           "recursos",
           "solicitacoes_aguardando",
+          "preferencias",
           "expira_em"
         ],
         "title": "SessaoResposta",
@@ -3513,6 +4260,266 @@
         ]
       }
     },
+    "/api/v1/perfil/consentimentos": {
+      "get": {
+        "operationId": "listar_consentimentos",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentimentosResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Listar Consentimentos",
+        "tags": [
+          "perfil"
+        ]
+      },
+      "put": {
+        "operationId": "decidir_consentimento",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentimentoEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentimentoItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Decidir Consentimento",
+        "tags": [
+          "perfil"
+        ]
+      }
+    },
     "/api/v1/perfil/contato": {
       "put": {
         "operationId": "atualizar_contato",
@@ -3649,6 +4656,397 @@
           }
         },
         "summary": "Atualizar Contato",
+        "tags": [
+          "perfil"
+        ]
+      }
+    },
+    "/api/v1/perfil/dados/exclusao": {
+      "post": {
+        "operationId": "pedir_exclusao",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExclusaoEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExclusaoResposta"
+                }
+              }
+            },
+            "description": "Repetição da mesma `chave_idempotencia`."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExclusaoResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Pedir Exclusao",
+        "tags": [
+          "perfil"
+        ]
+      }
+    },
+    "/api/v1/perfil/dados/exportar": {
+      "post": {
+        "operationId": "exportar_dados",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Arquivo JSON (`Content-Disposition: attachment`) com os dados que a área guarda sobre o associado. Uma exportação a cada 7 dias."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Exportar Dados",
+        "tags": [
+          "perfil"
+        ]
+      }
+    },
+    "/api/v1/perfil/dados/pedidos": {
+      "get": {
+        "operationId": "listar_pedidos",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PedidosTitularResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Listar Pedidos",
         "tags": [
           "perfil"
         ]
@@ -4289,6 +5687,540 @@
           }
         },
         "summary": "Enviar Foto",
+        "tags": [
+          "perfil"
+        ]
+      }
+    },
+    "/api/v1/perfil/pergunta": {
+      "get": {
+        "operationId": "obter_pergunta",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerguntaResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Obter Pergunta",
+        "tags": [
+          "perfil"
+        ]
+      }
+    },
+    "/api/v1/perfil/pergunta/{chave}": {
+      "post": {
+        "operationId": "responder_pergunta",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chave",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{1,31}$",
+              "title": "Chave",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespostaPerguntaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenciasResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Responder Pergunta",
+        "tags": [
+          "perfil"
+        ]
+      }
+    },
+    "/api/v1/perfil/preferencias": {
+      "get": {
+        "operationId": "obter_preferencias",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenciasResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Obter Preferencias",
+        "tags": [
+          "perfil"
+        ]
+      },
+      "put": {
+        "operationId": "atualizar_preferencias",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenciasEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenciasResposta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`entrada_invalida` — Confira os dados informados e tente novamente."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_autenticado` — Sua sessão terminou. Entre novamente."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_permitido` — Você não tem permissão para esta ação."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`nao_encontrado` — Não encontramos o que você procurou."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`metodo_nao_permitido` — Operação não permitida."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`estado_invalido` — Esta ação não pode ser feita agora."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`arquivo_grande` — O arquivo enviado é grande demais."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`tipo_nao_suportado` — Formato de envio não suportado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`limite_taxa` — Muitas tentativas em pouco tempo. Aguarde um instante."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "`fonte_indisponivel` — Não foi possível carregar agora. Tente novamente em instantes."
+          }
+        },
+        "summary": "Atualizar Preferencias",
         "tags": [
           "perfil"
         ]

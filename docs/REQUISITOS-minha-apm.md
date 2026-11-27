@@ -1085,33 +1085,33 @@ Layout: composto por componentes da spec (`HeroPanel` compacto com avatar 56 px,
 
 **RF-PE-10 — Perfil declarado (preferências)**
 - **Descrição:** campos que **não** vêm do CRM e vivem na área: tratamento ("como prefere ser chamado": padrão neutro; opções Dra./Dr./só o nome — DEC-26), área de atuação (consultório próprio, hospital, plantão, pesquisa, gestão, docência), região de interesse, temas (reusa `associado_tema`), canais preferidos (e-mail; WhatsApp e SMS **só quando existirem**, P-64 — regra 19) e frequência. Enums fechados; nenhum texto livre além do tratamento (≤ 40 caracteres, sem HTML).
-- **Fonte:** `perfil_declarado`, `preferencia_canal` (`sql/019`) · **Endpoint:** `GET /perfil/preferencias`, `PUT /perfil/preferencias [C]` · **Evento:** `perfil_declarado_atualizar` (servidor; `detalhes.campos[]` = nomes, nunca valores) · **Flag:** `lgpd_consentimentos` (seção inteira) · **Fase:** 3b (TI-25, TI-26, TI-27)
+- **Fonte:** `perfil_declarado` (`sql/017`; canal e frequência são colunas dela — não há `preferencia_canal`) · **Endpoint:** `GET /perfil/preferencias`, `PUT /perfil/preferencias [C]` · **Evento:** `perfil_declarado_atualizar` (servidor; `detalhes.campos[]` = nomes, nunca valores) · **Flag:** `perfil_preferencias` (própria, ADR-0026) · **Fase:** 3b (TI-25, TI-26, TI-27) — **implementado em 19/11**; região de interesse fica para a P-56 e os temas, provisórios, vivem em JSON na linha até existir `associado_tema`
 - **UI:** "Complete seu perfil" dizendo o que melhora ("recomendações para a sua especialidade"); especialidade do CRM, quando o hub entregar (P-56), aparece como somente leitura ao lado da declarada.
 - **Aceite:** valor fora do enum → `400 entrada_invalida`; `GET /sessao` passa a devolver `tratamento` para a saudação.
 
 **RF-PE-11 — Perfil progressivo (uma pergunta por visita)**
 - **Descrição:** em vez de formulário longo, o bloco 3 da home faz **uma pergunta por visita** (spec:§6 P13 "Regras"): `GET /perfil/pergunta` devolve a próxima pergunta não respondida do catálogo `pergunta_perfil` (ordem e condição por categoria) ou `null`; `POST /perfil/pergunta/{chave} [C] [L:10/dia]` grava a resposta em `perfil_declarado`.
-- **Fonte:** `pergunta_perfil` (seed), `perfil_declarado` · **Endpoint:** `GET /perfil/pergunta`, `POST /perfil/pergunta/{chave}` · **Evento:** `perfil_declarado_atualizar` · **Flag:** `lgpd_consentimentos` · **Fase:** 3b
+- **Fonte:** `pergunta_perfil` (seed), `perfil_declarado` · **Endpoint:** `GET /perfil/pergunta`, `POST /perfil/pergunta/{chave}` · **Evento:** `perfil_declarado_atualizar` · **Flag:** `perfil_preferencias` · **Fase:** 3b — **implementado em 19/11**: catálogo de perguntas no código; `pergunta_perfil` guarda só os pulos (30 dias, no máximo 3)
 - **UI:** `PerguntaPerfil` (mesmo componente na home e no perfil); "pular" conta como visita.
 - **Aceite:** pergunta respondida não volta; chave inexistente → `404`.
 
 **RF-PE-12 — Consentimentos por finalidade, versionados**
 - **Descrição:** consentimento por **finalidade e canal** (ofertas de parceiros; WhatsApp de relacionamento; demais finalidades por P-54), com **versão do texto obrigatória** e histórico completo (spec:§11.6 "consentimento versionado"). Mensagens transacionais seguem a execução do contrato de associação e não dependem de consentimento. Descadastro em um toque, refletido no RD na hora (RF-CM-03).
-- **Fonte:** `consentimento_texto` (texto novo = linha nova, nunca editar) e `consentimento` (**append-only**; estado atual = última linha por finalidade × canal, `vw_consentimento_atual`) (`sql/019`) · **Endpoint:** `GET /perfil/consentimentos` (histórico + vigentes), `POST /perfil/consentimentos [C]` `{finalidade, canal, valor, versao_texto}` · **Evento:** `consentimento_alterar` (servidor; `detalhes.finalidade`, `canal`, `valor`, `versao`) · **Flag:** `lgpd_consentimentos` · **Fase:** 3b
+- **Fonte:** `consentimento_texto` (texto novo = linha nova, nunca editar) e `consentimento` (**append-only**; estado atual = última linha por finalidade × canal, `vw_consentimento_atual`) (`sql/019`) · **Endpoint:** `GET /perfil/consentimentos` (histórico + vigentes), `PUT /perfil/consentimentos [C]` `{finalidade, canal, concedido, versao}` (implementado em 19/11 como `PUT`; ADR-0026) · **Evento:** `consentimento_alterar` (servidor; `detalhes.finalidade`, `canal`, `valor`, `versao`) · **Flag:** `lgpd_consentimentos` · **Fase:** 3b
 - **UI:** switch com a versão do texto e link "ver histórico"; texto v0 provisório até P-54.
-- **Aceite:** `versao_texto` ausente ou diferente da vigente → `409 versao_desatualizada`; nenhum `UPDATE`/`DELETE` em `consentimento` (`db_check`); retirar o consentimento suprime a outbox daquele canal na mesma transação.
+- **Aceite:** `versao_texto` ausente ou diferente da vigente → `409 versao_desatualizada`; nenhum `UPDATE`/`DELETE` em `consentimento` (`db_check`); retirar o consentimento suprime a outbox daquele canal na mesma transação (**ainda não**: entra com a outbox do RD, TI-53; `consentimento.concedido()` já existe e falha fechado).
 
 **RF-PE-13 — Baixar meus dados**
 - **Descrição:** `POST /perfil/dados/exportar [C] [L:1/7 d]` exige **step-up** (`idp_at` ≤ `REAUTH_MAX_IDADE`, regra 22; RF-AU-11) e devolve, de forma síncrona, um JSON com os dados que a **área** guarda do `contact_id` (`associado_perfil`, `perfil_declarado`, `solicitacao` + eventos, `uso_valor`, `consentimento`, `evento_uso`); dados do CRM são os já exibidos no perfil. Nunca por anexo de e-mail; download direto com `no-store`.
 - **Fonte:** tabelas acima · **Endpoint:** `POST /perfil/dados/exportar` · **Evento:** registro em `evento_log` (`titular_exportacao`) e `titular_pedido` (tipo `exportacao`, fechado na hora) · **Flag:** `lgpd_consentimentos` · **Fase:** 3b (TI-26)
 - **UI:** botão "Baixar meus dados" com `Dialogo` de confirmação e reautenticação quando necessário.
-- **Aceite:** arquivo sem CPF, sem `sub` e sem `crm_*`; 2.º pedido em 7 dias → `429 limite_taxa`.
+- **Aceite:** arquivo sem CPF, sem `sub` e sem `crm_*`; 2.º pedido em 7 dias → `429 limite_negocio` (contagem no banco, ADR-0020). **Implementado em 19/11** (ADR-0025): o registro no `evento_log` é `acesso_dado_pessoal` (TI-90); `uso_valor` entra no arquivo quando existir (Onda 4).
 
 **RF-PE-14 — Pedir exclusão (anonimização, sem DELETE)**
-- **Descrição:** `POST /perfil/exclusao [C]` (step-up) cria a solicitação `exclusao_dados` (tipo de serviço, §7.4) e o `titular_pedido` com protocolo; confirmação por e-mail; a fila é do encarregado de dados (B13). "Exclusão" na área = **anonimização administrativa** (DIV-05, DEC-06; ADR-0004 mantida): `associado_perfil` e `perfil_declarado` zerados, `anonimizado_em` preenchido, `contact_id` mantido nas trilhas como pseudônimo, `evento_log` preservado por obrigação legal; expurgo físico só por retenção pelo operador (P-15/P-54). A filiação em si é cancelada pela APM (RF-AJ-04), não por esta rota.
-- **Fonte:** `titular_pedido`, `solicitacao` · **Endpoint:** `POST /perfil/exclusao` · **Evento:** `solicitacao_criar` (`tipo_servico=exclusao_dados`) · **Flag:** `lgpd_consentimentos` · **Fase:** 3b (TI-26; procedimento em `docs/RETENCAO.md`, TI-28)
+- **Descrição:** `POST /perfil/dados/exclusao [C]` (step-up; exige a palavra `EXCLUIR`) cria a solicitação `exclusao_dados` (tipo de serviço, §7.4) e o `titular_pedido` com protocolo; confirmação por e-mail; a fila é do encarregado de dados (B13). "Exclusão" na área = **anonimização administrativa** (DIV-05, DEC-06; ADR-0004 mantida): `associado_perfil` e `perfil_declarado` zerados, `anonimizado_em` preenchido, `contact_id` mantido nas trilhas como pseudônimo, `evento_log` preservado por obrigação legal; expurgo físico só por retenção pelo operador (P-15/P-54). A filiação em si é cancelada pela APM (RF-AJ-04), não por esta rota.
+- **Fonte:** `titular_pedido`, `solicitacao` · **Endpoint:** `POST /perfil/dados/exclusao`, `GET /perfil/dados/pedidos` · **Evento:** `solicitacao_criar` (`tipo_servico=exclusao_dados`) · **Flag:** `lgpd_consentimentos` · **Fase:** 3b (TI-26; procedimento em `docs/RETENCAO.md`, TI-28)
 - **UI:** texto explica prazo e o que acontece; 1 pedido aberto por associado.
-- **Aceite:** script de anonimização roda fora do usuário `apm_area` (privilégio); após anonimizar, `GET /verificar/{token}` responde "não encontrada"; segundo pedido com um aberto → `409 estado_invalido`.
+- **Aceite:** script de anonimização roda fora do usuário `apm_area` (privilégio); após anonimizar, `GET /verificar/{token}` responde "não encontrada"; segundo pedido com um aberto → `409 estado_invalido`. **Implementado em 19/11** (ADR-0025): a anonimização troca o `contact_id` por um identificador novo em todas as tabelas (mais forte que mantê-lo como pseudônimo) por `scripts/anonimizar_titular.sql`.
 ---
 
 ### 3.12 Minhas solicitações (SO) — `/area/solicitacoes` (P05)
@@ -2082,6 +2082,8 @@ exibido no Meu valor (derivável), propriedades pessoais por linha.
 | 34 | `perfil_contato_atualizar` / `perfil_foto_atualizar` | `perfil_atualizado` | `associado_perfil` | edição confirmada pelo hub | `campos[]` (nomes) | servidor | PE-02, PE-05 |
 | 35 | `perfil_declarado_atualizar` | `perfil_atualizado` | `perfil_declarado` | preferência/pergunta gravada | `campos[]` (nomes) | servidor | PE-10, PE-11 |
 | 36 | `consentimento_alterar` | `consentimento` | `consentimento` | consentimento dado ou retirado | `finalidade`, `canal`, `valor`, `versao` | servidor | PE-12 |
+| 36a | `dados_exportar` | — | `associado` | exportação dos próprios dados entregue | — | servidor | PE-13 |
+| 36b | `exclusao_pedir` | — | `associado` | pedido de exclusão registrado | — | servidor | PE-14 |
 | 37 | `carteirinha_compartilhar` | — | `carteirinha` | link de verificação gerado | — | servidor | CA-04 |
 | 38 | `carteirinha_baixar` | — | `carteirinha` | imagem/PDF gerado | `formato` ∈ {png, pdf} | servidor | CA-07 |
 | 39 | `carteirinha_verificar` | `carteirinha_validada` | `carteirinha` | página pública aberta com token válido | `resultado` ∈ {ativo, inativo, nao_confirmado} | publico | CA-03, CA-08 |

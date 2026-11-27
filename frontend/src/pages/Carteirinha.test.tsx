@@ -78,7 +78,7 @@ describe('Carteirinha digital — número, downloads e revogação (P07; RF-CA-0
   });
 
   it('revogada: sem QR, sem compartilhar, sem downloads, com o texto e o caminho para a Central', async () => {
-    const { chamadas } = montarApp('/carteirinha', fabricarSessao({ recursos: { solicitacoes: true, ajuda: true }, flags: { wallet: true } }), (url) =>
+    const { chamadas } = montarApp('/carteirinha', fabricarSessao({ recursos: { solicitacoes: true, ajuda: true, privacidade: false }, flags: { wallet: true } }), (url) =>
       url === API ? respostaJson(carteirinha({ revogada: true, qr: null, url_verificacao: null })) : undefined,
     );
     const cartao = await screen.findByRole('figure', { name: 'Carteirinha digital de TELMA NOGUEIRA' });

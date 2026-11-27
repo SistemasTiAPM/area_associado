@@ -240,6 +240,9 @@ CATALOGO: dict[str, Acao] = {
     "consentimento_alterar": _a("consentimento", "servidor", finalidade=_SLUG,
                                 canal=_enum("email", "whatsapp", "sms", "push", "telefone"),
                                 valor=_enum("concedido", "retirado"), versao=_VERSAO),
+    # Direitos do titular (LGPD, ADR-0025): só o fato; o conteúdo nunca.
+    "dados_exportar": _a("associado", "servidor"),
+    "exclusao_pedir": _a("associado", "servidor"),
     # --- carteirinha
     "carteirinha_compartilhar": _a("carteirinha", "servidor"),
     "carteirinha_baixar": _a("carteirinha", "servidor", formato=_enum("png", "pdf")),

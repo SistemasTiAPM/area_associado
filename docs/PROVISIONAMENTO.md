@@ -273,6 +273,41 @@ docker compose exec area-associado python -m scripts.db_check   # resultado : co
 Ligar a paridade (só depois dos grants no hub, P-78, e do ensaio — `docs/JOBS.md` §4c):
 `UPDATE feature_flag SET ligada = 1 WHERE chave = 'solicitacoes_crm';` (vale em até `FLAGS_CACHE_TTL` s).
 
+### 2.8 P13 Perfil e privacidade — `sql/017_perfil_privacidade` (2026-11-19, ADR-0025 e ADR-0026)
+
+Tabelas `consentimento_texto`, `consentimento` (append-only, com a view `vw_consentimento_atual`),
+`perfil_declarado` e `pergunta_perfil` (`GRANT UPDATE` por coluna), `titular_pedido` (sem UPDATE para a
+aplicação), a coluna `associado.anonimizado_em` e a flag `perfil_preferencias` (desligada). Textos `v0` dos
+consentimentos são provisórios (P-54). **Reaplicável até o último comando**: o `ALTER` final falha na segunda
+execução (coluna duplicada), sem efeito. Pode ser aplicada antes ou depois do deploy: sem ela as rotas de P13
+respondem 503 `recurso_indisponivel` e nada aparece na tela. `ALTER` com `ALGORITHM=INSTANT`: sem janela.
+
+```bash
+cd /home/ubuntu/area_associado
+M="mysql --defaults-extra-file=$HOME/.rds-admin.cnf --ssl-mode=REQUIRED area_associado"
+sha256sum sql/017_perfil_privacidade.sql   # 8a1fbe09730f890401d4c04110a965203b4befb838cf71f06d4a536090994921
+$M < sql/017_perfil_privacidade.sql && \
+$M -e "INSERT INTO schema_migrations (versao, arquivo, sha256) VALUES ('017','017_perfil_privacidade.sql','8a1fbe09730f890401d4c04110a965203b4befb838cf71f06d4a536090994921');" && \
+echo "OK 017"
+$M -e "SHOW GRANTS FOR 'apm_area'@'%';" | grep -E "perfil_declarado|pergunta_perfil"   # 2 linhas, UPDATE por coluna
+$M -e "SHOW GRANTS FOR 'apm_area'@'%';" | grep -cE "consentimento|titular_pedido"       # 0: sem UPDATE
+$M -e "SELECT chave, ligada FROM feature_flag WHERE chave IN ('perfil_preferencias','lgpd_consentimentos');"   # 0 e 0
+docker compose exec area-associado python -m scripts.db_check   # resultado : conforme; migracoes … 017
+```
+
+Ligar (cada flag é independente; vale em até `FLAGS_CACHE_TTL` s):
+
+- `UPDATE feature_flag SET ligada = 1 WHERE chave = 'perfil_preferencias';` — preferências, "Complete seu
+  perfil" e tamanho do texto. Antes, conferir pela tela e saber que a frequência ainda não muda nenhum envio
+  (TI-53, rodada 2 da Onda 3).
+- `UPDATE feature_flag SET ligada = 1 WHERE chave = 'lgpd_consentimentos';` — autorizações, baixar os dados e
+  pedir exclusão. **Só depois da P-54** (textos e prazos do jurídico) e de o encarregado saber da fila
+  (`docs/RETENCAO.md` §4).
+
+Vhost: bloco novo `location ^~ /api/v1/perfil/dados/` e zona `area_titular` em
+`deploy/nginx_porteiro/area_associado.conf.example` — copiar para o arquivo real do porteiro e recarregar
+(`nginx -t` antes).
+
 ## 3. Conferir
 
 ```bash

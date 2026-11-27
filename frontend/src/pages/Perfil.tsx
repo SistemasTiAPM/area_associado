@@ -17,8 +17,10 @@ import { ConteudoAvatar } from '../components/Avatar';
 import { Campo } from '../components/Campo';
 import { EstadoVazio } from '../components/EstadoVazio';
 import { dataBR } from '../lib/formato';
+import { useDefinirTituloPagina } from '../shell/TituloPagina';
 import { useSessao } from '../state/SessaoContext';
 import { useToast } from '../state/ToastContext';
+import { SecoesPrivacidade } from './PerfilPrivacidade';
 
 const FOTO_MAX_BYTES = 5 * 1024 * 1024;
 const REENVIO_S = 60;
@@ -460,8 +462,8 @@ function SecaoEmail({ perfil, aoAtualizar }: { perfil: Perfil; aoAtualizar: (p: 
 /* ------------------------------------------------------------------ tela */
 type Estado = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'pronto'; perfil: Perfil };
 
-/** Meu perfil (RF-PE, tela nova — sem layout na spec, tokens e componentes dela). */
-export function PaginaPerfil() {
+/** Cadastro do CRM (RF-PE): identidade, contato e e-mail de acesso. */
+function BlocoCadastro() {
   const { mostrarErro } = useToast();
   const [estado, setEstado] = useState<Estado>({ fase: 'carregando' });
 
@@ -526,6 +528,24 @@ export function PaginaPerfil() {
           <SecaoEmail perfil={perfil} aoAtualizar={atualizar} />
         </div>
       </div>
+    </>
+  );
+}
+
+/**
+ * Meu perfil (RF-PE) e, com as flags de P13 ligadas, "Perfil e privacidade": o
+ * cadastro do CRM em cima; preferências, autorizações e dados do titular embaixo.
+ * As seções de P13 não dependem do CRM: aparecem mesmo com o cadastro indisponível.
+ */
+export function PaginaPerfil() {
+  const { sessao } = useSessao();
+  const comPrivacidade =
+    sessao.recursos.privacidade && (sessao.flags.perfil_preferencias || sessao.flags.lgpd_consentimentos);
+  useDefinirTituloPagina(comPrivacidade ? 'Perfil e privacidade' : null);
+  return (
+    <>
+      <BlocoCadastro />
+      <SecoesPrivacidade />
     </>
   );
 }

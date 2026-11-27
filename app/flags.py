@@ -45,6 +45,8 @@ FLAGS_CONHECIDAS: tuple[str, ...] = (
     # ADR-0024 (sql/016): paridade com o App APM — catálogo comum, lista dos dois
     # canais e conversa com a Central.
     "solicitacoes_crm",
+    # ADR-0026 (sql/017): P13 preferências, perfil progressivo e tamanho de fonte.
+    "perfil_preferencias",
 )
 
 _lock = threading.Lock()

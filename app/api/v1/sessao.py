@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from ... import prontidao
 from ...config import get_settings
 from ...csrf import csrf_token
-from ...dominio import perfil
+from ...dominio import perfil, preferencias
 from ...dominio.associado import contact_id_valido
 from ...dominio.solicitacoes import servico as solicitacoes
 from ...flags import flags_efetivas
@@ -51,7 +51,7 @@ def iniciais(nome: str) -> str:
 
 def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool],
                   foto_versao: str | None = None, recursos: dict[str, bool] | None = None,
-                  aguardando: int = 0) -> dict[str, Any]:
+                  aguardando: int = 0, preferencias_sessao: dict[str, Any] | None = None) -> dict[str, Any]:
     s = get_settings()
     nome = formatar_nome(associado.nome)
     expira = datetime.fromtimestamp(associado.auth_at + s.session_absolute_max, tz=timezone.utc)
@@ -78,8 +78,11 @@ def montar_sessao(request: Request, associado: Associado, flags: dict[str, bool]
         "dados_demonstracao": s.hub_mode == "stub" or s.smtp_mode == "stub",
         # Prontidão das migrações da Onda 2: sem as tabelas, a SPA mostra "em construção".
         "recursos": {"solicitacoes": bool((recursos or {}).get("solicitacoes")),
-                     "ajuda": bool((recursos or {}).get("ajuda"))},
+                     "ajuda": bool((recursos or {}).get("ajuda")),
+                     "privacidade": bool((recursos or {}).get("privacidade"))},
         "solicitacoes_aguardando": aguardando,
+        # Tamanho de fonte e tratamento (ADR-0026): o shell aplica antes de qualquer tela.
+        "preferencias": preferencias_sessao or {"fonte": preferencias.FONTE_PADRAO, "tratamento": None},
         "expira_em": expira.isoformat().replace("+00:00", "Z"),
     }
 
@@ -92,4 +95,8 @@ async def obter_sessao(request: Request, associado: Associado = Depends(require_
     recursos = await run_in_threadpool(prontidao.recursos)
     # Contador real (RF-SO-07); sem o recurso ou com falha de banco, 0 — o menu nunca depende disto.
     aguardando = await run_in_threadpool(solicitacoes.contar_aguardando, cid) if recursos["solicitacoes"] else 0
-    return montar_sessao(request, associado, flags, versao, recursos, aguardando)
+    # Preferências só com a flag ligada e a sql/017 aplicada; senão, o padrão (sem tocar o banco).
+    prefs = None
+    if flags.get("perfil_preferencias") and recursos.get("privacidade"):
+        prefs = await run_in_threadpool(preferencias.resumo_sessao, cid)
+    return montar_sessao(request, associado, flags, versao, recursos, aguardando, prefs)

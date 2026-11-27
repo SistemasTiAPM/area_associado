@@ -140,7 +140,7 @@ def _sem_chaves_proibidas(corpo):
 def test_criar_listar_detalhe_e_idempotencia(ambiente):
     c, h, cid = novo_cliente()
     s = c.get("/api/v1/sessao").json()
-    assert s["recursos"] == {"solicitacoes": True, "ajuda": True} and s["solicitacoes_aguardando"] == 0
+    assert s["recursos"] == {"solicitacoes": True, "ajuda": True, "privacidade": True} and s["solicitacoes_aguardando"] == 0
     chave = _chave()
     r = _outro(c, h, assunto="  Seguro ", chave=chave)
     assert r.status_code == 201, r.text

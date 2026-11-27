@@ -30,6 +30,55 @@ escrita no CRM (P-05); mapear flows de `contact` antes de liberar a escrita (P-2
 
 ---
 
+## 2026-11-19 — Onda 3, rodada 1: P13 Perfil e privacidade (ADR-0025, ADR-0026, `sql/017`)
+
+Pedido do William em 19/11 ("vamos começar a Onda 3"), plano aprovado no mesmo dia. Decisões dele: DEC-06
+anonimizar, DEC-26 tratamento como campo do perfil com padrão neutro, DEC-27 tamanho de fonte no servidor,
+recorte = núcleo de P13 (TI-25, 26, 27, 28, 64, 90). Commit em 27/11 (este commit), por cima do `b4783bd`
+(logo sem o selo). **Sem deploy; a `sql/017` não foi aplicada em produção** (P-87). Tudo nasce atrás de `perfil_preferencias` (nova) e `lgpd_consentimentos`,
+desligadas.
+
+- **🗄️ Atlas — `sql/017_perfil_privacidade.sql`** (sha256 `8a1fbe09…4921`): `consentimento_texto` e
+  `consentimento` (append-only, `vw_consentimento_atual`, chave estrangeira para a versão do texto),
+  `perfil_declarado` e `pergunta_perfil` (`UPDATE` por coluna), `titular_pedido` (sem `UPDATE` para a
+  aplicação), `associado.anonimizado_em`, flag `perfil_preferencias`, textos `v0` provisórios. Allowlist do
+  `db_check` com as duas tabelas mutáveis. Ensaiada em MySQL 8.4 descartável, 000→017 em ordem; reaplicação
+  falha só no `ALTER` final, sem efeito.
+- **⚙️ Maestro + 🛡️ Sentinela — domínio e API:** `app/dominio/preferencias.py`, `consentimento.py`,
+  `titular.py`, `agregacao.py`; `app/api/v1/privacidade.py` com `GET|PUT /perfil/preferencias`,
+  `GET /perfil/pergunta`, `POST /perfil/pergunta/{chave}`, `GET|PUT /perfil/consentimentos`,
+  `GET /perfil/dados/pedidos`, `POST /perfil/dados/exportar` e `/perfil/dados/exclusao`. Ordem: sessão → CSRF
+  → flag (404) → step-up (403) → prontidão (503) → limite. Exportação 1 a cada 7 dias contada no banco,
+  `no-store`, registrada como `acesso_dado_pessoal` (TI-90). Exclusão = pedido com protocolo + solicitação
+  `exclusao_dados`; a aplicação não anonimiza. `GET /sessao` ganhou `preferencias` e `recursos.privacidade`.
+  Ações novas: `dados_exportar`, `exclusao_pedir`. OpenAPI regenerado.
+- **Operador — `scripts/anonimizar_titular.sql`:** troca o `contact_id` por um identificador novo em 17
+  tabelas, apaga o conteúdo pessoal, conclui a solicitação e fecha o pedido, numa transação, sem `DELETE`;
+  recusa pedido fechado ou cancelado. Ensaiado pelo teste de integração e pelo cliente `mysql` com `SOURCE`.
+  `scripts/retencao.sql` (conferência + purgas comentadas) e `docs/RETENCAO.md` (TI-28).
+- **🎨 Vitrine:** "Perfil e privacidade" (`PerfilPrivacidade.tsx`): Complete seu perfil (`PerguntaPerfil`, uma
+  pergunta por visita), Sobre você, Tamanho do texto (`ControleFonte`), Autorizações com histórico, Seus dados
+  (baixar e pedir exclusão com `Dialogo` e palavra de confirmação). Todo `font-size` da SPA em `rem` (102
+  declarações); `data-fonte` no `<html>`; saudação com o tratamento escolhido.
+- **📦 Estivador:** zona `area_titular` e `location ^~ /api/v1/perfil/dados/` no exemplo do vhost;
+  `docs/PROVISIONAMENTO.md` §2.8.
+- **Alinhamento ao REQUISITOS §9.1 feito durante a entrega:** frequência `normal`/`minima`, canal preferido
+  único, slug `consultorio_proprio`, origem `perfil` no consentimento. Diferenças mantidas e registradas no
+  próprio REQUISITOS e na ADR-0026: flag própria, `PUT` nos consentimentos, rotas sob `/perfil/dados/`.
+
+| Verificação (19/11) | Resultado |
+|---|---|
+| `pytest` com MySQL 8.4 real (000–017, credencial administrativa do banco descartável) | 590 coletados, rc=0 (51 novos: 38 unidades + 13 integrações, incluindo grants, CHECKs e o script de anonimização) |
+| Front: `tsc -b`, ESLint (`src` e `e2e`), Vitest | limpos; 229 testes em 27 arquivos (14 novos) |
+| Build da imagem (`DOCKER_BUILDKIT=0`, com `npm run check` e conferência do OpenAPI) | ok |
+| e2e Playwright, flags de P13 **ligadas** no banco de teste | 52 passaram, 8 pulados; 0 CSP, 0 axe; `e2e/privacidade.spec.ts` nos 3 viewports, com o texto em 125 % sem rolagem horizontal |
+| e2e Playwright, flags **desligadas** | 49 passaram, 11 pulados: perfil de sempre, rotas de P13 em 404 `recurso_desligado` |
+| Reverificação em 27/11, por cima do `b4783bd` (antes do commit) | `pytest` com MySQL 8.4 (000–017): 590, rc=0; OpenAPI em dia; `tsc`, ESLint limpos; Vitest 229. e2e não refeito nesta base (o `b4783bd` só mudou logo e páginas Jinja) |
+
+Não verificado: nada em produção (sem deploy, `sql/017` não aplicada); WebKit/iPhone real; o vhost real do
+porteiro (só o exemplo foi alterado). Limites conhecidos: a frequência e o consentimento de ofertas ainda não
+mudam nenhum envio (P-88); textos `v0` sem validade jurídica (P-54); lista de temas provisória (P-86).
+
 ## 2026-11-19 — Virada da paridade com o App: jobs escrevendo no CRM (ADR-0024)
 
 Pedido do William em 19/11 ("vamos concluir a virada"). Estado anterior: flag `solicitacoes_crm` ligada desde

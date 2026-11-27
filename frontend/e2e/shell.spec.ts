@@ -25,7 +25,11 @@ test('login stub → saudação, 10 rotas pelo URL com recarga, sem violação d
   await expect(page.getByText('Telma', { exact: true })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'Ambiente de construção' })).toBeVisible();
 
-  for (const [caminho, titulo] of ROTAS) {
+  // Com as flags de P13 ligadas no banco de teste, o perfil vira "Perfil e privacidade" (ADR-0026).
+  const sessao = (await (await page.request.get('/api/v1/sessao')).json()) as { flags?: Record<string, boolean> };
+  const comP13 = sessao.flags?.perfil_preferencias === true || sessao.flags?.lgpd_consentimentos === true;
+  for (const [caminho, tituloDaRota] of ROTAS) {
+    const titulo = caminho === '/area/perfil' && comP13 ? 'Perfil e privacidade' : tituloDaRota;
     await page.goto(caminho);
     await expect(page.getByRole('heading', { level: 1, name: titulo })).toBeVisible();
     await expect(page).toHaveTitle(`${titulo} · Minha APM`);

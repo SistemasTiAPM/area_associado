@@ -11,7 +11,7 @@
   min-height: 28px;
   padding: 4px 11px;
   border-radius: var(--raio-pill);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
@@ -20,7 +20,7 @@
 .selo-estado--compacto {
   min-height: 22px;
   padding: 2px 8px;
-  font-size: 10.5px;
+  font-size: 0.65625rem;
 }
 
 .selo-estado--disponivel {
@@ -129,7 +129,7 @@
 
 .dialogo__descricao,
 .dialogo__corpo {
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   line-height: 1.6;
   color: var(--ink-700);
 }
@@ -161,7 +161,7 @@
   border-bottom: 1px solid var(--linha);
   background: transparent;
   color: var(--ink-900);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   text-align: left;
 }
@@ -184,7 +184,7 @@
 .accordion__conteudo {
   padding: 4px 4px 16px;
   border-bottom: 1px solid var(--linha);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   line-height: 1.6;
   color: var(--ink-700);
 }
@@ -251,7 +251,7 @@
   padding: 8px 12px;
   border-radius: 12px;
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 
 .combobox__opcao--ativa {
@@ -261,7 +261,7 @@
 
 .combobox__tipo {
   flex: none;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   color: var(--ink-500);
 }
 
@@ -276,7 +276,7 @@
   border-radius: var(--raio-controle);
   background: var(--vidro-fundo-forte);
   box-shadow: var(--vidro-sombra);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--ink-500);
 }
 
@@ -305,7 +305,7 @@
   border-radius: var(--raio-pill);
   background: transparent;
   color: var(--ink-500);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -342,7 +342,7 @@
 }
 
 .barra-progresso__texto {
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 600;
   color: var(--ink-700);
 }
@@ -438,19 +438,19 @@
 }
 
 .estado-erro__mensagem {
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   line-height: 1.6;
   color: var(--ink-700);
 }
 
 .estado-erro__codigo {
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--ink-500);
 }
 
 .estado-erro__codigo code {
   font-family: var(--fonte-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ink-900);
 }
 
@@ -471,7 +471,7 @@
 
 .grupo-opcoes__legenda {
   padding: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--ink-900);
 }
@@ -513,11 +513,11 @@
   flex: 1;
   gap: 2px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .opcao__descricao {
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--ink-500);
 }
 
@@ -573,7 +573,7 @@
   min-height: 28px;
   padding: 4px 11px;
   border-radius: var(--raio-pill);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 600;
   line-height: 1.3;
 }
@@ -655,7 +655,7 @@
 }
 
 .linha-tempo__rotulo {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--ink-900);
 }
@@ -671,7 +671,7 @@
   border-radius: var(--raio-controle);
   background: var(--vidro-fundo-forte);
   box-shadow: inset 0 0 0 1px var(--gray-200);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
@@ -716,7 +716,7 @@
   border-radius: 12px;
   background: var(--vidro-fundo-forte);
   box-shadow: inset 0 0 0 1px var(--ink-400);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--ink-900);
   pointer-events: none;
