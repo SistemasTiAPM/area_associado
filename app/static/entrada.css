@@ -242,7 +242,7 @@ body.entrada {
   padding: 64px 8vw;
 }
 
-.entrada__logo { width: 260px; max-width: 100%; height: auto; }
+.entrada__logo { width: 182px; max-width: 100%; height: auto; }
 
 .entrada__cabecalho { display: grid; gap: 8px; margin-top: 12px; }
 
@@ -503,7 +503,7 @@ body.entrada {
   .entrada__hero-conteudo { padding: 28px 24px; }
   .entrada__hero-titulo { font-size: 30px; }
   .entrada__painel { padding: 36px 16px 48px; gap: 22px; }
-  .entrada__logo { width: 200px; }
+  .entrada__logo { width: 140px; }
   .entrada__titulo { font-size: 26px; }
   .entrada__acoes, .entrada__texto, .entrada__nota { max-width: none; }
   .verificacao__cartao, .verificacao__aviso { max-width: none; }

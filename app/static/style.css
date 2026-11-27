@@ -75,7 +75,7 @@ body {
   padding: 18px 24px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
 }
-.brand__chip img { display: block; width: clamp(220px, 24vw, 320px); height: auto; }
+.brand__chip img { display: block; width: clamp(154px, 17vw, 224px); height: auto; }
 
 .brand__eyebrow {
   margin: 0 0 14px;
@@ -331,7 +331,7 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
     padding: 28px 22px 34px;
   }
   .brand__chip { padding: 14px 18px; }
-  .brand__chip img { width: clamp(200px, 60vw, 260px); }
+  .brand__chip img { width: clamp(140px, 42vw, 182px); }
   .brand__hero { margin-top: 4px; }
   .brand__title { font-size: clamp(1.6rem, 7vw, 2.1rem); }
   .brand__lead { display: none; }
